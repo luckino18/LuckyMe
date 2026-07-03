@@ -78,7 +78,7 @@ cargo check
 Install and typecheck the Seeker app:
 
 ```bash
-npm ci --prefix app-seeker
+npm ci --prefix app-seeker --omit=optional
 npm run app:typecheck
 npm --prefix app-seeker run doctor
 ```
