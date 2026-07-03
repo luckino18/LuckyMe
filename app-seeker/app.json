@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "LuckyMe",
+    "slug": "luckyme-seeker",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "luckyme",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.luckyme.seeker"
+    }
+  }
+}

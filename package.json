@@ -8,6 +8,7 @@
   },
   "type": "module",
   "scripts": {
+    "app:typecheck": "npm --prefix app-seeker run typecheck",
     "backend:start": "node backend/src/server.mjs",
     "init:pools": "node scripts/init-pools.mjs",
     "localnet:smoke": "node scripts/localnet-smoke.mjs",

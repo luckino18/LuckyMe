@@ -27,8 +27,17 @@ jobs:
       - name: Audit high severity Node dependencies
         run: npm audit --audit-level=high
 
+      - name: Install Seeker app dependencies
+        run: npm ci --prefix app-seeker
+
+      - name: Audit high severity Seeker app dependencies
+        run: npm audit --audit-level=high --prefix app-seeker
+
       - name: Run simulator tests
         run: npm test
+
+      - name: Typecheck Seeker app
+        run: npm run app:typecheck
 
       - name: Check Anchor program Rust
         run: cargo check

@@ -75,6 +75,13 @@ Check the Rust program:
 cargo check
 ```
 
+Install and typecheck the Seeker app:
+
+```bash
+npm ci --prefix app-seeker
+npm run app:typecheck
+```
+
 Build the Anchor/SBF artifact:
 
 ```bash
