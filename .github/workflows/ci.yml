@@ -28,7 +28,7 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Install Seeker app dependencies
-        run: npm ci --prefix app-seeker --omit=optional
+        run: npm install --prefix app-seeker --omit=optional
 
       - name: Audit high severity Seeker app dependencies
         run: npm audit --audit-level=high --prefix app-seeker
