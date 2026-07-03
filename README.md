@@ -80,6 +80,7 @@ Install and typecheck the Seeker app:
 ```bash
 npm ci --prefix app-seeker
 npm run app:typecheck
+npm --prefix app-seeker run doctor
 ```
 
 Build the Anchor/SBF artifact:

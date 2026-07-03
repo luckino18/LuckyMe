@@ -14,8 +14,24 @@ Set `EXPO_PUBLIC_LUCKYME_API_URL` before running the app:
 The backend binds to `0.0.0.0`, so a physical device can reach it on the Mac LAN
 IP when both devices are on the same network.
 
-The join button is intentionally disabled until the Mobile Wallet Adapter
-transaction builder is implemented.
+Mobile Wallet Adapter support requires a custom Expo development build. Expo Go
+is not enough because the wallet adapter and crypto polyfills use native modules.
+
+Local Android flow:
+
+```bash
+npm ci
+EXPO_PUBLIC_LUCKYME_API_URL=http://<mac-lan-ip>:8788 npm run android
+EXPO_PUBLIC_LUCKYME_API_URL=http://<mac-lan-ip>:8788 npm run start -- --host lan
+```
+
+The wallet authorization chain defaults to `solana:devnet` for mobile wallet
+compatibility. For localnet testing, the app asks the wallet only to sign the
+transaction; the backend submits the signed transaction to the configured local
+RPC.
+
+The join flow asks the backend to build and simulate an unsigned transaction,
+then asks the wallet to sign it. The backend never signs player transactions.
 
 MVP screens:
 

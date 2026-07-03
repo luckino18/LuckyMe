@@ -1,3 +1,9 @@
+import { Transaction } from "@solana/web3.js";
+import {
+  fromUint8Array,
+  toUint8Array,
+  useMobileWallet,
+} from "@wallet-ui/react-native-web3js";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -51,6 +57,24 @@ type PoolsResponse = {
     programId?: string;
   };
   pools?: Pool[];
+};
+
+type BuildBuyTicketsResponse = {
+  transactionBase64: string;
+  summary: {
+    amountSol: string;
+    pool: string;
+    roundId: number;
+    ticketCount: number;
+  };
+  simulation?: {
+    ok: boolean;
+    err: unknown;
+  };
+};
+
+type SubmitTransactionResponse = {
+  signature: string;
 };
 
 const API_BASE_URL =
@@ -138,7 +162,35 @@ function formatRemaining(endTs: number | undefined, now: number) {
   return `${minutes}:${seconds}`;
 }
 
+async function postJson<TResponse>(path: string, body: unknown) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    body: JSON.stringify(body),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    const message =
+      typeof payload?.message === "string" ? payload.message : "Request failed";
+    throw new Error(message);
+  }
+
+  return payload as TResponse;
+}
+
+function shortAddress(address: string | undefined) {
+  if (!address) {
+    return "--";
+  }
+
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
 export function LuckyMeScreen() {
+  const { account, connect, disconnect, signTransaction } = useMobileWallet();
   const [pools, setPools] = useState<Pool[]>(FALLBACK_POOLS);
   const [selectedPoolId, setSelectedPoolId] = useState(FALLBACK_POOLS[1].id);
   const [ticketCount, setTicketCount] = useState(1);
@@ -148,6 +200,9 @@ export function LuckyMeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [submitting, setSubmitting] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [txSignature, setTxSignature] = useState<string | null>(null);
 
   const loadPools = useCallback(async (silent = false) => {
     if (silent) {
@@ -252,7 +307,91 @@ export function LuckyMeScreen() {
   const splitLabel = `${formatBps(selectedPool.mainPrizeBps)} / ${formatBps(
     selectedPool.houseFeeBps,
   )} / ${formatBps(selectedPool.jackpotBps)}`;
-  const joinDisabled = true;
+  const walletAddress = account?.address.toBase58();
+  const roundEndTs = activeRound?.endTs;
+  const roundIsOpen =
+    Boolean(activeRound && !activeRound.settled) &&
+    typeof roundEndTs === "number" &&
+    roundEndTs * 1000 > now;
+  const joinDisabled =
+    !roundIsOpen ||
+    source !== "onchain" ||
+    loading ||
+    refreshing ||
+    submitting;
+  const primaryDisabled = account ? joinDisabled : submitting;
+  const primaryButtonLabel = !account
+    ? "Connect wallet"
+    : submitting
+      ? "Joining..."
+      : !roundIsOpen
+        ? "No open round"
+        : "Join round";
+
+  const handlePrimaryAction = useCallback(async () => {
+    setWalletError(null);
+    setTxSignature(null);
+
+    if (!account || !walletAddress) {
+      try {
+        await connect();
+      } catch (caught) {
+        setWalletError(
+          caught instanceof Error ? caught.message : "Wallet connection failed",
+        );
+      }
+      return;
+    }
+
+    if (joinDisabled) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const built = await postJson<BuildBuyTicketsResponse>(
+        "/transactions/buy-tickets",
+        {
+          player: walletAddress,
+          pool: selectedPool.id,
+          ticketCount,
+        },
+      );
+
+      if (built.simulation && !built.simulation.ok) {
+        throw new Error(`Simulation failed: ${JSON.stringify(built.simulation.err)}`);
+      }
+
+      const transaction = Transaction.from(toUint8Array(built.transactionBase64));
+      const signedTransaction = await signTransaction(transaction);
+      const signedTransactionBase64 = fromUint8Array(
+        Uint8Array.from(signedTransaction.serialize()),
+      );
+      const submitted = await postJson<SubmitTransactionResponse>(
+        "/transactions/submit",
+        {
+          signedTransactionBase64,
+        },
+      );
+
+      setTxSignature(submitted.signature);
+      await loadPools(true);
+    } catch (caught) {
+      setWalletError(caught instanceof Error ? caught.message : "Join failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [
+    account,
+    connect,
+    joinDisabled,
+    loadPools,
+    selectedPool.id,
+    signTransaction,
+    ticketCount,
+    walletAddress,
+  ]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -356,6 +495,21 @@ export function LuckyMeScreen() {
               {clusterUrl ? `${sourceLabel} RPC` : sourceLabel}
             </Text>
           </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Wallet</Text>
+            <View style={styles.walletValue}>
+              <Text style={styles.value}>{shortAddress(walletAddress)}</Text>
+              {account ? (
+                <Pressable
+                  disabled={submitting}
+                  onPress={() => void disconnect()}
+                  style={styles.disconnectButton}
+                >
+                  <Text style={styles.disconnectText}>Disconnect</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
         </View>
 
         <View style={styles.stepper}>
@@ -376,13 +530,25 @@ export function LuckyMeScreen() {
         </View>
 
         <Pressable
-          disabled={joinDisabled}
-          style={[styles.joinButton, joinDisabled && styles.joinButtonDisabled]}
+          disabled={primaryDisabled}
+          onPress={() => void handlePrimaryAction()}
+          style={[
+            styles.joinButton,
+            primaryDisabled && styles.joinButtonDisabled,
+          ]}
         >
-          <Text style={[styles.joinText, joinDisabled && styles.joinTextDisabled]}>
-            Join round
+          <Text
+            style={[styles.joinText, primaryDisabled && styles.joinTextDisabled]}
+          >
+            {primaryButtonLabel}
           </Text>
         </Pressable>
+        {walletError ? <Text style={styles.errorText}>{walletError}</Text> : null}
+        {txSignature ? (
+          <Text style={styles.successText}>
+            Sent {shortAddress(txSignature)}
+          </Text>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -490,6 +656,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "right",
   },
+  walletValue: {
+    alignItems: "flex-end",
+    flexShrink: 1,
+    gap: 8,
+  },
+  disconnectButton: {
+    borderColor: "#3a424b",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  disconnectText: {
+    color: "#d7dde4",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   stepper: {
     alignItems: "center",
     flexDirection: "row",
@@ -533,5 +716,10 @@ const styles = StyleSheet.create({
   },
   joinTextDisabled: {
     color: "#d7dde4",
+  },
+  successText: {
+    color: "#89e5b6",
+    fontSize: 13,
+    textAlign: "center",
   },
 });
