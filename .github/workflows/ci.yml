@@ -22,7 +22,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Node dependencies
-        run: npm ci
+        run: npm ci --omit=optional
 
       - name: Audit high severity Node dependencies
         run: npm audit --audit-level=high
