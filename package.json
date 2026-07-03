@@ -1,0 +1,15 @@
+{
+  "name": "luckyme",
+  "version": "0.1.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luckino18/LuckyMe.git"
+  },
+  "type": "module",
+  "scripts": {
+    "backend:start": "node backend/src/server.mjs",
+    "test": "node --test sim/*.test.mjs",
+    "sim:demo": "node sim/demo.mjs"
+  }
+}
