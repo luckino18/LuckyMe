@@ -57,6 +57,12 @@ docs/               Deployment and launch checklists
 
 ## Local Verification
 
+Install Node development dependencies:
+
+```bash
+npm ci
+```
+
 Run the simulator tests:
 
 ```bash
@@ -86,6 +92,20 @@ Start the local dev API:
 ```bash
 npm run backend:start
 ```
+
+Initialize config and the three fixed pools on the selected Anchor provider:
+
+```bash
+npm run init:pools
+```
+
+Run a full localnet smoke test after deploying the program to a local validator:
+
+```bash
+LUCKYME_ROUND_DURATION_SECS=60 npm run localnet:smoke
+```
+
+The smoke test initializes config and pools if needed, opens a Normal pool round, buys tickets, waits until the round can settle, and settles the round on-chain. The production target remains 300 seconds; the 60 second value is only for fast local verification.
 
 ## Randomness
 

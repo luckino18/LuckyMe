@@ -9,7 +9,13 @@
   "type": "module",
   "scripts": {
     "backend:start": "node backend/src/server.mjs",
+    "init:pools": "node scripts/init-pools.mjs",
+    "localnet:smoke": "node scripts/localnet-smoke.mjs",
     "test": "node --test sim/*.test.mjs",
     "sim:demo": "node sim/demo.mjs"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "0.32.1",
+    "@solana/web3.js": "1.98.4"
   }
 }

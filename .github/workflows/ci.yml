@@ -21,6 +21,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Audit high severity Node dependencies
+        run: npm audit --audit-level=high
+
       - name: Run simulator tests
         run: npm test
 
