@@ -1,6 +1,6 @@
 {
   "name": "luckyme",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "repository": {
     "type": "git",
@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "app:typecheck": "npm --prefix app-seeker run typecheck",
+    "app:validate:production": "npm --prefix app-seeker run validate:production",
     "backend:start": "node backend/src/server.mjs",
     "init:pools": "node scripts/init-pools.mjs",
     "localnet:smoke": "node scripts/localnet-smoke.mjs",
@@ -20,7 +21,7 @@
     "randomness:status": "node scripts/randomness-status.mjs",
     "randomness:settle": "node scripts/randomness-settle.mjs",
     "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
-    "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/docs-scripts.test.mjs",
+    "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/app-production-env.test.mjs tests/docs-scripts.test.mjs",
     "sim:demo": "node sim/demo.mjs"
   },
   "devDependencies": {

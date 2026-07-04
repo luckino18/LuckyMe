@@ -1,0 +1,1 @@
+LuckyMe v1.0.0 prepares the mobile-first Solana luck pool experience for mainnet release with wallet-signed ticket entries, transparent pool math, ORAO provider randomness, refund states, and Solana dApp Store APK build support.

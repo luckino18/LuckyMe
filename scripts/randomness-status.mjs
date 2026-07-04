@@ -33,7 +33,7 @@ const roundRandomness = deriveRoundRandomnessAccount(round);
 const vrf = new Orao(provider, ORAO_VRF_PROGRAM_ID);
 
 console.log(`Cluster: ${url}`);
-console.log(`Release mode: ${process.env.LUCKYME_RELEASE_MODE ?? "DEVNET_STORE_DEMO"}`);
+console.log(`Release mode: ${process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE"}`);
 console.log(`Randomness mode: ${RANDOMNESS_MODE}`);
 console.log("Fee payer: none (read-only status)");
 console.log(`Pool: ${poolSpec.label} (${pool.toBase58()})`);

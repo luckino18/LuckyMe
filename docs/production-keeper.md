@@ -1,65 +1,52 @@
-# Keeper Architecture
+# Production Keeper
 
-Keepers must run separately from the public backend. The public backend should
-only expose read APIs and unsigned transaction builders.
+The keeper submits operational transactions after rounds close. It does not hold
+player funds and does not sign player ticket purchases.
 
-## Scripts
-
-- `npm run round:open`
-- `npm run round:settle`
-- `npm run round:close-empty`
-- `npm run refund:crank`
-- `npm run randomness:request`
-- `npm run randomness:status`
-- `npm run randomness:settle`
-
-All signing scripts print cluster and fee payer. `round:open`, `round:settle`,
-`round:close-empty`, `refund:crank`, `randomness:request`, and
-`randomness:settle` refuse mainnet unless `CONFIRM_MAINNET=true`.
-`randomness:status` is read-only.
-
-## Dry Runs
+## Environment
 
 ```bash
-DRY_RUN=true npm run round:open
-DRY_RUN=true POOL=normal ROUND_ID=1 RANDOMNESS_REVEAL=<32-byte-hex> npm run round:settle
-DRY_RUN=true POOL=normal ROUND_ID=1 npm run round:close-empty
-DRY_RUN=true npm run refund:crank
-LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=normal ROUND_ID=1 npm run randomness:request
-LUCKYME_RANDOMNESS_MODE=orao_vrf POOL=normal ROUND_ID=1 npm run randomness:status
-LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=normal ROUND_ID=1 npm run randomness:settle
+export LUCKYME_RELEASE_MODE=MAINNET_RELEASE
+export LUCKYME_SOLANA_CLUSTER=mainnet-beta
+export ANCHOR_PROVIDER_URL=https://your-mainnet-rpc.example
+export LUCKYME_RANDOMNESS_MODE=orao_vrf
+export LUCKYME_PRODUCTION_RANDOMNESS=true
+export ANCHOR_WALLET=/secure/path/keeper.json
 ```
 
-## DEVNET_STORE_DEMO
+Use a dedicated keeper wallet funded only for transaction fees and provider
+operations.
 
-- Open rounds hourly or manually for review.
-- Store reveal files securely outside the repo.
-- Settle only after the round ends.
-- If a round expires with zero entrants, use `npm run round:close-empty`.
-- If reveal is missing, use `GET /refunds` and `npm run refund:crank`.
+## Commands
 
-## ORAO VRF Operations
+Request provider randomness:
 
-For `LUCKYME_RANDOMNESS_MODE=orao_vrf`:
+```bash
+npm run randomness:request -- --pool normal --round 1
+```
 
-1. After the round closes, run `npm run randomness:request`.
-2. Confirm the LuckyMe sidecar and ORAO request PDA in
-   `npm run randomness:status`.
-3. Wait for ORAO fulfillment.
-4. Run `npm run randomness:settle`.
-5. If fulfillment never arrives and the refund timeout passes, use `GET /refunds`
-   and `npm run refund:crank`.
+Check provider status:
 
-The public backend can build unsigned provider transactions, but it must not
-hold the keeper wallet. ORAO request fees are paid by the keeper wallet.
+```bash
+npm run randomness:status -- --pool normal --round 1
+```
 
-## MAINNET_BETA_CANDIDATE
+Settle with fulfilled provider randomness:
 
-Not ready. Before mainnet keepers:
+```bash
+npm run randomness:settle -- --pool normal --round 1
+```
 
-- archive a funded devnet ORAO request/fulfillment/settlement transcript
-- move authorities to multisig
-- use monitored dedicated RPC
-- add alerting for stuck rounds, failed settlements, and refund backlog
-- define incident response and pause policy
-- document keeper wallet funding and rotation
+Crank refundable entries:
+
+```bash
+npm run refund:crank
+```
+
+## Operating Checks
+
+- Confirm the wallet is the intended keeper before signing.
+- Confirm RPC endpoint and cluster are mainnet-beta.
+- Confirm Program ID in command output.
+- Confirm settlement simulation succeeds before submitting.
+- Store transaction signatures and round IDs for release operations records.

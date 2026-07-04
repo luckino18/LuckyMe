@@ -5,14 +5,14 @@ anchor_version = "1.1.2"
 resolution = true
 skip-lint = false
 
-[programs.devnet]
+[programs.mainnet]
 luckyme = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3"
 
 [programs.localnet]
 luckyme = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3"
 
 [provider]
-cluster = "devnet"
+cluster = "mainnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

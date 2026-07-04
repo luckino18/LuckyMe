@@ -54,6 +54,17 @@ jobs:
       - name: Run simulator tests
         run: npm test
 
+      - name: Validate Seeker production config
+        run: npm run app:validate:production
+        env:
+          EXPO_PUBLIC_LUCKYME_RELEASE_MODE: MAINNET_RELEASE
+          EXPO_PUBLIC_LUCKYME_STORE_BUILD: "true"
+          EXPO_PUBLIC_LUCKYME_API_URL: https://api.luckyme.example
+          EXPO_PUBLIC_LUCKYME_WALLET_CHAIN: solana:mainnet
+          EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL: https://api.mainnet-beta.solana.com
+          EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER: mainnet-beta
+          EXPO_PUBLIC_LUCKYME_PROGRAM_ID: 4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3
+
       - name: Typecheck Seeker app
         run: npm run app:typecheck
 

@@ -1,66 +1,73 @@
 # LuckyMe Seeker App
 
-Mobile-first Android client for Solana Seeker and Solana dApp Store review.
+Expo React Native app for the LuckyMe Solana mobile-first luck pool game.
 
-The current app target is `DEVNET_STORE_DEMO`: devnet only, no real SOL, no real
-prizes, and visible safety/transparency copy.
-
-## API Configuration
-
-Set `EXPO_PUBLIC_LUCKYME_API_URL` before running the app:
-
-- desktop preview: `http://localhost:8788`
-- Android emulator: `http://10.0.2.2:8788`
-- physical Seeker device: `http://<mac-lan-ip>:8788`
-
-For store/demo builds, `EXPO_PUBLIC_LUCKYME_API_URL` is required. The app shows a
-blocking configuration error instead of silently falling back to localhost.
-
-Optional public env vars:
-
-```text
-EXPO_PUBLIC_LUCKYME_RELEASE_MODE=DEVNET_STORE_DEMO
-EXPO_PUBLIC_LUCKYME_STORE_BUILD=true
-EXPO_PUBLIC_LUCKYME_TERMS_URL=https://example.com/terms
-EXPO_PUBLIC_LUCKYME_PRIVACY_URL=https://example.com/privacy
-EXPO_PUBLIC_LUCKYME_SUPPORT_URL=https://example.com/support
-```
-
-## Local Android Flow
-
-The backend binds to `127.0.0.1` by default. For a trusted LAN dev session:
+## Release Env
 
 ```bash
-HOST=0.0.0.0 ENABLE_TRANSACTION_SUBMIT=true npm run backend:start
+export EXPO_PUBLIC_LUCKYME_RELEASE_MODE=MAINNET_RELEASE
+export EXPO_PUBLIC_LUCKYME_STORE_BUILD=true
+export EXPO_PUBLIC_LUCKYME_API_URL=https://your-production-api.example
+export EXPO_PUBLIC_LUCKYME_WALLET_CHAIN=solana:mainnet
+export EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL=https://your-mainnet-rpc.example
+export EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER=mainnet-beta
+export EXPO_PUBLIC_LUCKYME_PROGRAM_ID=4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3
 ```
 
-Run the app:
+The release validator rejects missing variables, localhost/LAN backend URLs,
+non-HTTPS backend/RPC URLs, non-mainnet wallet chain values, and malformed
+Program IDs.
+
+## Commands
 
 ```bash
-npm ci
-EXPO_PUBLIC_LUCKYME_API_URL=http://<mac-lan-ip>:8788 npm run android
-EXPO_PUBLIC_LUCKYME_API_URL=http://<mac-lan-ip>:8788 npm run start -- --host lan
+npm install
+npm run validate:production
+npm run typecheck
+npm run doctor
+eas build --platform android --profile dapp-store
 ```
 
-Mobile Wallet Adapter support requires a custom Expo development build. Expo Go
-is not enough because wallet adapter and crypto polyfills use native modules.
+For a local EAS build:
 
-## Store-Visible Safety
+```bash
+eas build --platform android --profile dapp-store --local
+```
 
-The screen displays:
+## Wallet And Signing Flow
 
-- `DEVNET MODE - no real funds` banner
-- current release mode, cluster, and randomness mode
-- ticket price, total pool, countdown, user tickets, and user chance
-- 98% main prize, 1% house fee, 1% jackpot contribution
-- treasury address, vault addresses, and program id
-- round history, winner, refund state, and randomness proof status
-- transaction review before wallet signing
-- safety, how-it-works, terms, privacy, and support placeholders
+- Mobile Wallet Adapter defaults to `solana:mainnet`.
+- The backend builds and simulates unsigned transactions.
+- The app displays amount, pool, connected wallet, Solana mainnet, Program ID,
+  simulation result, and expected ticket/refund behavior before signing.
+- The connected wallet signs the transaction.
+- The backend does not hold user private keys and does not sign player
+  transactions.
 
-The wallet authorization chain defaults to `solana:devnet`. The backend submit
-relay is disabled by default; local mobile tests that rely on the relay must
-start the backend with `ENABLE_TRANSACTION_SUBMIT=true`.
+## Error States
 
-The app should sign only user-approved transactions. Winner selection and
-payouts must be verified by the Solana program.
+The UI has explicit states for missing wallet support, rejected wallet requests,
+insufficient SOL, failed simulation, stale or closed rounds, backend
+unavailability, RPC failures, settlement, and refund mode.
+
+## APK Profile
+
+`eas.json` contains a `dapp-store` profile:
+
+```json
+{
+  "build": {
+    "dapp-store": {
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}
+```
+
+Verify a signed APK with:
+
+```bash
+apksigner verify --print-certs app-release.apk
+```

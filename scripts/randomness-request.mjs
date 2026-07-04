@@ -49,7 +49,7 @@ const roundAccount = await program.account.round.fetch(round);
 assertRoundClosedWithEntries(roundAccount);
 
 console.log(`Cluster: ${url}`);
-console.log(`Release mode: ${process.env.LUCKYME_RELEASE_MODE ?? "DEVNET_STORE_DEMO"}`);
+console.log(`Release mode: ${process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE"}`);
 console.log(`Randomness mode: ${RANDOMNESS_MODE}`);
 console.log(`Keeper fee payer: ${payer.publicKey.toBase58()}`);
 console.log(`Pool: ${poolSpec.label} (${pool.toBase58()})`);

@@ -41,15 +41,21 @@ const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 120);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT === "true";
-const ANCHOR_PROVIDER_URL = process.env.ANCHOR_PROVIDER_URL ?? "https://api.devnet.solana.com";
-const RELEASE_MODE = process.env.LUCKYME_RELEASE_MODE ?? "DEVNET_STORE_DEMO";
-const RANDOMNESS_MODE = process.env.LUCKYME_RANDOMNESS_MODE ?? "commit_reveal_demo";
+const RELEASE_MODE = process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE";
+const IS_LOCAL_DEVELOPMENT = RELEASE_MODE === "LOCAL_DEVELOPMENT";
+const ANCHOR_PROVIDER_URL =
+  process.env.ANCHOR_PROVIDER_URL ?? (IS_LOCAL_DEVELOPMENT ? "http://127.0.0.1:8899" : "");
+const RANDOMNESS_MODE =
+  process.env.LUCKYME_RANDOMNESS_MODE ?? (IS_LOCAL_DEVELOPMENT ? "commit_reveal_demo" : "orao_vrf");
+const SOLANA_CLUSTER =
+  process.env.LUCKYME_SOLANA_CLUSTER ?? inferClusterName(ANCHOR_PROVIDER_URL);
 const PRODUCTION_RANDOMNESS_ENABLED = process.env.LUCKYME_PRODUCTION_RANDOMNESS === "true";
 const ORAO_PROGRAM_ID = parsePublicKeyConfig(
   process.env.LUCKYME_ORAO_PROGRAM_ID ?? ORAO_VRF_PROGRAM_ID.toBase58(),
   "LUCKYME_ORAO_PROGRAM_ID",
 );
 const STRICT_ONCHAIN =
+  RELEASE_MODE === "MAINNET_RELEASE" ||
   process.env.LUCKYME_STRICT_ONCHAIN === "true" ||
   process.env.LUCKYME_STORE_BUILD === "true" ||
   process.env.NODE_ENV === "production";
@@ -79,7 +85,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/health") {
     return json(res, 200, {
       ok: true,
-      service: "luckyme-dev-api",
+      service: "luckyme-api",
       mode: RELEASE_MODE,
       cluster: clusterName(ANCHOR_PROVIDER_URL),
     });
@@ -260,11 +266,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`LuckyMe dev API listening on http://${HOST}:${PORT}`);
+  console.log(`LuckyMe API listening on http://${HOST}:${PORT}`);
 });
 
 async function getProgramState({ player } = {}) {
-  const staticPools = buildStaticPools();
+  const staticPools = STRICT_ONCHAIN ? [] : buildStaticPools();
 
   try {
     const { connection, program, url } = createClient({
@@ -303,17 +309,19 @@ async function getProgramState({ player } = {}) {
 
       const poolExists = await accountExists(connection, poolAddress);
       if (!poolExists) {
-        pools.push({
-          ...poolPayloadFromStatic(staticPool, poolSpec),
-          source: "static",
-          initialized: false,
-          poolId: poolSpec.id,
-          addresses: {
-            pool: poolAddress.toBase58(),
-            poolVault: poolVault.toBase58(),
-            jackpotVault: jackpotVault.toBase58(),
-          },
-        });
+        if (!STRICT_ONCHAIN) {
+          pools.push({
+            ...poolPayloadFromStatic(staticPool, poolSpec),
+            source: "static",
+            initialized: false,
+            poolId: poolSpec.id,
+            addresses: {
+              pool: poolAddress.toBase58(),
+              poolVault: poolVault.toBase58(),
+              jackpotVault: jackpotVault.toBase58(),
+            },
+          });
+        }
         continue;
       }
 
@@ -399,10 +407,10 @@ async function getPublicConfig() {
   );
 
   return {
-    service: "luckyme-dev-api",
+    service: "luckyme-api",
     mode: RELEASE_MODE,
     releaseMode: RELEASE_MODE,
-    supportedModes: ["DEVNET_STORE_DEMO", "MAINNET_BETA_CANDIDATE"],
+    supportedModes: ["MAINNET_RELEASE", "LOCAL_DEVELOPMENT"],
     cluster: clusterName(ANCHOR_PROVIDER_URL),
     clusterUrl: ANCHOR_PROVIDER_URL,
     programId: PROGRAM_ID.toBase58(),
@@ -416,10 +424,10 @@ async function getPublicConfig() {
       provider: RANDOMNESS_MODE === "orao_vrf" ? "orao_vrf" : "commit_reveal_demo",
       oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
       failover: "none",
-      commitRevealAllowed: RELEASE_MODE === "DEVNET_STORE_DEMO",
+      commitRevealAllowed: RELEASE_MODE === "LOCAL_DEVELOPMENT",
     },
-    devnetOnly: RELEASE_MODE === "DEVNET_STORE_DEMO",
-    realFundsEnabled: false,
+    mainnet: RELEASE_MODE === "MAINNET_RELEASE",
+    realFundsEnabled: RELEASE_MODE === "MAINNET_RELEASE",
     economics: {
       mainPrizeBps: 10_000 - houseFeeBps - jackpotBps,
       houseFeeBps,
@@ -432,10 +440,11 @@ async function getPublicConfig() {
     authority: config.authority ?? null,
     poolVaultExample: firstPool.addresses?.poolVault ?? null,
     jackpotVaultExample: firstPool.addresses?.jackpotVault ?? null,
-    limitations: [
-      "DEVNET_STORE_DEMO uses commit-reveal randomness and no real funds.",
-      "MAINNET_BETA_CANDIDATE remains disabled until production randomness, legal review, and multisig controls are complete.",
-    ],
+    releaseChecks: {
+      strictOnchain: STRICT_ONCHAIN,
+      transactionSubmitRelayEnabled: ENABLE_TRANSACTION_SUBMIT,
+      backendSignsPlayerTransactions: false,
+    },
   };
 }
 
@@ -1751,8 +1760,8 @@ function getClientId(req) {
 }
 
 function validateRuntimeConfig() {
-  if (!["DEVNET_STORE_DEMO", "MAINNET_BETA_CANDIDATE"].includes(RELEASE_MODE)) {
-    throw new Error("LUCKYME_RELEASE_MODE must be DEVNET_STORE_DEMO or MAINNET_BETA_CANDIDATE");
+  if (!["MAINNET_RELEASE", "LOCAL_DEVELOPMENT"].includes(RELEASE_MODE)) {
+    throw new Error("LUCKYME_RELEASE_MODE must be MAINNET_RELEASE or LOCAL_DEVELOPMENT");
   }
 
   if (!["commit_reveal_demo", "orao_vrf"].includes(RANDOMNESS_MODE)) {
@@ -1765,33 +1774,34 @@ function validateRuntimeConfig() {
     );
   }
 
-  if (
-    RELEASE_MODE === "DEVNET_STORE_DEMO" &&
-    isMainnetUrl(ANCHOR_PROVIDER_URL)
-  ) {
-    throw new Error("DEVNET_STORE_DEMO cannot use a mainnet RPC");
-  }
+  if (RELEASE_MODE === "MAINNET_RELEASE") {
+    if (!ANCHOR_PROVIDER_URL) {
+      throw new Error("ANCHOR_PROVIDER_URL is required for MAINNET_RELEASE");
+    }
 
-  if (
-    RELEASE_MODE === "MAINNET_BETA_CANDIDATE" &&
-    (!PRODUCTION_RANDOMNESS_ENABLED || RANDOMNESS_MODE !== "orao_vrf")
-  ) {
-    throw new Error("MAINNET_BETA_CANDIDATE requires LUCKYME_RANDOMNESS_MODE=orao_vrf and production randomness");
-  }
+    if (!isHttpsUrl(ANCHOR_PROVIDER_URL)) {
+      throw new Error("MAINNET_RELEASE requires an HTTPS Solana RPC URL");
+    }
 
-  if (isMainnetUrl(ANCHOR_PROVIDER_URL)) {
-    const allowed = (
-      process.env.LUCKYME_ENABLE_MAINNET === "true" &&
-      process.env.LUCKYME_LEGAL_SIGNOFF === "true" &&
-      PRODUCTION_RANDOMNESS_ENABLED &&
-      process.env.LUCKYME_MULTISIG_SIGNOFF === "true"
-    );
+    if (SOLANA_CLUSTER !== "mainnet-beta") {
+      throw new Error("MAINNET_RELEASE requires LUCKYME_SOLANA_CLUSTER=mainnet-beta");
+    }
 
-    if (!allowed) {
+    if (!PRODUCTION_RANDOMNESS_ENABLED || RANDOMNESS_MODE !== "orao_vrf") {
       throw new Error(
-        "Refusing mainnet RPC without LUCKYME_ENABLE_MAINNET, legal, randomness, and multisig signoffs",
+        "MAINNET_RELEASE requires LUCKYME_RANDOMNESS_MODE=orao_vrf and LUCKYME_PRODUCTION_RANDOMNESS=true",
       );
     }
+
+    if (CORS_ORIGIN === "*") {
+      throw new Error("CORS_ORIGIN must be strict for MAINNET_RELEASE");
+    }
+
+    if (ENABLE_TRANSACTION_SUBMIT) {
+      throw new Error("ENABLE_TRANSACTION_SUBMIT must stay false for MAINNET_RELEASE");
+    }
+  } else if (RANDOMNESS_MODE !== "commit_reveal_demo" && RANDOMNESS_MODE !== "orao_vrf") {
+    throw new Error("LOCAL_DEVELOPMENT randomness mode is invalid");
   }
 
   if (process.env.NODE_ENV === "production") {
@@ -1809,11 +1819,26 @@ function validateRuntimeConfig() {
   }
 }
 
+function isHttpsUrl(url) {
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function isMainnetUrl(url) {
   return /mainnet|api\.mainnet-beta\.solana\.com/i.test(url);
 }
 
 function clusterName(url) {
+  if (SOLANA_CLUSTER) {
+    return SOLANA_CLUSTER;
+  }
+  return inferClusterName(url);
+}
+
+function inferClusterName(url) {
   if (isMainnetUrl(url)) {
     return "mainnet-beta";
   }

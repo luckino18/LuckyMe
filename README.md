@@ -1,221 +1,231 @@
 # LuckyMe
 
-LuckyMe is a transparent Solana mobile-first luck pool MVP for fixed-entry
-rounds. The current release target is a safe devnet store demo, not a real-money
-mainnet game.
+LuckyMe is a Solana mobile-first luck pool game for fixed-entry rounds. Users
+connect a Solana wallet, choose a pool, review the ticket transaction, and sign
+with their wallet. Pool math is transparent: fixed ticket price, total tickets,
+winner chance, prize, jackpot contribution, and treasury fee. Results and
+payouts are executed by the Solana program.
 
-The repository is public so the Anchor program, pool math, transaction builders,
-mobile app, CI, and launch limitations can be reviewed before any production
-claim.
+## Product Overview
 
-## Status
+- Network target: Solana mainnet-beta
+- Program ID: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
+- Mobile app: Expo React Native with Mobile Wallet Adapter
+- Backend: transaction builder and public state API
+- Randomness mode: ORAO VRF provider path for `MAINNET_RELEASE`
+- Player custody: the backend never signs player transactions and never
+  custodies user funds
+- Release mode: `MAINNET_RELEASE`
 
-- Current mode: `DEVNET_STORE_DEMO`
-- Network target: devnet/localnet only
-- Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
-- Anchor target: `1.1.2`
-- Solana CLI target: `3.x`
-- Audit status: not independently audited
-- Legal status: not reviewed for gambling, lottery, or sweepstakes compliance
-
-Do not use this code with mainnet funds.
-
-## Release Modes
-
-`DEVNET_STORE_DEMO` is the only enabled release mode. It is intended for Solana
-dApp Store / Seeker Store review. It uses devnet SOL only, has no real prizes,
-displays a devnet/no-real-funds banner in the app, and can run either the
-documented `commit_reveal_demo` path or the `orao_vrf` provider path for
-testing.
-
-`MAINNET_BETA_CANDIDATE` is disabled by default. The backend refuses this mode
-unless `LUCKYME_RANDOMNESS_MODE=orao_vrf` and production randomness are enabled.
-Mainnet RPC is blocked unless mainnet, legal, production randomness, and
-multisig signoff environment gates are all set. Do not enable it until
-`docs/mainnet-readiness.md` is complete.
-
-## Game Model
-
-The current default economics are:
-
-- fixed pools: `0.005 SOL`, `0.01 SOL`, `0.1 SOL`
-- round duration: 1 hour
-- one main winner per round
-- main prize: 98% of the round pool
-- house fee: 1% of the round pool
-- jackpot contribution: 1% of the round pool
-- no-reveal recovery: after a 10 minute reveal timeout, entrants can refund
-  their own entry from the pool vault
-- abandoned-round recovery can also be cranked by a third-party fee payer; the
-  refund always goes to `entry.player`
-
-Each pool has a fixed ticket price. A wallet can buy one or more tickets in a
-single purchase per round. The winner is selected by ticket number, so
-probability is proportional to tickets bought.
-
-```text
-player_chance = player_tickets / total_round_tickets
-main_prize = total_pool * 98%
-house_fee = total_pool * 1%
-jackpot_add = total_pool * 1%
-```
-
-## Randomness
-
-The devnet demo path uses single-provider commit-reveal:
-
-1. a round opens with `hash("luckyme-commit", reveal)`
-2. users buy tickets while the commitment is public
-3. settlement reveals the secret
-4. the program verifies the commitment and derives winning tickets from the
-   reveal, round key, and ticket count
-
-This is acceptable only for `DEVNET_STORE_DEMO`. A reveal provider can still
-withhold unfavorable reveals. Refunds prevent permanent pool-vault lockup, but
-they do not make commit-reveal fair enough for real-money mainnet.
-
-The provider path uses ORAO Classic VRF:
-
-1. after the round closes, `request_randomness` records an ORAO seed and request
-   PDA in a `RoundRandomness` sidecar; the seed includes final round state and
-   the request slot
-2. a keeper pays the ORAO request through the ORAO SDK
-3. `settle_round_with_provider_randomness` verifies the ORAO request owner,
-   PDA, seed, and fulfilled `RandomnessV2` data before deriving winners
-4. if fulfillment never arrives, entrants can still refund after the timeout
-
-See `docs/randomness.md` and `docs/randomness-provider-investigation.md`.
+The app builds and reviews an unsigned transaction, the connected wallet signs
+it, and the backend submit relay is disabled by default. Users see the amount,
+pool, connected wallet, Solana mainnet network, Program ID, simulation result,
+and expected ticket behavior before signing.
 
 ## Repository Layout
 
 ```text
-programs/luckyme/   Anchor program
-sim/                Local economic model and tests
-backend/            Local/devnet API, transaction builders, and safety guards
-app-seeker/         Solana Seeker mobile app prototype
-idl/                Public client-facing Anchor IDL
-sdk/                Public generated TypeScript types
-docs/               Store, deployment, settlement, legal, and launch checklists
+programs/luckyme/        Anchor program
+idl/                     Generated IDL
+sdk/                     TypeScript IDL type helper
+scripts/                 Operator and keeper transaction builders
+backend/                 Public state API and transaction builders
+app-seeker/              Solana Mobile / Seeker Expo app
+docs/                    Publishing, APK signing, operations, and handoff docs
+tests/                   Node and Anchor integration tests
+sim/                     Economic simulator and unit tests
 ```
 
-Audit follow-up status is tracked in `docs/audit-closure.md`. Store submission
-readiness is tracked in `docs/store-readiness.md`. Mainnet blockers are tracked
-in `docs/mainnet-readiness.md`.
+## Mainnet Environment
 
-## Local Verification
-
-Install dependencies:
+Required backend variables for `MAINNET_RELEASE`:
 
 ```bash
-npm ci
-npm install --prefix app-seeker --omit=optional
+export LUCKYME_RELEASE_MODE=MAINNET_RELEASE
+export LUCKYME_SOLANA_CLUSTER=mainnet-beta
+export ANCHOR_PROVIDER_URL=https://your-mainnet-rpc.example
+export LUCKYME_RANDOMNESS_MODE=orao_vrf
+export LUCKYME_PRODUCTION_RANDOMNESS=true
+export CORS_ORIGIN=https://your-production-app.example
+export ENABLE_TRANSACTION_SUBMIT=false
 ```
 
-Run the full local verification set:
+Required app variables for the dApp Store APK build:
 
 ```bash
+export EXPO_PUBLIC_LUCKYME_RELEASE_MODE=MAINNET_RELEASE
+export EXPO_PUBLIC_LUCKYME_STORE_BUILD=true
+export EXPO_PUBLIC_LUCKYME_API_URL=https://your-production-api.example
+export EXPO_PUBLIC_LUCKYME_WALLET_CHAIN=solana:mainnet
+export EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL=https://your-mainnet-rpc.example
+export EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER=mainnet-beta
+export EXPO_PUBLIC_LUCKYME_PROGRAM_ID=4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3
+```
+
+Release validation rejects missing env, localhost/LAN backend URLs, non-HTTPS
+mainnet RPC URLs, non-mainnet wallet chain values, and production commit-reveal
+randomness.
+
+## Backend Setup
+
+```bash
+npm install
+npm run app:validate:production
+node backend/src/server.mjs
+```
+
+Important backend behavior:
+
+- `GET /config` exposes release mode, cluster, Program ID, randomness mode,
+  economics, and public release checks.
+- `GET /pools` reads the Solana program state. In `MAINNET_RELEASE`, unavailable
+  on-chain state returns an unavailable/error state rather than fake pool data.
+- `POST /transactions/buy-tickets` builds and simulates an unsigned ticket
+  transaction for the connected wallet.
+- `POST /transactions/refund-entry` builds and simulates an unsigned refund
+  transaction when refund state is available.
+- `POST /transactions/request-randomness` and
+  `POST /transactions/settle-provider-round` support the ORAO keeper flow.
+- `POST /transactions/submit` is disabled unless explicitly enabled; keep it
+  disabled for production.
+
+## App Build
+
+```bash
+cd app-seeker
+npm install
+npm run validate:production
+npm run typecheck
+npm run doctor
+```
+
+The app defaults wallet authorization to `solana:mainnet` and uses
+`https://api.mainnet-beta.solana.com` as the fallback wallet RPC. The dApp Store
+profile still requires explicit production env through
+`app-seeker/scripts/validate-production-env.mjs` and `app-seeker/app.config.js`.
+
+Build the Solana dApp Store APK with EAS:
+
+```bash
+cd app-seeker
+eas build --platform android --profile dapp-store
+```
+
+For a local build with Android SDK/NDK installed:
+
+```bash
+cd app-seeker
+eas build --platform android --profile dapp-store --local
+```
+
+## APK Signing And Verification
+
+The Solana dApp Store accepts signed APK files. `app-seeker/eas.json` contains a
+`dapp-store` profile with `android.buildType` set to `apk`.
+
+Create a dedicated dApp Store signing key if you manage signing locally:
+
+```bash
+keytool -genkey -v -keystore luckyme-dapp-store.keystore \
+  -alias luckyme-dapp-store \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+```
+
+Verify the signed APK:
+
+```bash
+apksigner verify --print-certs app-release.apk
+```
+
+Do not commit keystores, key passwords, Expo credentials, Solana keypairs, or
+Publisher Portal API keys.
+
+## Solana Mobile Publishing Checklist
+
+Based on the official Solana Mobile dApp Store docs:
+
+- Prepare a release-ready APK signed with the release key.
+- Prepare app metadata: name, description, screenshots, and icon.
+- Use a Solana browser-extension wallet with enough SOL for submission fees and
+  storage costs.
+- Review the Publisher Policy and Developer Agreement.
+- Create a Publisher Account in the Publisher Portal and complete KYC/KYB.
+- Connect the publisher wallet and keep access to it for future submissions.
+- Set the storage provider for APK and asset uploads.
+- Add LuckyMe app details and submit the first release version.
+- After submission, monitor the publisher email for review results.
+
+Optional CLI path:
+
+```bash
+npm install -g @solana-mobile/dapp-store-cli
+export DAPP_STORE_API_KEY=<publisher-portal-api-key>
+dapp-store \
+  --apk-file ./app-release.apk \
+  --keypair ./publisher-keypair.json \
+  --whats-new "$(cat docs/store-listing/whats-new-v1.0.0.txt)"
+```
+
+The CLI path requires an app already created in the Publisher Portal, an App NFT
+minted, a signed APK, a Solana signer keypair, and a Publisher Portal API key.
+
+## Store Metadata
+
+Store listing material is in `docs/store-listing/`:
+
+- `short-description.txt`
+- `full-description.md`
+- `whats-new-v1.0.0.txt`
+- `screenshot-checklist.md`
+- `icon-adaptive-icon-checklist.md`
+- `privacy-policy.md`
+- `support-contact.md`
+- `category.txt`
+
+The privacy placeholder is included because the backend may receive wallet
+addresses and request metadata while serving state and transaction builders.
+
+## Solana Mobile Docs Scope
+
+The official Solana Mobile docs specify APK signing, metadata, Publisher Portal
+account/KYC, wallet funding for submission/storage costs, Publisher Policy,
+Developer Agreement, and optional publishing CLI requirements.
+
+Not specified by the cited Solana Mobile docs as universal submission artifacts:
+
+- a third-party smart-contract audit report;
+- a written legal opinion;
+- an uploaded gambling license.
+
+The Publisher Policy still requires submitted assets, content, transactions, and
+user-data practices to comply with the policy and applicable law. That is a
+publisher responsibility, not a repo-side build blocker encoded in LuckyMe.
+
+## Validation Commands
+
+```bash
+npm install
 npm test
-cargo check
-cargo test
+npm run app:validate:production
 npm run app:typecheck
 npm --prefix app-seeker run doctor
+cargo check
+cargo test
 NO_DNA=1 anchor build --provider.cluster localnet
 npm run test:anchor
 ```
 
-## Backend
-
-Start the backend safely:
+For production backend smoke testing:
 
 ```bash
-npm run backend:start
+LUCKYME_RELEASE_MODE=MAINNET_RELEASE \
+LUCKYME_SOLANA_CLUSTER=mainnet-beta \
+ANCHOR_PROVIDER_URL=https://your-mainnet-rpc.example \
+LUCKYME_RANDOMNESS_MODE=orao_vrf \
+LUCKYME_PRODUCTION_RANDOMNESS=true \
+CORS_ORIGIN=https://your-production-app.example \
+ENABLE_TRANSACTION_SUBMIT=false \
+node backend/src/server.mjs
 ```
-
-Safe defaults:
-
-- `ANCHOR_PROVIDER_URL=https://api.devnet.solana.com`
-- `LUCKYME_RELEASE_MODE=DEVNET_STORE_DEMO`
-- `LUCKYME_RANDOMNESS_MODE=commit_reveal_demo`
-- `LUCKYME_ORAO_PROGRAM_ID=VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y`
-- `HOST=127.0.0.1`
-- `ENABLE_TRANSACTION_SUBMIT=false`
-- read/build endpoints do not load a local private wallet
-
-Useful endpoints:
-
-- `GET /health`
-- `GET /config`
-- `GET /pools?player=<wallet-public-key>`
-- `GET /refunds`
-- `GET /rounds/:round/randomness?pool=<pool>`
-- `POST /transactions/buy-tickets`
-- `POST /transactions/settle-round`
-- `POST /transactions/request-randomness`
-- `POST /transactions/settle-provider-round`
-- `POST /transactions/refund-entry`
-
-For a trusted LAN dev session with a physical Seeker device:
-
-```bash
-HOST=0.0.0.0 ENABLE_TRANSACTION_SUBMIT=true npm run backend:start
-```
-
-Do not expose that LAN pattern as production infrastructure.
-
-## App
-
-Run the Expo dev build:
-
-```bash
-cd app-seeker
-npm run android
-EXPO_PUBLIC_LUCKYME_API_URL=http://<backend-host>:8788 npm run start -- --host lan
-```
-
-For store/demo builds, `EXPO_PUBLIC_LUCKYME_API_URL` must be set. The app shows a
-blocking configuration error instead of silently falling back to localhost.
-
-The app displays:
-
-- `DEVNET MODE - no real funds` banner
-- ticket price, total pool, countdown, and user chance
-- 98% / 1% / 1% split
-- treasury, vaults, program id, and cluster
-- randomness mode and proof status
-- recent winners, refund state, and transaction review before wallet signing
-- safety, transparency, terms, privacy, and support placeholders
-
-## Keeper Scripts
-
-All keeper scripts print cluster and wallet, support dry-run where applicable,
-and refuse mainnet unless `CONFIRM_MAINNET=true`.
-
-```bash
-DRY_RUN=true npm run round:open
-DRY_RUN=true POOL=mini ROUND_ID=1 RANDOMNESS_REVEAL=<32-byte-hex> npm run round:settle
-DRY_RUN=true POOL=mini ROUND_ID=1 npm run round:close-empty
-DRY_RUN=true npm run refund:crank
-LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=mini ROUND_ID=1 npm run randomness:request
-LUCKYME_RANDOMNESS_MODE=orao_vrf POOL=mini ROUND_ID=1 npm run randomness:status
-LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=mini ROUND_ID=1 npm run randomness:settle
-```
-
-## Store Submission
-
-Use `DEVNET_STORE_DEMO` for the first Solana dApp Store / Seeker Store
-submission. See `docs/store-readiness.md` for the APK, metadata, policy, KYC/KYB,
-publisher wallet, screenshot, privacy, and terms checklist.
-
-## Mainnet Blockers
-
-LuckyMe must remain devnet-only until these are complete:
-
-- funded devnet ORAO request, fulfillment, provider settlement transcript, and
-  monitoring/runbook evidence
-- independent smart-contract audit
-- written legal review for intended jurisdictions
-- multisig treasury, pause/admin, and upgrade authority
-- production backend behind proxy/WAF with strict CORS, persistent rate limits,
-  monitoring, and no private key on the server
-- private security contact and bug bounty/disclosure process
-- responsible gaming, age gate, geofencing, terms, privacy, and payout policy

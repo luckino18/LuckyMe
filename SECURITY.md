@@ -1,111 +1,68 @@
 # Security Policy
 
-LuckyMe is an experimental Solana devnet MVP. Do not use it with mainnet funds.
+## Scope
 
-## Current Status
+Security reports may cover:
 
-- The program has not been externally audited.
-- `commit_reveal_demo` remains devnet-only. The repo also includes an ORAO VRF
-  provider path, but mainnet still requires funded provider evidence, final
-  audit, legal review, and operational signoff.
-- The economic model includes gambling-like mechanics and requires legal review
-  before any real-money launch.
-- There is no public bug bounty yet.
-- Backend production/mainnet guardrails exist, but they do not replace a real
-  production security program.
-- The current store target is `DEVNET_STORE_DEMO`, with no real funds and no
-  real-money prizes.
+- Anchor program logic in `programs/luckyme/`
+- Generated IDL and SDK type helpers
+- Backend transaction builders in `backend/`
+- Mobile Wallet Adapter flow in `app-seeker/`
+- Operator scripts in `scripts/`
+- CI and release configuration
 
-## Supported Scope
+## Reporting
 
-Security review currently covers the public `main` branch, the devnet program id
-documented in the README, the local backend, and the Seeker app prototype.
+Use the repository maintainer contact listed in the Publisher Portal metadata or
+the support contact in `docs/store-listing/support-contact.md`. Include:
 
-Mainnet deployments, forks, unofficial frontends, private operator scripts, and
-third-party RPC infrastructure are not supported by this policy.
+- affected commit and file path;
+- reproduction steps;
+- expected and observed behavior;
+- impact on funds, transaction signing, randomness, settlement, or refunds;
+- logs, screenshots, or transaction signatures when available.
 
-## Reporting Issues
-
-For non-sensitive bugs, open a GitHub issue.
-
-For sensitive findings, use GitHub private vulnerability reporting on this
-repository if it is available from the Security tab. If no private channel is
-available, open a minimal public issue that only says a private security contact
-is needed. Do not publish exploit details, proof-of-concept transactions, private
-keys, or user-identifying data in a public issue.
-
-Include:
-
-- affected commit or deployed program id
-- cluster and transaction signatures, if relevant
-- impact and exploit preconditions
-- minimal reproduction steps
-- whether funds can be locked, redirected, or unfairly settled
-
-Private reporting placeholder before mainnet:
-
-- dedicated security email or form
-- GitHub private vulnerability reporting enabled
-- encrypted contact if needed for sensitive proofs
-- triage owner and escalation backup
+Never send seed phrases, private keys, or keystore passwords.
 
 ## Severity Guide
 
-- Critical: loss or theft of funds, arbitrary settlement manipulation, permanent
-  vault lockup, upgrade-authority compromise, or private-key exposure.
-- High: denial of settlement/refund, bypass of pause or treasury constraints,
-  backend transaction-builder abuse with material user impact, or severe
-  phishing surface.
-- Medium: incorrect UI transaction review, incomplete accounting, weak
-  operational controls, or missing tests for money-moving paths.
-- Low: documentation gaps, minor hardening issues, or non-sensitive reliability
-  problems.
+- Critical: unauthorized fund movement, transaction signing deception, arbitrary
+  winner selection in production mode, or bypass of program account constraints.
+- High: backend transaction builders create materially different transactions
+  than the UI review shows, production fallback returns fake pool data, or
+  refund/settlement state can be corrupted.
+- Medium: stale round UX, missing error handling, inaccurate public config, or
+  rate-limit/CORS misconfiguration.
+- Low: documentation, metadata, or non-sensitive operational issues.
 
-## Response Targets
+## Mainnet Release Controls
 
-These are best-effort targets for the devnet MVP:
+- `MAINNET_RELEASE` requires `orao_vrf` randomness and
+  `LUCKYME_PRODUCTION_RANDOMNESS=true`.
+- `MAINNET_RELEASE` requires `LUCKYME_SOLANA_CLUSTER=mainnet-beta`.
+- `MAINNET_RELEASE` requires an HTTPS Solana RPC URL.
+- The production app requires an HTTPS backend URL and `solana:mainnet` wallet
+  authorization.
+- The backend submit relay is disabled by default and must stay disabled for
+  production.
+- The backend never signs player transactions.
+- Production on-chain state failures produce unavailable/error responses, not
+  fake pool data.
 
-- Critical: acknowledge within 48 hours
-- High: acknowledge within 5 business days
-- Medium/Low: triage when project time allows
+## User Data
 
-No SLA or bounty is promised until a production security program is announced.
+The backend may receive wallet addresses, IP-derived rate-limit metadata,
+transaction build payloads, and request logs. Store listing privacy text is kept
+in `docs/store-listing/privacy-policy.md` so Publisher Policy user-data
+disclosure can be completed consistently with the deployed infrastructure.
 
-## Known Limitations
+## Solana Mobile Requirements Note
 
-- `commit_reveal_demo` randomness can be selectively withheld and is blocked
-  from `MAINNET_BETA_CANDIDATE`.
-- ORAO VRF settlement verifies owner, PDA, seed, and fulfilled account data, but
-  live provider operations still need monitoring and final audit evidence.
-- Refunds recover funds after timeout but remain a recovery path, not a
-  substitute for fulfilled provider randomness.
-- No legal/compliance opinion has been completed.
-- No multisig authority handover has been completed.
-- No public bug bounty is funded yet.
+The Solana Mobile docs specify APK signing, metadata, Publisher Portal account
+and KYC/KYB, wallet funding for submission/storage, Publisher Policy, Developer
+Agreement, and optional publishing CLI prerequisites.
 
-## Planned Bug Bounty
-
-Before any mainnet launch, publish:
-
-- bounty scope and excluded assets
-- severity-to-payout matrix
-- disclosure rules
-- response SLA
-- payout currency/process
-- safe harbor language reviewed by counsel
-
-## Incident Response
-
-If a critical issue affects the devnet deployment:
-
-1. Pause config if the bug affects buying or opening rounds.
-2. Preserve transaction signatures, logs, build artifacts, and commit hashes.
-3. Publish a short public status note without exploit details.
-4. Patch, test locally, rebuild the IDL/SDK, and deploy only after verification.
-5. Update `docs/handoff.md` with the exact fix, tests, deploy transaction, and
-   residual risk.
-
-Before any mainnet launch, LuckyMe needs a dedicated private contact, multisig
-admin controls, a formal disclosure process, a real bug bounty policy,
-production randomness, and legal/compliance signoff. The full evidence checklist
-is in `docs/mainnet-readiness.md`.
+The cited Solana Mobile docs do not list a third-party smart-contract audit
+report, written legal opinion, or uploaded gambling license as universal
+submission artifacts. Publisher Policy compliance remains the publisher's
+responsibility.

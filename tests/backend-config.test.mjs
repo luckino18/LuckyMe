@@ -4,36 +4,69 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 import test from "node:test";
 
-test("backend refuses mainnet RPC without required signoffs", async () => {
+test("backend refuses mainnet release without a configured RPC", async () => {
+  const result = await runServerExpectingExit({
+    ANCHOR_PROVIDER_URL: "",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    CORS_ORIGIN: "https://luckyme.example",
+  });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.output, /ANCHOR_PROVIDER_URL is required for MAINNET_RELEASE/);
+});
+
+test("backend refuses mainnet release on non-HTTPS RPC", async () => {
+  const result = await runServerExpectingExit({
+    ANCHOR_PROVIDER_URL: "http://127.0.0.1:8899",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    CORS_ORIGIN: "https://luckyme.example",
+  });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.output, /MAINNET_RELEASE requires an HTTPS Solana RPC URL/);
+});
+
+test("backend refuses mainnet release without ORAO production randomness", async () => {
   const result = await runServerExpectingExit({
     ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
-  });
-
-  assert.notEqual(result.code, 0);
-  assert.match(result.output, /DEVNET_STORE_DEMO cannot use a mainnet RPC/);
-});
-
-test("backend refuses mainnet beta candidate without production randomness", async () => {
-  const result = await runServerExpectingExit({
-    ANCHOR_PROVIDER_URL: "https://api.devnet.solana.com",
-    LUCKYME_RELEASE_MODE: "MAINNET_BETA_CANDIDATE",
-    LUCKYME_PRODUCTION_RANDOMNESS: "false",
-  });
-
-  assert.notEqual(result.code, 0);
-  assert.match(result.output, /MAINNET_BETA_CANDIDATE requires LUCKYME_RANDOMNESS_MODE=orao_vrf/);
-});
-
-test("backend refuses mainnet beta candidate on commit reveal", async () => {
-  const result = await runServerExpectingExit({
-    ANCHOR_PROVIDER_URL: "https://api.devnet.solana.com",
-    LUCKYME_RELEASE_MODE: "MAINNET_BETA_CANDIDATE",
-    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
     LUCKYME_RANDOMNESS_MODE: "commit_reveal_demo",
+    LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
+    CORS_ORIGIN: "https://luckyme.example",
   });
 
   assert.notEqual(result.code, 0);
-  assert.match(result.output, /LUCKYME_RANDOMNESS_MODE=orao_vrf/);
+  assert.match(result.output, /MAINNET_RELEASE requires LUCKYME_RANDOMNESS_MODE=orao_vrf/);
+});
+
+test("backend accepts strict mainnet production health config", async () => {
+  const port = await getFreePort();
+  const child = startServer({
+    PORT: String(port),
+    NODE_ENV: "production",
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
+    LUCKYME_RANDOMNESS_MODE: "orao_vrf",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
+    CORS_ORIGIN: "https://luckyme.example",
+  });
+
+  try {
+    await waitForOutput(child, /LuckyMe API listening/);
+    const response = await fetch(`http://127.0.0.1:${port}/health`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.service, "luckyme-api");
+    assert.equal(payload.mode, "MAINNET_RELEASE");
+    assert.equal(payload.cluster, "mainnet-beta");
+  } finally {
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  }
 });
 
 test("backend accepts ORAO randomness mode for public config", async () => {
@@ -41,11 +74,12 @@ test("backend accepts ORAO randomness mode for public config", async () => {
   const child = startServer({
     PORT: String(port),
     ANCHOR_PROVIDER_URL: "http://127.0.0.1:1",
+    LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
     LUCKYME_RANDOMNESS_MODE: "orao_vrf",
   });
 
   try {
-    await waitForOutput(child, /LuckyMe dev API listening/);
+    await waitForOutput(child, /LuckyMe API listening/);
     const response = await fetch(`http://127.0.0.1:${port}/config`);
     const payload = await response.json();
 
@@ -63,6 +97,7 @@ test("backend production mode requires strict CORS", async () => {
   const result = await runServerExpectingExit({
     NODE_ENV: "production",
     CORS_ORIGIN: "*",
+    LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
   });
 
   assert.notEqual(result.code, 0);
@@ -74,10 +109,11 @@ test("backend transaction submit relay is disabled by default", async () => {
   const child = startServer({
     PORT: String(port),
     ANCHOR_PROVIDER_URL: "http://127.0.0.1:1",
+    LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
   });
 
   try {
-    await waitForOutput(child, /LuckyMe dev API listening/);
+    await waitForOutput(child, /LuckyMe API listening/);
     const response = await fetch(`http://127.0.0.1:${port}/transactions/submit`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -98,16 +134,17 @@ test("backend exposes safe public config", async () => {
   const child = startServer({
     PORT: String(port),
     ANCHOR_PROVIDER_URL: "http://127.0.0.1:1",
+    LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
   });
 
   try {
-    await waitForOutput(child, /LuckyMe dev API listening/);
+    await waitForOutput(child, /LuckyMe API listening/);
     const response = await fetch(`http://127.0.0.1:${port}/config`);
     const payload = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(payload.mode, "DEVNET_STORE_DEMO");
-    assert.equal(payload.releaseMode, "DEVNET_STORE_DEMO");
+    assert.equal(payload.mode, "LOCAL_DEVELOPMENT");
+    assert.equal(payload.releaseMode, "LOCAL_DEVELOPMENT");
     assert.equal(payload.randomnessMode, "commit_reveal_demo");
     assert.deepEqual(payload.supportedRandomnessModes, ["commit_reveal_demo", "orao_vrf"]);
     assert.equal(payload.economics.houseFeeBps, 100);
@@ -115,6 +152,7 @@ test("backend exposes safe public config", async () => {
     assert.equal(payload.economics.mainPrizeBps, 9800);
     assert.equal(payload.economics.roundDurationSeconds, 3600);
     assert.equal(payload.realFundsEnabled, false);
+    assert.equal(payload.releaseChecks.backendSignsPlayerTransactions, false);
   } finally {
     child.kill();
     await once(child, "exit").catch(() => {});
@@ -137,14 +175,12 @@ function startServer(env) {
       ...process.env,
       HOST: "127.0.0.1",
       PORT: "0",
-      LUCKYME_RELEASE_MODE: "DEVNET_STORE_DEMO",
+      LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
       LUCKYME_RANDOMNESS_MODE: "commit_reveal_demo",
       LUCKYME_STORE_BUILD: "false",
       LUCKYME_STRICT_ONCHAIN: "false",
-      LUCKYME_ENABLE_MAINNET: "false",
-      LUCKYME_LEGAL_SIGNOFF: "false",
+      LUCKYME_SOLANA_CLUSTER: "localnet",
       LUCKYME_PRODUCTION_RANDOMNESS: "false",
-      LUCKYME_MULTISIG_SIGNOFF: "false",
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

@@ -12,17 +12,17 @@ const rootScripts = new Set(Object.keys(packageJson.scripts ?? {}));
 const appScripts = new Set(Object.keys(appPackageJson.scripts ?? {}));
 const docs = [
   "README.md",
+  "SECURITY.md",
   "backend/README.md",
   "app-seeker/README.md",
-  "docs/devnet-checklist.md",
+  "docs/apk-signing.md",
+  "docs/local-development.md",
   "docs/manual-settlement.md",
-  "docs/randomness-provider-investigation.md",
   "docs/randomness.md",
   "docs/mainnet-readiness.md",
-  "docs/audit-closure.md",
-  "docs/store-readiness.md",
+  "docs/solana-mobile-publishing.md",
   "docs/production-keeper.md",
-  "docs/final-readiness-audit.md",
+  "docs/handoff.md",
 ].filter((file) => fs.existsSync(path.join(ROOT, file)));
 
 test("documented npm scripts exist in root or app package.json", () => {

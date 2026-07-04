@@ -2,13 +2,33 @@
   "expo": {
     "name": "LuckyMe",
     "slug": "luckyme-seeker",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "luckyme",
     "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
     "android": {
       "package": "com.luckyme.seeker",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#101316"
+      },
       "permissions": []
-    }
+    },
+    "extra": {
+      "luckymeProgramId": "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3",
+      "solanaCluster": "mainnet-beta"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#101316"
+        }
+      ]
+    ]
   }
 }

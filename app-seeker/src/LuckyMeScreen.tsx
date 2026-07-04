@@ -20,7 +20,9 @@ declare const process:
   | {
       env?: {
         EXPO_PUBLIC_LUCKYME_API_URL?: string;
+        EXPO_PUBLIC_LUCKYME_PROGRAM_ID?: string;
         EXPO_PUBLIC_LUCKYME_RELEASE_MODE?: string;
+        EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER?: string;
         EXPO_PUBLIC_LUCKYME_STORE_BUILD?: string;
         EXPO_PUBLIC_LUCKYME_TERMS_URL?: string;
         EXPO_PUBLIC_LUCKYME_PRIVACY_URL?: string;
@@ -96,7 +98,7 @@ type PublicConfig = {
   programId?: string;
   randomnessMode?: string;
   productionRandomnessEnabled?: boolean;
-  devnetOnly?: boolean;
+  mainnet?: boolean;
   realFundsEnabled?: boolean;
   economics?: {
     mainPrizeBps?: number;
@@ -107,7 +109,11 @@ type PublicConfig = {
     jackpotOddsDenominator?: number | null;
   };
   treasury?: string | null;
-  limitations?: string[];
+  releaseChecks?: {
+    strictOnchain?: boolean;
+    transactionSubmitRelayEnabled?: boolean;
+    backendSignsPlayerTransactions?: boolean;
+  };
 };
 
 type PoolsResponse = {
@@ -148,18 +154,34 @@ type SubmitTransactionResponse = {
 };
 
 const ENV = typeof process !== "undefined" ? process.env : undefined;
-const RELEASE_MODE = ENV?.EXPO_PUBLIC_LUCKYME_RELEASE_MODE ?? "DEVNET_STORE_DEMO";
+const RELEASE_MODE = ENV?.EXPO_PUBLIC_LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE";
+const LOCAL_DEVELOPMENT = RELEASE_MODE === "LOCAL_DEVELOPMENT";
 const STORE_BUILD = ENV?.EXPO_PUBLIC_LUCKYME_STORE_BUILD === "true";
+const SOLANA_CLUSTER = ENV?.EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER ?? "mainnet-beta";
+const PROGRAM_ID =
+  ENV?.EXPO_PUBLIC_LUCKYME_PROGRAM_ID ?? "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
 const API_BASE_URL =
   ENV?.EXPO_PUBLIC_LUCKYME_API_URL ??
-  (!STORE_BUILD && RELEASE_MODE === "DEVNET_STORE_DEMO"
-    ? "http://localhost:8788"
-    : "");
+  (!STORE_BUILD && LOCAL_DEVELOPMENT ? "http://localhost:8788" : "");
 const TERMS_URL = ENV?.EXPO_PUBLIC_LUCKYME_TERMS_URL ?? "https://example.com/terms";
 const PRIVACY_URL =
   ENV?.EXPO_PUBLIC_LUCKYME_PRIVACY_URL ?? "https://example.com/privacy";
 const SUPPORT_URL =
   ENV?.EXPO_PUBLIC_LUCKYME_SUPPORT_URL ?? "https://example.com/support";
+const LOCAL_FALLBACK_ENABLED = !STORE_BUILD && LOCAL_DEVELOPMENT;
+
+const UNAVAILABLE_POOL: Pool = {
+  id: "unavailable",
+  label: "Unavailable",
+  ticketPriceSol: "--",
+  currentRound: 0,
+  jackpotSol: "0",
+  roundDurationSeconds: 0,
+  mainPrizeBps: 0,
+  houseFeeBps: 0,
+  jackpotBps: 0,
+  activeRound: null,
+};
 
 const FALLBACK_POOLS: Pool[] = [
   {
@@ -345,13 +367,97 @@ function roundOutcome(round: RoundState, now: number) {
   return "Open";
 }
 
+function isHttpUrl(value: string | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function runtimeConfigError() {
+  if (RELEASE_MODE === "MAINNET_RELEASE") {
+    if (!API_BASE_URL) {
+      return "EXPO_PUBLIC_LUCKYME_API_URL is required for MAINNET_RELEASE";
+    }
+
+    if (!API_BASE_URL.startsWith("https://")) {
+      return "MAINNET_RELEASE requires an HTTPS backend URL";
+    }
+
+    if (API_BASE_URL.includes("localhost") || API_BASE_URL.includes("127.0.0.1")) {
+      return "MAINNET_RELEASE cannot use localhost or LAN backend URLs";
+    }
+
+    if (SOLANA_CLUSTER !== "mainnet-beta") {
+      return "EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER must be mainnet-beta";
+    }
+
+    try {
+      new PublicKey(PROGRAM_ID);
+    } catch {
+      return "EXPO_PUBLIC_LUCKYME_PROGRAM_ID must be a valid Solana public key";
+    }
+  }
+
+  if (API_BASE_URL && !isHttpUrl(API_BASE_URL)) {
+    return "EXPO_PUBLIC_LUCKYME_API_URL must be an HTTP or HTTPS URL";
+  }
+
+  return null;
+}
+
+function friendlyErrorMessage(caught: unknown, fallback: string) {
+  const message = caught instanceof Error ? caught.message : fallback;
+
+  if (/no wallet|wallet.*not|authorization|not.*installed/i.test(message)) {
+    return "No compatible Solana wallet is available. Install a Mobile Wallet Adapter wallet and try again.";
+  }
+
+  if (/reject|declin|cancel|user/i.test(message)) {
+    return "Signature request was rejected in the wallet.";
+  }
+
+  if (/insufficient|custom program error: 0x1|fund/i.test(message)) {
+    return "Insufficient SOL for the ticket amount and network fee.";
+  }
+
+  if (/simulation failed|failed simulation|simulate/i.test(message)) {
+    return message;
+  }
+
+  if (/no_open_round|round.*closed|stale|closed round|already_entered_round/i.test(message)) {
+    return "The selected round is stale, closed, or already contains your wallet entry. Refresh and choose an open round.";
+  }
+
+  if (/refund_not_available|refund/i.test(message)) {
+    return "Refund is not available for this entry yet. Refresh the round state.";
+  }
+
+  if (/network request failed|fetch|timeout|HTTP 5|onchain_state_unavailable|backend/i.test(message)) {
+    return "LuckyMe backend or Solana RPC is unavailable. Refresh and try again.";
+  }
+
+  return message;
+}
+
 export function LuckyMeScreen() {
   const { account, connect, disconnect, signTransaction } = useMobileWallet();
   const walletAddress = walletAddressFromAccount(account);
-  const [pools, setPools] = useState<Pool[]>(FALLBACK_POOLS);
-  const [selectedPoolId, setSelectedPoolId] = useState(FALLBACK_POOLS[1].id);
+  const initialPools = LOCAL_FALLBACK_ENABLED ? FALLBACK_POOLS : [];
+  const [pools, setPools] = useState<Pool[]>(initialPools);
+  const [selectedPoolId, setSelectedPoolId] = useState(
+    LOCAL_FALLBACK_ENABLED ? FALLBACK_POOLS[1].id : "",
+  );
   const [ticketCount, setTicketCount] = useState(1);
-  const [source, setSource] = useState("fallback");
+  const [source, setSource] = useState(
+    LOCAL_FALLBACK_ENABLED ? "fallback" : "unavailable",
+  );
   const [clusterUrl, setClusterUrl] = useState<string | undefined>();
   const [config, setConfig] = useState<ConfigState | null>(null);
   const [publicConfig, setPublicConfig] = useState<PublicConfig | null>(null);
@@ -411,10 +517,10 @@ export function LuckyMeScreen() {
       setSelectedPoolId((current: string) =>
         payload.pools?.some((pool: Pool) => pool.id === current)
           ? current
-          : payload.pools?.[0]?.id ?? FALLBACK_POOLS[0].id,
+          : payload.pools?.[0]?.id ?? "",
       );
     } catch (caught) {
-      const allowFallback = !STORE_BUILD && RELEASE_MODE === "DEVNET_STORE_DEMO";
+      const allowFallback = LOCAL_FALLBACK_ENABLED;
       setPools(allowFallback ? FALLBACK_POOLS : []);
       setSource(allowFallback ? "fallback" : "unavailable");
       setClusterUrl(undefined);
@@ -422,9 +528,11 @@ export function LuckyMeScreen() {
       setPublicConfig(null);
       setError(caught instanceof Error ? caught.message : "Backend unavailable");
       setSelectedPoolId((current: string) =>
-        FALLBACK_POOLS.some((pool: Pool) => pool.id === current)
+        allowFallback && FALLBACK_POOLS.some((pool: Pool) => pool.id === current)
           ? current
-          : FALLBACK_POOLS[0].id,
+          : allowFallback
+            ? FALLBACK_POOLS[0].id
+            : "",
       );
     } finally {
       setLoading(false);
@@ -444,7 +552,8 @@ export function LuckyMeScreen() {
 
   const selectedPool = useMemo(
     () =>
-      pools.find((pool: Pool) => pool.id === selectedPoolId) ?? FALLBACK_POOLS[0],
+      pools.find((pool: Pool) => pool.id === selectedPoolId) ??
+      (LOCAL_FALLBACK_ENABLED ? FALLBACK_POOLS[0] : UNAVAILABLE_POOL),
     [pools, selectedPoolId],
   );
 
@@ -491,14 +600,11 @@ export function LuckyMeScreen() {
     selectedPool.houseFeeBps,
   )} / ${formatBps(selectedPool.jackpotBps)}`;
   const mode = publicConfig?.mode ?? RELEASE_MODE;
-  const randomnessMode = publicConfig?.randomnessMode ?? "commit_reveal_demo";
-  const modeBanner = mode === "DEVNET_STORE_DEMO"
-    ? "DEVNET MODE - no real funds"
-    : "MAINNET BETA CANDIDATE - disabled until production randomness";
-  const apiConfigError =
-    !API_BASE_URL && (STORE_BUILD || RELEASE_MODE !== "DEVNET_STORE_DEMO")
-      ? "Missing EXPO_PUBLIC_LUCKYME_API_URL for store/production build"
-      : null;
+  const randomnessMode = publicConfig?.randomnessMode ?? "orao_vrf";
+  const modeBanner = mode === "MAINNET_RELEASE"
+    ? "Solana mainnet"
+    : "Local development";
+  const apiConfigError = runtimeConfigError();
 
   useEffect(() => {
     setPendingTransaction(null);
@@ -552,7 +658,7 @@ export function LuckyMeScreen() {
         await connect();
       } catch (caught) {
         setWalletError(
-          caught instanceof Error ? caught.message : "Wallet connection failed",
+          friendlyErrorMessage(caught, "Wallet connection failed"),
         );
       }
       return;
@@ -582,7 +688,7 @@ export function LuckyMeScreen() {
       setPendingTransaction(built);
     } catch (caught) {
       setWalletError(
-        caught instanceof Error ? caught.message : "Transaction build failed",
+        friendlyErrorMessage(caught, "Transaction build failed"),
       );
     } finally {
       setSubmitting(false);
@@ -605,7 +711,7 @@ export function LuckyMeScreen() {
         await connect();
       } catch (caught) {
         setWalletError(
-          caught instanceof Error ? caught.message : "Wallet connection failed",
+          friendlyErrorMessage(caught, "Wallet connection failed"),
         );
       }
       return;
@@ -635,7 +741,7 @@ export function LuckyMeScreen() {
       setPendingTransaction(built);
     } catch (caught) {
       setWalletError(
-        caught instanceof Error ? caught.message : "Refund build failed",
+        friendlyErrorMessage(caught, "Refund build failed"),
       );
     } finally {
       setSubmitting(false);
@@ -678,7 +784,7 @@ export function LuckyMeScreen() {
       await loadPools(true);
     } catch (caught) {
       setWalletError(
-        caught instanceof Error ? caught.message : "Transaction failed",
+        friendlyErrorMessage(caught, "Transaction failed"),
       );
     } finally {
       setSubmitting(false);
@@ -697,7 +803,9 @@ export function LuckyMeScreen() {
                   ? "Live Solana pools"
                   : source === "static"
                     ? "Static pool metadata"
-                    : "Local fallback pools"}
+                    : source === "fallback"
+                      ? "Local fallback pools"
+                      : "Pool data unavailable"}
               </Text>
             </View>
             <Pressable
@@ -729,7 +837,7 @@ export function LuckyMeScreen() {
           <Text style={styles.modeTitle}>{modeBanner}</Text>
           <Text style={styles.modeText}>
             Mode {mode} | Randomness {randomnessMode} | Cluster{" "}
-            {publicConfig?.cluster ?? sourceLabel}
+            {publicConfig?.cluster ?? SOLANA_CLUSTER}
           </Text>
         </View>
 
@@ -939,12 +1047,14 @@ export function LuckyMeScreen() {
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Program</Text>
-            <Text style={styles.value}>{shortAddress(publicConfig?.programId)}</Text>
+            <Text style={styles.value}>
+              {shortAddress(publicConfig?.programId ?? PROGRAM_ID)}
+            </Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Real funds</Text>
+            <Text style={styles.label}>Network</Text>
             <Text style={styles.value}>
-              {publicConfig?.realFundsEnabled ? "Enabled" : "Disabled"}
+              {mode === "MAINNET_RELEASE" ? "Solana mainnet" : sourceLabel}
             </Text>
           </View>
         </View>
@@ -957,9 +1067,9 @@ export function LuckyMeScreen() {
             split shown above.
           </Text>
           <Text style={styles.infoText}>
-            Current demo randomness is commit-reveal with refund after timeout.
-            If the reveal is missing, refundable entries are shown and funds can
-            be returned to entry owners.
+            Mainnet settlement uses provider randomness. If provider fulfillment
+            is unavailable after the timeout, refundable entries are shown and
+            funds can be returned to entry owners.
           </Text>
         </View>
 
@@ -969,10 +1079,6 @@ export function LuckyMeScreen() {
             The app never handles private keys. Your wallet signs the reviewed
             transaction. Program, vault, treasury, fee, randomness, and refund
             status are displayed before signing.
-          </Text>
-          <Text style={styles.infoText}>
-            DEVNET_STORE_DEMO is for store review and testing only: no real SOL,
-            no real prizes, and no mainnet claims.
           </Text>
           <Text style={styles.linkText}>Terms: {TERMS_URL}</Text>
           <Text style={styles.linkText}>Privacy: {PRIVACY_URL}</Text>
@@ -1041,7 +1147,13 @@ export function LuckyMeScreen() {
               </Text>
             </View>
             <View style={styles.row}>
-              <Text style={styles.label}>Cluster</Text>
+              <Text style={styles.label}>Network</Text>
+              <Text style={styles.value}>
+                {mode === "MAINNET_RELEASE" ? "Solana mainnet" : SOLANA_CLUSTER}
+              </Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>RPC</Text>
               <Text style={styles.value}>
                 {pendingTransaction.clusterUrl ?? clusterUrl ?? "--"}
               </Text>
@@ -1065,9 +1177,10 @@ export function LuckyMeScreen() {
               </Text>
             </View>
             <Text style={styles.reviewNote}>
-              Wallet warnings are expected on localnet/devnet because the program
-              is not a known mainnet app. Check the amount and cluster before
-              signing.
+              Buying creates one wallet entry for this round. Settlement uses
+              the program rules shown above: fixed ticket price, transparent
+              pool split, provider randomness, and refund state if settlement
+              cannot complete after timeout.
             </Text>
             <View style={styles.reviewActions}>
               <Pressable

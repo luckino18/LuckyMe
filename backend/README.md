@@ -1,160 +1,61 @@
 # LuckyMe Backend
 
-The backend is a devnet/store-demo API. It must not decide winners, custody
-funds, generate production randomness, or hold private keys.
+The backend is a Solana mainnet transaction builder and public state API. It
+does not decide winners, does not sign player transactions, and does not custody
+user funds.
 
-## Responsibilities
-
-- expose safe public config for the app
-- index pools, rounds, entries, winners, refunds, and payouts from Solana
-- build unsigned transactions for wallet review/signing
-- find winner/jackpot entry accounts for permissionless settlement
-- find refundable entries after no-reveal timeout
-- support keeper/refund cranking without running keepers inside the public API
-
-## Safe Defaults
-
-```text
-ANCHOR_PROVIDER_URL=https://api.devnet.solana.com
-LUCKYME_RELEASE_MODE=DEVNET_STORE_DEMO
-LUCKYME_RANDOMNESS_MODE=commit_reveal_demo
-LUCKYME_ORAO_PROGRAM_ID=VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y
-HOST=127.0.0.1
-CORS_ORIGIN=*
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX=120
-MAX_JSON_BYTES=100000
-REFUND_SCAN_ROUNDS=20
-ENABLE_TRANSACTION_SUBMIT=false
-```
-
-Read/build/submit-relay paths use a read-only Anchor wallet and do not read
-`ANCHOR_WALLET`. Signer-only authority actions live in scripts.
-
-## Production/Mainnet Guards
-
-- `DEVNET_STORE_DEMO` refuses mainnet RPC.
-- `MAINNET_BETA_CANDIDATE` refuses to start unless
-  `LUCKYME_RANDOMNESS_MODE=orao_vrf` and production randomness are enabled.
-- `LUCKYME_ORAO_PROGRAM_ID` must match the ORAO program id compiled into the
-  on-chain verifier; no runtime provider swap is allowed.
-- Mainnet RPC requires all gates:
-  `LUCKYME_ENABLE_MAINNET=true`, `LUCKYME_LEGAL_SIGNOFF=true`,
-  `LUCKYME_PRODUCTION_RANDOMNESS=true`, and
-  `LUCKYME_MULTISIG_SIGNOFF=true`.
-- `NODE_ENV=production` refuses `CORS_ORIGIN=*`.
-- `NODE_ENV=production` refuses `ENABLE_TRANSACTION_SUBMIT=true`.
-- `NODE_ENV=production` refuses `HOST=0.0.0.0`.
-
-These guards do not make mainnet safe. They prevent accidental exposure while
-the project is still devnet-only.
-
-## Local API
-
-Start:
+## Mainnet Release Env
 
 ```bash
-npm run backend:start
+export LUCKYME_RELEASE_MODE=MAINNET_RELEASE
+export LUCKYME_SOLANA_CLUSTER=mainnet-beta
+export ANCHOR_PROVIDER_URL=https://your-mainnet-rpc.example
+export LUCKYME_RANDOMNESS_MODE=orao_vrf
+export LUCKYME_PRODUCTION_RANDOMNESS=true
+export CORS_ORIGIN=https://your-production-app.example
+export ENABLE_TRANSACTION_SUBMIT=false
+node backend/src/server.mjs
 ```
 
-For trusted LAN testing with a physical Seeker device:
+`MAINNET_RELEASE` fails during startup when:
+
+- `ANCHOR_PROVIDER_URL` is missing;
+- the RPC URL is not HTTPS;
+- `LUCKYME_SOLANA_CLUSTER` is not `mainnet-beta`;
+- randomness is not `orao_vrf`;
+- `LUCKYME_PRODUCTION_RANDOMNESS` is not `true`;
+- CORS is wildcard;
+- the public submit relay is enabled.
+
+## Endpoints
+
+- `GET /health` - service mode and cluster
+- `GET /config` - public release config, economics, Program ID, randomness mode
+- `GET /program` - current on-chain program/config/pool state
+- `GET /pools?player=<wallet>` - pools, active round, user entry, recent rounds
+- `GET /refunds` - refundable entries discovered by the scanner
+- `GET /rounds/:pool/:roundId/randomness` - ORAO provider sidecar status
+- `POST /transactions/buy-tickets` - builds and simulates an unsigned buy tx
+- `POST /transactions/refund-entry` - builds and simulates an unsigned refund tx
+- `POST /transactions/request-randomness` - builds an unsigned keeper request tx
+- `POST /transactions/settle-provider-round` - builds an unsigned provider settlement tx
+- `POST /transactions/submit` - disabled by default and should stay disabled for production
+
+## Production Safety
+
+The API returns an unavailable state instead of fake pool data when mainnet
+on-chain state cannot be read. Player transactions are always returned unsigned
+for Mobile Wallet Adapter signing.
+
+Use a production HTTPS reverse proxy or managed platform in front of this
+process. Keep CORS restricted to the production app origin and apply upstream
+rate limiting/WAF controls for public deployments.
+
+## Local Development
 
 ```bash
-HOST=0.0.0.0 ENABLE_TRANSACTION_SUBMIT=true npm run backend:start
-```
-
-Useful endpoints:
-
-- `GET /health` - process health plus mode/cluster
-- `GET /config` - safe public mode, cluster, program, economics, treasury,
-  randomness, and limitation data
-- `GET /program` - current program/config/pool state
-- `GET /pools` - pool list and recent rounds
-- `GET /pools?player=<wallet-public-key>` - includes wallet entry/chance
-- `GET /refunds` - recent refundable abandoned entries
-- `GET /refunds?pool=mini&roundId=9` - specific refund scan
-- `GET /rounds/:round/randomness?pool=mini` - LuckyMe sidecar and ORAO request
-  status
-- `GET /rounds/:pool/:round/randomness` - same status with pool in the path
-- `GET /simulate?pool=normal&seed=demo` - deterministic economics simulation
-- `POST /transactions/buy-tickets` - unsigned simulated `buy_tickets`
-- `POST /transactions/settle-round` - reveal verification and unsigned
-  simulated `settle_round`; available only in `commit_reveal_demo`
-- `POST /transactions/request-randomness` - unsigned simulated
-  `request_randomness` sidecar transaction for `orao_vrf`
-- `POST /transactions/settle-provider-round` - unsigned simulated
-  `settle_round_with_provider_randomness` after ORAO fulfillment
-- `POST /transactions/refund-entry` - unsigned simulated
-  `refund_entry_after_timeout`; optional `feePayer` can pay cranking fees
-- `POST /transactions/submit` - disabled by default, devnet relay only
-
-## Examples
-
-Build buy transaction:
-
-```bash
-curl -s -X POST http://localhost:8788/transactions/buy-tickets \
-  -H 'content-type: application/json' \
-  -d '{"player":"<wallet-public-key>","pool":"normal","ticketCount":1}'
-```
-
-Build refund transaction with a separate fee payer:
-
-```bash
-curl -s -X POST http://localhost:8788/transactions/refund-entry \
-  -H 'content-type: application/json' \
-  -d '{"player":"<entrant-wallet>","feePayer":"<optional-fee-payer>","pool":"normal","roundId":1}'
-```
-
-Build settlement transaction:
-
-```bash
-curl -s -X POST http://localhost:8788/transactions/settle-round \
-  -H 'content-type: application/json' \
-  -d '{"settler":"<wallet-paying-fees>","pool":"normal","roundId":1,"randomnessReveal":"<32-byte-hex-reveal>"}'
-```
-
-Build ORAO sidecar request transaction:
-
-```bash
-LUCKYME_RANDOMNESS_MODE=orao_vrf npm run backend:start
-
-curl -s -X POST http://localhost:8788/transactions/request-randomness \
-  -H 'content-type: application/json' \
-  -d '{"keeper":"<wallet-paying-fees>","pool":"normal","roundId":1}'
-```
-
-Read provider randomness status:
-
-```bash
-curl -s http://localhost:8788/rounds/normal/1/randomness
-```
-
-Build provider settlement transaction after ORAO fulfillment:
-
-```bash
-curl -s -X POST http://localhost:8788/transactions/settle-provider-round \
-  -H 'content-type: application/json' \
-  -d '{"settler":"<wallet-paying-fees>","pool":"normal","roundId":1}'
-```
-
-The public API does not request ORAO with a private key. ORAO request,
-fulfillment polling, and provider settlement execution are keeper operations:
-
-```bash
-LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=normal ROUND_ID=1 npm run randomness:request
-LUCKYME_RANDOMNESS_MODE=orao_vrf POOL=normal ROUND_ID=1 npm run randomness:status
-LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=normal ROUND_ID=1 npm run randomness:settle
-```
-
-## Refund Cranking
-
-Refunds are permissionless: `player` is not a signer and the program transfers
-only to `entry.player`. A keeper can pay fees and clear abandoned rounds without
-redirecting funds.
-
-```bash
-curl -s http://localhost:8788/refunds
-DRY_RUN=true npm run refund:crank
-POOL=mini ROUND_ID=9 npm run refund:crank
+LUCKYME_RELEASE_MODE=LOCAL_DEVELOPMENT \
+ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 \
+LUCKYME_RANDOMNESS_MODE=commit_reveal_demo \
+node backend/src/server.mjs
 ```

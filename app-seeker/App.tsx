@@ -16,10 +16,10 @@ declare const process:
   | undefined;
 
 const walletChain = (process?.env?.EXPO_PUBLIC_LUCKYME_WALLET_CHAIN ??
-  "solana:devnet") as Chain;
+  "solana:mainnet") as Chain;
 const walletEndpoint =
   process?.env?.EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL ??
-  "https://api.devnet.solana.com";
+  "https://api.mainnet-beta.solana.com";
 const identity: AppIdentity = {
   name: "LuckyMe",
   uri: "https://github.com/luckino18/LuckyMe",
