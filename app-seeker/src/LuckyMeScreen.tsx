@@ -36,6 +36,14 @@ type RoundState = {
   jackpotTriggered?: boolean;
   winner?: string;
   jackpotWinner?: string;
+  userEntry?: {
+    address: string;
+    player: string;
+    ticketStart: string;
+    ticketCount: string;
+    lamports: string;
+    chancePercent: string;
+  } | null;
   missing?: boolean;
 };
 
@@ -272,6 +280,7 @@ function roundOutcome(round: RoundState, now: number) {
 
 export function LuckyMeScreen() {
   const { account, connect, disconnect, signTransaction } = useMobileWallet();
+  const walletAddress = walletAddressFromAccount(account);
   const [pools, setPools] = useState<Pool[]>(FALLBACK_POOLS);
   const [selectedPoolId, setSelectedPoolId] = useState(FALLBACK_POOLS[1].id);
   const [ticketCount, setTicketCount] = useState(1);
@@ -297,7 +306,14 @@ export function LuckyMeScreen() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/pools`);
+      const params = new URLSearchParams();
+      if (walletAddress) {
+        params.set("player", walletAddress);
+      }
+      const query = params.toString();
+      const response = await fetch(
+        `${API_BASE_URL}/pools${query ? `?${query}` : ""}`,
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -334,7 +350,7 @@ export function LuckyMeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [walletAddress]);
 
   useEffect(() => {
     void loadPools();
@@ -358,19 +374,13 @@ export function LuckyMeScreen() {
   );
   const transparencyTotalSol = activeRound?.totalSol;
 
-  const estimatedChance = useMemo(() => {
-    if (!activeRound || activeRound.settled) {
+  const walletChance = useMemo(() => {
+    if (!walletAddress || !activeRound || activeRound.missing) {
       return "--";
     }
 
-    const currentTickets = Number(activeRound.totalTickets);
-
-    if (!Number.isFinite(currentTickets)) {
-      return "--";
-    }
-
-    return ((ticketCount / (currentTickets + ticketCount)) * 100).toFixed(2);
-  }, [activeRound, ticketCount]);
+    return activeRound.userEntry?.chancePercent ?? "0.00";
+  }, [activeRound, walletAddress]);
 
   const roundStatus = useMemo(() => {
     if (!activeRound) {
@@ -398,7 +408,6 @@ export function LuckyMeScreen() {
   const splitLabel = `${formatBps(selectedPool.mainPrizeBps)} / ${formatBps(
     selectedPool.houseFeeBps,
   )} / ${formatBps(selectedPool.jackpotBps)}`;
-  const walletAddress = walletAddressFromAccount(account);
 
   useEffect(() => {
     setPendingJoin(null);
@@ -603,7 +612,7 @@ export function LuckyMeScreen() {
           <View style={styles.row}>
             <Text style={styles.label}>Your chance</Text>
             <Text style={styles.value}>
-              {estimatedChance === "--" ? estimatedChance : `${estimatedChance}%`}
+              {walletChance === "--" ? walletChance : `${walletChance}%`}
             </Text>
           </View>
           <View style={styles.row}>

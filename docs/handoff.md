@@ -138,16 +138,127 @@ Devnet Samsung result:
 - deployer/keeper balance after buy check: `3.0222605 SOL`.
 - app displayed Round 7, Tickets 1, Pool `0.005 SOL`, source `On-chain RPC`.
 
+Devnet settlement result:
+
+- Round 7 Mini was settled on devnet after explicit approval.
+- settlement tx:
+  `5ZddxuV8hJmTVbcaF3XTZ4ciUvYDV4p8jZGyNpQhXh3yMTAmhU1JzieErdcF8ke7gpURBkBFGJFFxtUaFtVVdAmh`
+- explorer:
+  `https://explorer.solana.com/tx/5ZddxuV8hJmTVbcaF3XTZ4ciUvYDV4p8jZGyNpQhXh3yMTAmhU1JzieErdcF8ke7gpURBkBFGJFFxtUaFtVVdAmh?cluster=devnet`
+- pre-send simulation: `ok`, `14371` compute units.
+- round `GKwsvpTeCejnDopJSnbCNAsbE4PhScFgYk7GR7dziFUX` is now `settled: true`.
+- winner: Phantom/player `EdWNHnbG1iQtaZ5BzZkzjsHopjfaQiB8Dzw1sRevrLHW`.
+- main payout: `0.00475 SOL`.
+- house fee to treasury/keeper: `0.00015 SOL`.
+- jackpot add: `0.0001 SOL`.
+- jackpot did not trigger; pool jackpot is now `100000` lamports.
+- Phantom/player balance after settle: `0.498104 SOL`.
+- deployer/keeper/treasury balance after settle: `3.0224055 SOL`.
+- pool vault after settle: `890880` lamports.
+- jackpot vault after settle: `990880` lamports.
+
+Samsung/app verification after refresh:
+
+- backend `GET /pools` reports `source: onchain`.
+- Mini Round 7 appears with `settled: true`.
+- app displays status `Settled`.
+- history displays `Round 7`, badge `Settled`, `Tickets 1 | Pool 0.005 SOL`.
+- history displays shortened winner `EdWN...rLHW`.
+- app displays jackpot `0.0001 SOL`.
+- local screenshot:
+  `/Users/victor/Documents/Codex/2026-07-04/hai-2/work/luckyme-screens/round7-history-settled.png`
+
 Known follow-up:
 
-- The app displayed `Your chance 50.00%` after the first ticket was purchased.
-  That value is the projected chance for buying one more ticket
+User chance fix:
+
+- The app previously displayed `Your chance 50.00%` after the first ticket was
+  purchased because it used the projected chance for buying one more ticket
   (`ticketCount / (currentTickets + ticketCount)`), not the already-owned
-  player chance. Rename it or compute the connected wallet's actual entry
-  count before production.
-- Round 7 settlement is pending. Use the reveal above after the round closes,
-  and require explicit approval before sending the keeper settlement
-  transaction.
+  player chance.
+- Backend `GET /pools` now accepts `?player=<wallet-public-key>`.
+- When `player` is present, the backend returns `userEntry` for each fetched
+  round: `address`, `player`, `ticketStart`, `ticketCount`, `lamports`,
+  `chancePercent`.
+- The app sends the connected wallet to `GET /pools`.
+- `Your chance` now uses `userEntry.chancePercent`, computed as
+  `entry.ticketCount / round.totalTickets`.
+- For Round 7 Mini, the Phantom wallet has `ticketCount: 1`,
+  `totalTickets: 1`, and `chancePercent: 100.00`.
+- Verified on Samsung: Mini Round 7 displays `Your chance 100.00%`.
+- local screenshot:
+  `/Users/victor/Documents/Codex/2026-07-04/hai-2/work/luckyme-screens/round7-chance-mini.png`
+
+Devnet Mini Round 8 open result:
+
+- Mini Round 8 was opened on devnet after explicit approval.
+- open-round tx:
+  `TuZd4bRR3iDkJYV9g9qS8VEuW9bgi7dVPZuVcdDk18cPELdxq3rFvkBrJaxaoPZmUnA2dkx6fgHmFZLDrqMKEJ7`
+- explorer:
+  `https://explorer.solana.com/tx/TuZd4bRR3iDkJYV9g9qS8VEuW9bgi7dVPZuVcdDk18cPELdxq3rFvkBrJaxaoPZmUnA2dkx6fgHmFZLDrqMKEJ7?cluster=devnet`
+- transaction is `Finalized`.
+- pre-send simulation: `ok`, `11549` compute units.
+- round address: `Yw4v481Bq348VX5dzcVdjsRnLtaPUrXsgG1N7M3fhCL`.
+- commitment:
+  `c5a08a2506a88986c9796a4bd28ed5b500968ec19996347871f48d547f3ad822`
+- reveal for settlement:
+  `7b5c2cc16125ffd32812aec0a0f0272dd7481897bf4e7556369c6dab3cf6cc0e`
+- backend `GET /pools?player=...` reports `currentRound: 8`.
+- Round 8 is `settled: false`, `totalTickets: 0`, `totalSol: 0`,
+  `userEntry: null`.
+- Mini jackpot remains `0.0001 SOL`.
+- local prep/reveal file:
+  `/Users/victor/Documents/Codex/2026-07-04/hai-2/work/luckyme-rounds/devnet-mini-round-8-open-prep.json`
+- Next test: refresh the Samsung app to confirm Mini Round 8 is visible/open,
+  then buy 1 ticket through Phantom after the in-app review step.
+
+Devnet Mini Round 8 buy result:
+
+- The user manually confirmed the 1-ticket buy in Phantom.
+- buy tx:
+  `5jbj89GrzoirhvU4a1rNhrAjQjoP1XqpYXfYUw5VqeGezR99UAsa5wLUw7Z6uasoN7c7iEcSGAyzMB1stjG5Umm7`
+- explorer:
+  `https://explorer.solana.com/tx/5jbj89GrzoirhvU4a1rNhrAjQjoP1XqpYXfYUw5VqeGezR99UAsa5wLUw7Z6uasoN7c7iEcSGAyzMB1stjG5Umm7?cluster=devnet`
+- transaction status: `Finalized`.
+- round: `Yw4v481Bq348VX5dzcVdjsRnLtaPUrXsgG1N7M3fhCL`.
+- entry:
+  `4gZA4kR6o4giti3nWYHYUkix8Soo7ahvbMgVB69ZV8mb`
+- player: `EdWNHnbG1iQtaZ5BzZkzjsHopjfaQiB8Dzw1sRevrLHW`.
+- `totalTickets: 1`, `totalSol: 0.005`,
+  `userEntry.chancePercent: 100.00`.
+- app displayed `Sent 5jbj...Umm7`.
+- local screenshot:
+  `/Users/victor/Documents/Codex/2026-07-04/hai-2/work/luckyme-screens/round8-after-user-buy.png`
+- Round 8 is closed and settlement is prepared locally, but not sent.
+- settle prep:
+  `/Users/victor/Documents/Codex/2026-07-04/hai-2/work/luckyme-rounds/devnet-mini-round-8-settle-prep.json`
+- settlement simulation: `ok`, `14371` compute units.
+- expected settlement: winner
+  `EdWNHnbG1iQtaZ5BzZkzjsHopjfaQiB8Dzw1sRevrLHW`, main payout
+  `0.00475 SOL`, house fee `0.00015 SOL`, jackpot add `0.0001 SOL`,
+  jackpot does not trigger.
+
+Devnet Mini Round 8 settlement result:
+
+- Mini Round 8 was settled on devnet after explicit approval.
+- settlement tx:
+  `2jhZPP2Cv8d2XpBFweK94qbAd7asbS53ciNtVbpy8B8ND1sc8VykJ1qmvJwArFQftmJ5VnjyzYM1c3LdKkGYCshk`
+- explorer:
+  `https://explorer.solana.com/tx/2jhZPP2Cv8d2XpBFweK94qbAd7asbS53ciNtVbpy8B8ND1sc8VykJ1qmvJwArFQftmJ5VnjyzYM1c3LdKkGYCshk?cluster=devnet`
+- transaction status: `Finalized`.
+- pre-send simulation: `ok`, `14371` compute units.
+- round: `Yw4v481Bq348VX5dzcVdjsRnLtaPUrXsgG1N7M3fhCL`.
+- round is now `settled: true`.
+- winner: `EdWNHnbG1iQtaZ5BzZkzjsHopjfaQiB8Dzw1sRevrLHW`.
+- jackpot did not trigger.
+- main payout: `0.00475 SOL`.
+- house fee: `0.00015 SOL`.
+- jackpot add: `0.0001 SOL`.
+- Mini jackpot is now `0.0002 SOL`.
+- Samsung app displays Round 8 `Settled`, `Tickets 1`, `Pool 0.005 SOL`,
+  winner `EdWN...rLHW`.
+- local screenshot:
+  `/Users/victor/Documents/Codex/2026-07-04/hai-2/work/luckyme-screens/round8-after-settle-refresh-top.png`
 
 ## Safety Notes
 

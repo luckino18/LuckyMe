@@ -40,13 +40,22 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/pools") {
-    const state = await getProgramState();
-    return json(res, 200, {
-      source: state.onchain.available ? "onchain" : "static",
-      onchain: state.onchain,
-      config: state.config,
-      pools: state.pools,
-    });
+    try {
+      const playerParam = url.searchParams.get("player");
+      const player = playerParam ? parsePublicKey(playerParam, "player") : null;
+      const state = await getProgramState({ player });
+      return json(res, 200, {
+        source: state.onchain.available ? "onchain" : "static",
+        onchain: state.onchain,
+        config: state.config,
+        pools: state.pools,
+      });
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "pools_fetch_failed",
+        message: error.message,
+      });
+    }
   }
 
   if (req.method === "GET" && url.pathname === "/simulate") {
@@ -112,7 +121,7 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`LuckyMe dev API listening on http://localhost:${PORT}`);
 });
 
-async function getProgramState() {
+async function getProgramState({ player } = {}) {
   const staticPools = buildStaticPools();
 
   try {
@@ -166,9 +175,14 @@ async function getProgramState() {
       const pool = await program.account.pool.fetch(poolAddress);
       const currentRound = numberFromAnchor(pool.currentRound);
       const activeRound = currentRound > 0
-        ? await fetchRound(program, poolAddress, currentRound)
+        ? await fetchRound(program, poolAddress, currentRound, player)
         : null;
-      const recentRounds = await fetchRecentRounds(program, poolAddress, currentRound);
+      const recentRounds = await fetchRecentRounds(
+        program,
+        poolAddress,
+        currentRound,
+        player,
+      );
 
       pools.push({
         id: slug,
@@ -371,17 +385,18 @@ async function submitSignedTransaction(payload) {
   };
 }
 
-async function fetchRound(program, poolAddress, roundId) {
+async function fetchRound(program, poolAddress, roundId, player = null) {
   const roundAddress = deriveRound(poolAddress, roundId);
   try {
     const round = await program.account.round.fetch(roundAddress);
+    const totalTickets = bigintFromAnchor(round.totalTickets);
     return {
       address: roundAddress.toBase58(),
       roundId: numberFromAnchor(round.roundId),
       startTs: numberFromAnchor(round.startTs),
       endTs: numberFromAnchor(round.endTs),
       ticketPriceLamports: stringFromAnchor(round.ticketPriceLamports),
-      totalTickets: stringFromAnchor(round.totalTickets),
+      totalTickets: totalTickets.toString(),
       totalLamports: stringFromAnchor(round.totalLamports),
       totalSol: lamportsToSol(bigintFromAnchor(round.totalLamports)),
       entrantCount: round.entrantCount,
@@ -389,6 +404,9 @@ async function fetchRound(program, poolAddress, roundId) {
       jackpotTriggered: round.jackpotTriggered,
       winner: round.winner.toBase58(),
       jackpotWinner: round.jackpotWinner.toBase58(),
+      userEntry: player
+        ? await fetchUserEntry(program, roundAddress, player, totalTickets)
+        : undefined,
     };
   } catch {
     return {
@@ -399,7 +417,7 @@ async function fetchRound(program, poolAddress, roundId) {
   }
 }
 
-async function fetchRecentRounds(program, poolAddress, currentRound) {
+async function fetchRecentRounds(program, poolAddress, currentRound, player = null) {
   if (currentRound <= 0) {
     return [];
   }
@@ -411,8 +429,28 @@ async function fetchRecentRounds(program, poolAddress, currentRound) {
   }
 
   return Promise.all(
-    roundIds.map((roundId) => fetchRound(program, poolAddress, roundId)),
+    roundIds.map((roundId) => fetchRound(program, poolAddress, roundId, player)),
   );
+}
+
+async function fetchUserEntry(program, roundAddress, player, totalTickets) {
+  const entryAddress = deriveEntry(roundAddress, player);
+
+  try {
+    const entry = await program.account.entry.fetch(entryAddress);
+    const ticketCount = bigintFromAnchor(entry.ticketCount);
+
+    return {
+      address: entryAddress.toBase58(),
+      player: entry.player.toBase58(),
+      ticketStart: stringFromAnchor(entry.ticketStart),
+      ticketCount: ticketCount.toString(),
+      lamports: stringFromAnchor(entry.lamports),
+      chancePercent: formatPercentRatio(ticketCount, totalTickets),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function buildStaticPools() {
@@ -534,6 +572,14 @@ function serializeBigInts(value) {
       typeof inner === "bigint" ? inner.toString() : inner,
     ),
   );
+}
+
+function formatPercentRatio(numerator, denominator) {
+  if (denominator === 0n) {
+    return "0.00";
+  }
+
+  return ((Number(numerator) / Number(denominator)) * 100).toFixed(2);
 }
 
 function bigintFromAnchor(value) {
