@@ -664,6 +664,99 @@ export type Luckyme = {
       ]
     }
   ],
+  "events": [
+    {
+      "name": "configInitialized",
+      "discriminator": [
+        181,
+        49,
+        200,
+        156,
+        19,
+        167,
+        178,
+        91
+      ]
+    },
+    {
+      "name": "entryRefunded",
+      "discriminator": [
+        34,
+        82,
+        130,
+        116,
+        93,
+        139,
+        188,
+        234
+      ]
+    },
+    {
+      "name": "pausedSet",
+      "discriminator": [
+        171,
+        125,
+        127,
+        156,
+        233,
+        81,
+        68,
+        66
+      ]
+    },
+    {
+      "name": "poolInitialized",
+      "discriminator": [
+        100,
+        118,
+        173,
+        87,
+        12,
+        198,
+        254,
+        229
+      ]
+    },
+    {
+      "name": "roundOpened",
+      "discriminator": [
+        99,
+        173,
+        228,
+        72,
+        142,
+        57,
+        109,
+        178
+      ]
+    },
+    {
+      "name": "roundSettled",
+      "discriminator": [
+        249,
+        225,
+        66,
+        54,
+        157,
+        200,
+        234,
+        222
+      ]
+    },
+    {
+      "name": "ticketsBought",
+      "discriminator": [
+        204,
+        103,
+        221,
+        60,
+        70,
+        142,
+        88,
+        233
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -818,6 +911,38 @@ export type Luckyme = {
       }
     },
     {
+      "name": "configInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "houseFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "jackpotBps",
+            "type": "u16"
+          },
+          {
+            "name": "jackpotOddsDenominator",
+            "type": "u32"
+          },
+          {
+            "name": "roundDurationSecs",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "entry",
       "type": {
         "kind": "struct",
@@ -845,6 +970,70 @@ export type Luckyme = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "entryRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "refundLamports",
+            "type": "u64"
+          },
+          {
+            "name": "refundTickets",
+            "type": "u64"
+          },
+          {
+            "name": "roundTotalTickets",
+            "type": "u64"
+          },
+          {
+            "name": "roundTotalLamports",
+            "type": "u64"
+          },
+          {
+            "name": "remainingEntrantCount",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pausedSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
           }
         ]
       }
@@ -885,6 +1074,38 @@ export type Luckyme = {
           {
             "name": "jackpotBump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "poolInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "poolId",
+            "type": "u8"
+          },
+          {
+            "name": "ticketPriceLamports",
+            "type": "u64"
+          },
+          {
+            "name": "poolVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "jackpotVault",
+            "type": "pubkey"
           }
         ]
       }
@@ -963,6 +1184,164 @@ export type Luckyme = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "roundOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
+          },
+          {
+            "name": "startTs",
+            "type": "i64"
+          },
+          {
+            "name": "endTs",
+            "type": "i64"
+          },
+          {
+            "name": "ticketPriceLamports",
+            "type": "u64"
+          },
+          {
+            "name": "randomnessCommitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "roundSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "winnerEntry",
+            "type": "pubkey"
+          },
+          {
+            "name": "winningTicket",
+            "type": "u64"
+          },
+          {
+            "name": "mainPrizeLamports",
+            "type": "u64"
+          },
+          {
+            "name": "houseFeeLamports",
+            "type": "u64"
+          },
+          {
+            "name": "jackpotAddLamports",
+            "type": "u64"
+          },
+          {
+            "name": "jackpotTriggered",
+            "type": "bool"
+          },
+          {
+            "name": "jackpotWinner",
+            "type": "pubkey"
+          },
+          {
+            "name": "jackpotEntry",
+            "type": "pubkey"
+          },
+          {
+            "name": "jackpotTicket",
+            "type": "u64"
+          },
+          {
+            "name": "randomness",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ticketsBought",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "ticketStart",
+            "type": "u64"
+          },
+          {
+            "name": "ticketCount",
+            "type": "u64"
+          },
+          {
+            "name": "entryTicketCount",
+            "type": "u64"
+          },
+          {
+            "name": "amountLamports",
+            "type": "u64"
+          },
+          {
+            "name": "roundTotalTickets",
+            "type": "u64"
+          },
+          {
+            "name": "roundTotalLamports",
+            "type": "u64"
           }
         ]
       }

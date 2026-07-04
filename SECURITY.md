@@ -10,6 +10,8 @@ LuckyMe is an experimental Solana devnet MVP. Do not use it with mainnet funds.
 - The economic model includes gambling-like mechanics and requires legal review
   before any real-money launch.
 - There is no public bug bounty yet.
+- Backend production/mainnet guardrails exist, but they do not replace a real
+  production security program.
 
 ## Supported Scope
 
@@ -71,4 +73,6 @@ If a critical issue affects the devnet deployment:
    residual risk.
 
 Before any mainnet launch, LuckyMe needs a dedicated private contact, multisig
-admin controls, a formal disclosure process, and a real bug bounty policy.
+admin controls, a formal disclosure process, a real bug bounty policy,
+production randomness, and legal/compliance signoff. The full evidence checklist
+is in `docs/mainnet-readiness.md`.

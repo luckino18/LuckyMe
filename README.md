@@ -28,6 +28,8 @@ The first protocol target is deliberately small:
 - settlement is permissionless once a round has ended and the reveal is available
 - no-reveal recovery: after a 10 minute reveal timeout, entrants can refund
   their own entry from the pool vault
+- abandoned-round recovery can also be cranked by a third-party fee payer; the
+  refund always goes to `entry.player`
 
 Each pool has a fixed ticket price. Users buy one or more tickets in a single purchase per wallet per round. The round winner is selected by ticket number, so probability is proportional to tickets bought:
 
@@ -56,6 +58,9 @@ idl/                Public client-facing Anchor IDL
 sdk/                Public generated TypeScript types
 docs/               Deployment, settlement, and launch checklists
 ```
+
+Audit follow-up status is tracked in `docs/audit-closure.md`. Mainnet blockers
+and required evidence are tracked in `docs/mainnet-readiness.md`.
 
 ## Local Verification
 
@@ -105,6 +110,10 @@ Start the local dev API:
 npm run backend:start
 ```
 
+The backend binds to `127.0.0.1` by default, does not read a private wallet for
+read/build endpoints, and keeps `/transactions/submit` disabled unless
+`ENABLE_TRANSACTION_SUBMIT=true` is set.
+
 Initialize config and the three fixed pools on the selected Anchor provider:
 
 ```bash
@@ -144,6 +153,14 @@ For devnet operations, the backend exposes unsigned transaction builders for:
 accounts for the round, computes the winner and jackpot entry, and returns a
 simulated unsigned transaction. See `docs/manual-settlement.md`.
 
+`GET /refunds` discovers refundable abandoned-round entries. `npm run
+refund:crank` can pay the transaction fee and crank refunds permissionlessly;
+the on-chain instruction still transfers lamports only to `entry.player`.
+
+The Anchor program emits events for config initialization, pool initialization,
+round opening, ticket purchases, settlement, refunds, and pause changes so a
+public indexer can track the state machine without private backend state.
+
 ## Launch Gates
 
 LuckyMe should stay on devnet until these are complete:
@@ -153,4 +170,7 @@ LuckyMe should stay on devnet until these are complete:
 - public verified program id and reproducible build notes
 - production randomness integration
 - multisig treasury and upgrade authority
+- production backend behind proxy/WAF with strict CORS, persistent rate limits,
+  monitoring, and no private key on the server
+- private security contact and bug bounty/disclosure process
 - responsible gaming controls

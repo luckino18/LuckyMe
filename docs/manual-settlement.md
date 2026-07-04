@@ -94,3 +94,20 @@ curl -s -X POST http://localhost:8788/transactions/refund-entry \
 
 The refund always pays `entry.player`. A third party can help build or submit the
 transaction, but cannot redirect the refund.
+
+The backend can also discover refundable abandoned entries:
+
+```bash
+curl -s 'http://localhost:8788/refunds?pool=mini&roundId=9'
+```
+
+A keeper can crank refunds from a local fee-paying wallet:
+
+```bash
+DRY_RUN=true npm run refund:crank
+POOL=mini ROUND_ID=9 npm run refund:crank
+```
+
+`DRY_RUN=true` only prints the refundable entries. Without dry run, the script
+sends `refund_entry_after_timeout` transactions from the configured
+`ANCHOR_WALLET` fee payer.

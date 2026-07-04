@@ -658,6 +658,99 @@
       ]
     }
   ],
+  "events": [
+    {
+      "name": "ConfigInitialized",
+      "discriminator": [
+        181,
+        49,
+        200,
+        156,
+        19,
+        167,
+        178,
+        91
+      ]
+    },
+    {
+      "name": "EntryRefunded",
+      "discriminator": [
+        34,
+        82,
+        130,
+        116,
+        93,
+        139,
+        188,
+        234
+      ]
+    },
+    {
+      "name": "PausedSet",
+      "discriminator": [
+        171,
+        125,
+        127,
+        156,
+        233,
+        81,
+        68,
+        66
+      ]
+    },
+    {
+      "name": "PoolInitialized",
+      "discriminator": [
+        100,
+        118,
+        173,
+        87,
+        12,
+        198,
+        254,
+        229
+      ]
+    },
+    {
+      "name": "RoundOpened",
+      "discriminator": [
+        99,
+        173,
+        228,
+        72,
+        142,
+        57,
+        109,
+        178
+      ]
+    },
+    {
+      "name": "RoundSettled",
+      "discriminator": [
+        249,
+        225,
+        66,
+        54,
+        157,
+        200,
+        234,
+        222
+      ]
+    },
+    {
+      "name": "TicketsBought",
+      "discriminator": [
+        204,
+        103,
+        221,
+        60,
+        70,
+        142,
+        88,
+        233
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -812,6 +905,38 @@
       }
     },
     {
+      "name": "ConfigInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "house_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "jackpot_bps",
+            "type": "u16"
+          },
+          {
+            "name": "jackpot_odds_denominator",
+            "type": "u32"
+          },
+          {
+            "name": "round_duration_secs",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Entry",
       "type": {
         "kind": "struct",
@@ -839,6 +964,70 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EntryRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "refund_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "refund_tickets",
+            "type": "u64"
+          },
+          {
+            "name": "round_total_tickets",
+            "type": "u64"
+          },
+          {
+            "name": "round_total_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_entrant_count",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PausedSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
           }
         ]
       }
@@ -879,6 +1068,38 @@
           {
             "name": "jackpot_bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_id",
+            "type": "u8"
+          },
+          {
+            "name": "ticket_price_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "pool_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "jackpot_vault",
+            "type": "pubkey"
           }
         ]
       }
@@ -957,6 +1178,164 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoundOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "start_ts",
+            "type": "i64"
+          },
+          {
+            "name": "end_ts",
+            "type": "i64"
+          },
+          {
+            "name": "ticket_price_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "randomness_commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoundSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner_entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "winning_ticket",
+            "type": "u64"
+          },
+          {
+            "name": "main_prize_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "house_fee_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "jackpot_add_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "jackpot_triggered",
+            "type": "bool"
+          },
+          {
+            "name": "jackpot_winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "jackpot_entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "jackpot_ticket",
+            "type": "u64"
+          },
+          {
+            "name": "randomness",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TicketsBought",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "ticket_start",
+            "type": "u64"
+          },
+          {
+            "name": "ticket_count",
+            "type": "u64"
+          },
+          {
+            "name": "entry_ticket_count",
+            "type": "u64"
+          },
+          {
+            "name": "amount_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "round_total_tickets",
+            "type": "u64"
+          },
+          {
+            "name": "round_total_lamports",
+            "type": "u64"
           }
         ]
       }

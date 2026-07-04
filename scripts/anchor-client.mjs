@@ -13,18 +13,37 @@ export const POOLS = [
   { id: 3, label: "High", ticketPriceLamports: new BN(100_000_000) },
 ];
 
-export function createClient() {
+class ReadonlyWallet {
+  constructor(publicKey = PublicKey.default) {
+    this.publicKey = publicKey;
+  }
+
+  async signTransaction() {
+    throw new Error("Readonly wallet cannot sign transactions");
+  }
+
+  async signAllTransactions() {
+    throw new Error("Readonly wallet cannot sign transactions");
+  }
+}
+
+export function createClient({ requireSigner = true } = {}) {
   const url = process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
-  const walletPath = expandHome(process.env.ANCHOR_WALLET ?? "~/.config/solana/id.json");
-  const payer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(walletPath, "utf8"))));
   const connection = new Connection(url, "confirmed");
-  const provider = new AnchorProvider(connection, new Wallet(payer), {
+  const payer = requireSigner ? readKeypair() : null;
+  const wallet = payer ? new Wallet(payer) : new ReadonlyWallet();
+  const provider = new AnchorProvider(connection, wallet, {
     commitment: "confirmed",
     preflightCommitment: "confirmed",
   });
   const idl = JSON.parse(fs.readFileSync(new URL("../idl/luckyme.json", import.meta.url), "utf8"));
   const program = new Program(idl, provider);
   return { connection, payer, program, provider, url };
+}
+
+export function readKeypair() {
+  const walletPath = expandHome(process.env.ANCHOR_WALLET ?? "~/.config/solana/id.json");
+  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(walletPath, "utf8"))));
 }
 
 export function deriveConfig() {

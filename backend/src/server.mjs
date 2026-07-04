@@ -20,19 +20,24 @@ import {
 } from "../../scripts/anchor-client.mjs";
 
 const PORT = Number(process.env.PORT ?? 8788);
+const HOST = process.env.HOST ?? "127.0.0.1";
 const DEFAULT_ROUND_DURATION_SECONDS = 300;
 const REFUND_DELAY_SECONDS = 600;
+const REFUND_SCAN_ROUNDS = Number(process.env.REFUND_SCAN_ROUNDS ?? 20);
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES ?? 100_000);
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 120);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
-const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT !== "false";
+const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT === "true";
+const ANCHOR_PROVIDER_URL = process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
 const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
 const STATIC_POOL_BY_SLUG = new Map(FIXED_POOLS.map((pool) => [pool.id, pool]));
 const ONCHAIN_POOL_BY_SLUG = new Map(
   ONCHAIN_POOLS.map((pool) => [pool.label.toLowerCase(), pool]),
 );
 const rateBuckets = new Map();
+
+validateRuntimeConfig();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -70,6 +75,17 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, error.status ?? 500, {
         error: error.code ?? "pools_fetch_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/refunds") {
+    try {
+      return json(res, 200, await getRefundableEntries(url));
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "refunds_fetch_failed",
         message: error.message,
       });
     }
@@ -165,15 +181,15 @@ const server = http.createServer(async (req, res) => {
   return json(res, 404, { error: "not found" });
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`LuckyMe dev API listening on http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`LuckyMe dev API listening on http://${HOST}:${PORT}`);
 });
 
 async function getProgramState({ player } = {}) {
   const staticPools = buildStaticPools();
 
   try {
-    const { connection, program, url } = createClient();
+    const { connection, program, url } = createClient({ requireSigner: false });
     const configAddress = deriveConfig();
     const programAccount = await connection.getAccountInfo(PROGRAM_ID, "confirmed");
     const hasConfig = await accountExists(connection, configAddress);
@@ -294,8 +310,9 @@ async function buildBuyTicketsTransaction(payload) {
   const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
   const ticketCount = parseTicketCount(payload.ticketCount);
   const player = parsePublicKey(payload.player, "player");
+  enforceSubjectRateLimit(player.toBase58());
   const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
-  const { connection, program, url } = createClient();
+  const { connection, program, url } = createClient({ requireSigner: false });
   const config = deriveConfig();
   const pool = derivePool(config, poolSpec.id);
   const poolVault = derivePoolVault(pool);
@@ -387,8 +404,13 @@ async function buildBuyTicketsTransaction(payload) {
 async function buildRefundEntryTransaction(payload) {
   const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
   const player = parsePublicKey(payload.player, "player");
+  const feePayer = payload.feePayer
+    ? parsePublicKey(payload.feePayer, "feePayer")
+    : player;
+  enforceSubjectRateLimit(player.toBase58());
+  enforceSubjectRateLimit(feePayer.toBase58());
   const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
-  const { connection, program, url } = createClient();
+  const { connection, program, url } = createClient({ requireSigner: false });
   const config = deriveConfig();
   const pool = derivePool(config, poolSpec.id);
   const poolVault = derivePoolVault(pool);
@@ -432,7 +454,7 @@ async function buildRefundEntryTransaction(payload) {
     })
     .transaction();
 
-  transaction.feePayer = player;
+  transaction.feePayer = feePayer;
   transaction.recentBlockhash = latestBlockhash.blockhash;
 
   const transactionBase64 = transaction
@@ -453,6 +475,7 @@ async function buildRefundEntryTransaction(payload) {
       amountLamports: userEntry.lamports,
       amountSol: lamportsToSol(BigInt(userEntry.lamports)),
       player: player.toBase58(),
+      feePayer: feePayer.toBase58(),
       accounts: {
         config: config.toBase58(),
         pool: pool.toBase58(),
@@ -471,9 +494,10 @@ async function buildSettleRoundTransaction(payload) {
   const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
   const roundId = parseRoundId(payload.roundId);
   const settler = parsePublicKey(payload.settler ?? payload.keeper, "settler");
+  enforceSubjectRateLimit(settler.toBase58());
   const reveal = parseRevealHex(payload.randomnessReveal ?? payload.reveal);
   const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
-  const { connection, program, url } = createClient();
+  const { connection, program, url } = createClient({ requireSigner: false });
   const configAddress = deriveConfig();
   const config = await program.account.config.fetch(configAddress);
   const pool = derivePool(configAddress, poolSpec.id);
@@ -640,7 +664,7 @@ async function submitSignedTransaction(payload) {
     payload.signedTransactionBase64,
     "signedTransactionBase64",
   );
-  const { connection, url } = createClient();
+  const { connection, url } = createClient({ requireSigner: false });
   const rawTransaction = Buffer.from(signedTransactionBase64, "base64");
   const signature = await connection.sendRawTransaction(rawTransaction, {
     maxRetries: 3,
@@ -703,6 +727,81 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
   }
 }
 
+async function getRefundableEntries(url) {
+  const poolFilter = url.searchParams.get("pool");
+  const roundIdFilter = url.searchParams.get("roundId");
+  const poolSlugs = poolFilter
+    ? [parsePoolSlug(poolFilter)]
+    : [...ONCHAIN_POOL_BY_SLUG.keys()];
+  const { connection, program, url: clusterUrl } = createClient({ requireSigner: false });
+  const configAddress = deriveConfig();
+  const hasConfig = await accountExists(connection, configAddress);
+
+  if (!hasConfig) {
+    return {
+      clusterUrl,
+      programId: PROGRAM_ID.toBase58(),
+      refunds: [],
+    };
+  }
+
+  const refunds = [];
+
+  for (const poolSlug of poolSlugs) {
+    const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
+    const pool = derivePool(configAddress, poolSpec.id);
+    if (!(await accountExists(connection, pool))) {
+      continue;
+    }
+
+    const poolAccount = await program.account.pool.fetch(pool);
+    const currentRound = numberFromAnchor(poolAccount.currentRound);
+    const roundIds = roundIdFilter
+      ? [parseRoundId(roundIdFilter)]
+      : recentRoundIds(currentRound, REFUND_SCAN_ROUNDS);
+
+    for (const roundId of roundIds) {
+      const roundAddress = deriveRound(pool, roundId);
+      try {
+        const round = await program.account.round.fetch(roundAddress);
+        const refundState = getRefundState(round);
+        if (!refundState.refundAvailable) {
+          continue;
+        }
+
+        const entries = (await fetchEntriesForRound(program, roundAddress))
+          .filter((entry) => entry.lamports > 0n)
+          .map((entry) => ({
+            address: entry.address.toBase58(),
+            player: entry.player.toBase58(),
+            ticketStart: entry.ticketStart.toString(),
+            ticketCount: entry.ticketCount.toString(),
+            lamports: entry.lamports.toString(),
+            sol: lamportsToSol(entry.lamports),
+          }));
+
+        refunds.push({
+          pool: poolSlug,
+          roundId,
+          round: roundAddress.toBase58(),
+          refundAfterTs: refundState.refundAfterTs,
+          refundMode: refundState.refundMode,
+          entries,
+        });
+      } catch {
+        // Ignore missing recent round accounts.
+      }
+    }
+  }
+
+  return {
+    clusterUrl,
+    programId: PROGRAM_ID.toBase58(),
+    scanRounds: REFUND_SCAN_ROUNDS,
+    refunds,
+  };
+}
+
 async function fetchRecentRounds(program, poolAddress, currentRound, player = null) {
   if (currentRound <= 0) {
     return [];
@@ -717,6 +816,19 @@ async function fetchRecentRounds(program, poolAddress, currentRound, player = nu
   return Promise.all(
     roundIds.map((roundId) => fetchRound(program, poolAddress, roundId, player)),
   );
+}
+
+function recentRoundIds(currentRound, count) {
+  if (currentRound <= 0) {
+    return [];
+  }
+
+  const firstRound = Math.max(1, currentRound - Math.max(1, count) + 1);
+  const roundIds = [];
+  for (let roundId = currentRound; roundId >= firstRound; roundId -= 1) {
+    roundIds.push(roundId);
+  }
+  return roundIds;
 }
 
 async function fetchUserEntry(program, roundAddress, player, totalTickets) {
@@ -996,12 +1108,67 @@ function rateLimitAllows(req) {
   return existing.count <= RATE_LIMIT_MAX;
 }
 
+function enforceSubjectRateLimit(subject) {
+  if (rateLimitAllowsKey(`subject:${subject}`)) {
+    return;
+  }
+  throw httpError(429, "rate_limited", "Too many requests for this wallet");
+}
+
+function rateLimitAllowsKey(clientId) {
+  const now = Date.now();
+  const existing = rateBuckets.get(clientId);
+
+  if (!existing || now >= existing.resetAt) {
+    rateBuckets.set(clientId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  existing.count += 1;
+  return existing.count <= RATE_LIMIT_MAX;
+}
+
 function getClientId(req) {
   const forwardedFor = req.headers["x-forwarded-for"];
   if (typeof forwardedFor === "string" && forwardedFor.length > 0) {
     return forwardedFor.split(",")[0].trim();
   }
   return req.socket.remoteAddress ?? "unknown";
+}
+
+function validateRuntimeConfig() {
+  if (isMainnetUrl(ANCHOR_PROVIDER_URL)) {
+    const allowed = (
+      process.env.LUCKYME_ENABLE_MAINNET === "true" &&
+      process.env.LUCKYME_LEGAL_SIGNOFF === "true" &&
+      process.env.LUCKYME_PRODUCTION_RANDOMNESS === "true" &&
+      process.env.LUCKYME_MULTISIG_SIGNOFF === "true"
+    );
+
+    if (!allowed) {
+      throw new Error(
+        "Refusing mainnet RPC without LUCKYME_ENABLE_MAINNET, legal, randomness, and multisig signoffs",
+      );
+    }
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    if (CORS_ORIGIN === "*") {
+      throw new Error("CORS_ORIGIN must be strict in production");
+    }
+
+    if (ENABLE_TRANSACTION_SUBMIT) {
+      throw new Error("ENABLE_TRANSACTION_SUBMIT must stay false in production");
+    }
+
+    if (HOST === "0.0.0.0") {
+      throw new Error("HOST=0.0.0.0 is not allowed directly in production; put the API behind a proxy");
+    }
+  }
+}
+
+function isMainnetUrl(url) {
+  return /mainnet|api\.mainnet-beta\.solana\.com/i.test(url);
 }
 
 function formatPercentRatio(numerator, denominator) {

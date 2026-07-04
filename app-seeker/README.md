@@ -12,8 +12,15 @@ Set `EXPO_PUBLIC_LUCKYME_API_URL` before running the app:
 - Android emulator: `http://10.0.2.2:8788`
 - physical Seeker device: `http://<mac-lan-ip>:8788`
 
-The backend binds to `0.0.0.0`, so a physical device can reach it on the Mac LAN
-IP when both devices are on the same network.
+The backend binds to `127.0.0.1` by default. For a trusted LAN dev session,
+start it explicitly on all interfaces so a physical device can reach the Mac LAN
+IP:
+
+```bash
+HOST=0.0.0.0 npm run backend:start
+```
+
+Do not use the LAN bind as a production exposure pattern.
 
 Mobile Wallet Adapter support requires a custom Expo development build. Expo Go
 is not enough because the wallet adapter and crypto polyfills use native modules.
@@ -30,6 +37,13 @@ The wallet authorization chain defaults to `solana:devnet` for mobile wallet
 compatibility. For localnet testing, the app asks the wallet only to sign the
 transaction; the backend submits the signed transaction to the configured local
 RPC.
+
+Because the backend submit relay is disabled by default, local mobile testing
+that relies on the relay must start the backend with:
+
+```bash
+HOST=0.0.0.0 ENABLE_TRANSACTION_SUBMIT=true npm run backend:start
+```
 
 The join flow asks the backend to build and simulate an unsigned transaction,
 then shows an in-app review with amount, cluster, program, wallet, and
