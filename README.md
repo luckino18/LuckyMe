@@ -91,10 +91,12 @@ Build the Anchor/SBF artifact:
 anchor build
 ```
 
-Run the local Anchor test flow:
+Run the local Anchor test flow. This uses the `test-short-timers` feature so
+localnet can exercise settlement and refund timeout paths without waiting for
+the production 60 second round duration plus 10 minute refund delay:
 
 ```bash
-anchor test --provider.cluster localnet
+npm run test:anchor
 ```
 
 Start the local dev API:

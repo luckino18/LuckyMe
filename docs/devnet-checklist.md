@@ -11,7 +11,7 @@
 ## Program
 
 - Build with `anchor build`.
-- Run local validator tests.
+- Run local validator tests with `npm run test:anchor`.
 - Confirm duplicate wallet entries in the same round are rejected.
 - Deploy to devnet.
 - Publish and verify the devnet program id.

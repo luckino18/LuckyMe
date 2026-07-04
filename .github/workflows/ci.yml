@@ -21,6 +21,24 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.10/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/solana-foundation/anchor avm --force
+          avm install 1.1.2
+          avm use 1.1.2
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Create localnet wallet
+        run: |
+          mkdir -p "$HOME/.config/solana"
+          solana-keygen new --no-bip39-passphrase --silent --outfile "$HOME/.config/solana/id.json"
+          solana config set --url localhost --keypair "$HOME/.config/solana/id.json"
+
       - name: Install Node dependencies
         run: npm install --omit=optional
 
@@ -47,3 +65,9 @@ jobs:
 
       - name: Run Anchor program Rust unit tests
         run: cargo test
+
+      - name: Build Anchor SBF program
+        run: NO_DNA=1 anchor build --provider.cluster localnet
+
+      - name: Run Anchor localnet integration tests
+        run: npm run test:anchor

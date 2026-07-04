@@ -12,6 +12,7 @@
     "backend:start": "node backend/src/server.mjs",
     "init:pools": "node scripts/init-pools.mjs",
     "localnet:smoke": "node scripts/localnet-smoke.mjs",
+    "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
     "test": "node --test sim/*.test.mjs",
     "sim:demo": "node sim/demo.mjs"
   },

@@ -7,9 +7,15 @@ declare_id!("4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3");
 const BPS_DENOMINATOR: u64 = 10_000;
 const MAX_FEE_BPS: u16 = 500;
 const MAX_JACKPOT_BPS: u16 = 500;
+#[cfg(not(feature = "test-short-timers"))]
 const MIN_ROUND_DURATION_SECS: i64 = 60;
+#[cfg(feature = "test-short-timers")]
+const MIN_ROUND_DURATION_SECS: i64 = 1;
 const MAX_ROUND_DURATION_SECS: i64 = 86_400;
+#[cfg(not(feature = "test-short-timers"))]
 const REFUND_DELAY_SECS: i64 = 600;
+#[cfg(feature = "test-short-timers")]
+const REFUND_DELAY_SECS: i64 = 2;
 
 #[program]
 pub mod luckyme {

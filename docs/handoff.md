@@ -1,6 +1,6 @@
 # LuckyMe Handoff
 
-Last updated: 2026-07-04 19:14 CEST
+Last updated: 2026-07-04 20:00 CEST
 
 ## Repository
 
@@ -394,7 +394,21 @@ External audit follow-up: settlement tooling and security policy:
   severity definitions, response targets, and incident-response steps.
 - Remaining mainnet blockers are unchanged: production VRF/Entropy or bonded
   multi-party randomness, legal review, multisig authorities, production
-  indexer/monitoring, and CI that runs full Anchor local-validator tests.
+  indexer/monitoring, and broader production test coverage.
+
+External audit follow-up: Anchor localnet tests:
+
+- Added `test-short-timers` program feature for CI/local tests only. Normal
+  builds keep the production timers: minimum 60 second rounds and 600 second
+  no-reveal refund delay.
+- Added `tests/anchor-localnet.test.mjs` and `npm run test:anchor`.
+- Localnet test coverage now includes config/pool initialization, zero-space
+  vault funding, ticket buy, duplicate buy rejection, normal settlement,
+  refund blocked after normal settlement, no-reveal refund mode, second entrant
+  refund after first refund marks the round settled, settlement blocked after
+  refund mode starts, duplicate refund rejection, and final vault balance.
+- CI installs Solana CLI and Anchor CLI, runs `anchor build`, and runs the
+  Anchor localnet integration test.
 
 ## Safety Notes
 
