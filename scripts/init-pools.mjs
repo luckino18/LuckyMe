@@ -13,7 +13,7 @@ import {
 const { connection, payer, program, url } = createClient();
 const config = deriveConfig();
 const treasury = payer.publicKey;
-const roundDurationSecs = Number(process.env.LUCKYME_ROUND_DURATION_SECS ?? 300);
+const roundDurationSecs = Number(process.env.LUCKYME_ROUND_DURATION_SECS ?? 3_600);
 
 console.log(`Cluster: ${url}`);
 console.log(`Authority: ${payer.publicKey.toBase58()}`);
@@ -21,7 +21,7 @@ console.log(`Config: ${config.toBase58()}`);
 
 if (!(await accountExists(connection, config))) {
   const signature = await program.methods
-    .initializeConfig(treasury, 300, 200, 288, new BN(roundDurationSecs))
+    .initializeConfig(treasury, 100, 100, 288, new BN(roundDurationSecs))
     .accounts({
       authority: payer.publicKey,
       config,

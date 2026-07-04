@@ -12,9 +12,12 @@
     "backend:start": "node backend/src/server.mjs",
     "init:pools": "node scripts/init-pools.mjs",
     "localnet:smoke": "node scripts/localnet-smoke.mjs",
+    "round:open": "node scripts/open-round.mjs",
+    "round:settle": "node scripts/settle-round.mjs",
+    "round:close-empty": "node scripts/close-empty-round.mjs",
     "refund:crank": "node scripts/refund-cranker.mjs",
     "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
-    "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs",
+    "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/docs-scripts.test.mjs",
     "sim:demo": "node sim/demo.mjs"
   },
   "devDependencies": {

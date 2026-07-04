@@ -35,7 +35,7 @@ external launch gates in `docs/mainnet-readiness.md` are complete.
 | Finding | Status | Closure |
 | --- | --- | --- |
 | CI lacked Anchor localnet coverage | Fixed in repo | GitHub Actions installs Solana CLI and Anchor CLI, runs `NO_DNA=1 anchor build --provider.cluster localnet`, and runs `npm run test:anchor`. |
-| Refund state machine needs aggressive tests | Fixed in repo | `tests/anchor-localnet.test.mjs` covers the money-moving refund and settlement state machine, including zero-space vault balance consistency. |
+| Refund state machine needs aggressive tests | Fixed in repo | `tests/anchor-localnet.test.mjs` covers the money-moving refund and settlement state machine, zero-entry round close, and zero-space vault balance consistency. |
 | Refund UX can leave users unaware | Mitigated for devnet | Mobile app exposes `Refund entry` for connected refundable entries. Backend exposes `GET /refunds`. `scripts/refund-cranker.mjs` lets a keeper crank refunds permissionlessly while funds still go to `entry.player`. |
 | PDA vaults with manual lamport transfers need balance tests | Fixed in repo for current flows | Anchor localnet tests assert pool vault balance after buy, after settlement rejection path, after partial refund, and after all refunds. |
 | Security policy incomplete for production | Mitigated for devnet, external blocker for mainnet | `SECURITY.md` now defines scope, reporting, severity, response targets, and incident response. Mainnet still requires a dedicated private contact, formal disclosure process, and funded bug bounty. |
@@ -46,6 +46,7 @@ external launch gates in `docs/mainnet-readiness.md` are complete.
 | --- | --- | --- |
 | Repo is young with little public history | External/non-code | Cannot be fixed instantly. Documentation now avoids overclaiming and keeps devnet-only status explicit. |
 | Dev/prod documentation needed clearer separation | Fixed in repo | `README.md`, `backend/README.md`, `docs/devnet-checklist.md`, `docs/mainnet-readiness.md`, and `SECURITY.md` separate devnet operation from mainnet launch gates. |
+| Store-readiness documentation missing | Fixed in repo | `docs/store-readiness.md`, `docs/legal-risk.md`, `docs/randomness.md`, `docs/production-keeper.md`, and `docs/final-readiness-audit.md` document the devnet store-demo path and external blockers. |
 
 ## Current Hard Blockers For Mainnet
 
@@ -62,3 +63,6 @@ These are intentionally not marked fixed:
 
 Until those are done, the correct verdict remains: devnet/demo yes, mainnet with
 real funds no.
+
+For Solana dApp Store / Seeker Store submission, the current target is
+`DEVNET_STORE_DEMO`; `MAINNET_BETA_CANDIDATE` remains disabled.

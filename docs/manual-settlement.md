@@ -77,6 +77,17 @@ sha256("luckyme-round-randomness" || round_pubkey || total_tickets_le || reveal)
 If no entry contains a derived ticket, the builder returns an error instead of
 guessing an account.
 
+## Empty Rounds
+
+Rounds with zero entries cannot be settled because no valid `winner_entry`
+exists. After the round expires, a keeper can close the empty round without a
+reveal and without moving funds:
+
+```bash
+DRY_RUN=true POOL=mini ROUND_ID=9 npm run round:close-empty
+POOL=mini ROUND_ID=9 npm run round:close-empty
+```
+
 ## Refund After Missing Reveal
 
 If the reveal does not arrive, each entrant can build a refund transaction after

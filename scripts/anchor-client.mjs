@@ -27,8 +27,8 @@ class ReadonlyWallet {
   }
 }
 
-export function createClient({ requireSigner = true } = {}) {
-  const url = process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
+export function createClient({ requireSigner = true, url: overrideUrl } = {}) {
+  const url = overrideUrl ?? process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
   const connection = new Connection(url, "confirmed");
   const payer = requireSigner ? readKeypair() : null;
   const wallet = payer ? new Wallet(payer) : new ReadonlyWallet();

@@ -20,6 +20,11 @@ declare const process:
   | {
       env?: {
         EXPO_PUBLIC_LUCKYME_API_URL?: string;
+        EXPO_PUBLIC_LUCKYME_RELEASE_MODE?: string;
+        EXPO_PUBLIC_LUCKYME_STORE_BUILD?: string;
+        EXPO_PUBLIC_LUCKYME_TERMS_URL?: string;
+        EXPO_PUBLIC_LUCKYME_PRIVACY_URL?: string;
+        EXPO_PUBLIC_LUCKYME_SUPPORT_URL?: string;
       };
     }
   | undefined;
@@ -36,6 +41,10 @@ type RoundState = {
   jackpotTriggered?: boolean;
   winner?: string;
   jackpotWinner?: string;
+  randomnessCommitment?: string;
+  randomness?: string;
+  randomnessMode?: string;
+  randomnessProofStatus?: string;
   refundAfterTs?: number;
   refundAvailable?: boolean;
   refundMode?: boolean;
@@ -72,8 +81,33 @@ type Pool = {
 };
 
 type ConfigState = {
+  authority?: string;
   treasury?: string;
   jackpotOddsDenominator?: number;
+  roundDurationSeconds?: number;
+  houseFeeBps?: number;
+  jackpotBps?: number;
+};
+
+type PublicConfig = {
+  mode?: string;
+  cluster?: string;
+  clusterUrl?: string;
+  programId?: string;
+  randomnessMode?: string;
+  productionRandomnessEnabled?: boolean;
+  devnetOnly?: boolean;
+  realFundsEnabled?: boolean;
+  economics?: {
+    mainPrizeBps?: number;
+    houseFeeBps?: number;
+    jackpotBps?: number;
+    roundDurationSeconds?: number;
+    refundDelaySeconds?: number;
+    jackpotOddsDenominator?: number | null;
+  };
+  treasury?: string | null;
+  limitations?: string[];
 };
 
 type PoolsResponse = {
@@ -113,10 +147,19 @@ type SubmitTransactionResponse = {
   signature: string;
 };
 
+const ENV = typeof process !== "undefined" ? process.env : undefined;
+const RELEASE_MODE = ENV?.EXPO_PUBLIC_LUCKYME_RELEASE_MODE ?? "DEVNET_STORE_DEMO";
+const STORE_BUILD = ENV?.EXPO_PUBLIC_LUCKYME_STORE_BUILD === "true";
 const API_BASE_URL =
-  typeof process !== "undefined" && process.env?.EXPO_PUBLIC_LUCKYME_API_URL
-    ? process.env.EXPO_PUBLIC_LUCKYME_API_URL
-    : "http://localhost:8788";
+  ENV?.EXPO_PUBLIC_LUCKYME_API_URL ??
+  (!STORE_BUILD && RELEASE_MODE === "DEVNET_STORE_DEMO"
+    ? "http://localhost:8788"
+    : "");
+const TERMS_URL = ENV?.EXPO_PUBLIC_LUCKYME_TERMS_URL ?? "https://example.com/terms";
+const PRIVACY_URL =
+  ENV?.EXPO_PUBLIC_LUCKYME_PRIVACY_URL ?? "https://example.com/privacy";
+const SUPPORT_URL =
+  ENV?.EXPO_PUBLIC_LUCKYME_SUPPORT_URL ?? "https://example.com/support";
 
 const FALLBACK_POOLS: Pool[] = [
   {
@@ -125,10 +168,10 @@ const FALLBACK_POOLS: Pool[] = [
     ticketPriceSol: "0.005",
     currentRound: 0,
     jackpotSol: "0",
-    roundDurationSeconds: 300,
-    mainPrizeBps: 9500,
-    houseFeeBps: 300,
-    jackpotBps: 200,
+    roundDurationSeconds: 3_600,
+    mainPrizeBps: 9_800,
+    houseFeeBps: 100,
+    jackpotBps: 100,
     activeRound: null,
   },
   {
@@ -137,10 +180,10 @@ const FALLBACK_POOLS: Pool[] = [
     ticketPriceSol: "0.01",
     currentRound: 0,
     jackpotSol: "0",
-    roundDurationSeconds: 300,
-    mainPrizeBps: 9500,
-    houseFeeBps: 300,
-    jackpotBps: 200,
+    roundDurationSeconds: 3_600,
+    mainPrizeBps: 9_800,
+    houseFeeBps: 100,
+    jackpotBps: 100,
     activeRound: null,
   },
   {
@@ -149,10 +192,10 @@ const FALLBACK_POOLS: Pool[] = [
     ticketPriceSol: "0.1",
     currentRound: 0,
     jackpotSol: "0",
-    roundDurationSeconds: 300,
-    mainPrizeBps: 9500,
-    houseFeeBps: 300,
-    jackpotBps: 200,
+    roundDurationSeconds: 3_600,
+    mainPrizeBps: 9_800,
+    houseFeeBps: 100,
+    jackpotBps: 100,
     activeRound: null,
   },
 ];
@@ -210,6 +253,21 @@ function formatRemaining(endTs: number | undefined, now: number) {
   const seconds = String(remainingSeconds % 60).padStart(2, "0");
 
   return `${minutes}:${seconds}`;
+}
+
+function formatDuration(seconds: number | undefined) {
+  if (!seconds) {
+    return "--";
+  }
+  if (seconds % 3600 === 0) {
+    const hours = seconds / 3600;
+    return `${hours}h`;
+  }
+  if (seconds % 60 === 0) {
+    const minutes = seconds / 60;
+    return `${minutes}m`;
+  }
+  return `${seconds}s`;
 }
 
 async function postJson<TResponse>(path: string, body: unknown) {
@@ -296,6 +354,7 @@ export function LuckyMeScreen() {
   const [source, setSource] = useState("fallback");
   const [clusterUrl, setClusterUrl] = useState<string | undefined>();
   const [config, setConfig] = useState<ConfigState | null>(null);
+  const [publicConfig, setPublicConfig] = useState<PublicConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -314,19 +373,29 @@ export function LuckyMeScreen() {
     }
 
     try {
+      if (!API_BASE_URL) {
+        throw new Error(
+          "EXPO_PUBLIC_LUCKYME_API_URL is required for store/production builds",
+        );
+      }
+
       const params = new URLSearchParams();
       if (walletAddress) {
         params.set("player", walletAddress);
       }
       const query = params.toString();
-      const response = await fetch(
-        `${API_BASE_URL}/pools${query ? `?${query}` : ""}`,
-      );
+      const configResponse = await fetch(`${API_BASE_URL}/config`);
+      if (!configResponse.ok) {
+        throw new Error(`Config HTTP ${configResponse.status}`);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/pools${query ? `?${query}` : ""}`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
+      const safeConfig = (await configResponse.json()) as PublicConfig;
       const payload = (await response.json()) as PoolsResponse;
 
       if (!Array.isArray(payload.pools) || payload.pools.length === 0) {
@@ -337,6 +406,7 @@ export function LuckyMeScreen() {
       setSource(payload.source ?? "backend");
       setClusterUrl(payload.onchain?.clusterUrl);
       setConfig(payload.config ?? null);
+      setPublicConfig(safeConfig);
       setError(null);
       setSelectedPoolId((current: string) =>
         payload.pools?.some((pool: Pool) => pool.id === current)
@@ -344,10 +414,12 @@ export function LuckyMeScreen() {
           : payload.pools?.[0]?.id ?? FALLBACK_POOLS[0].id,
       );
     } catch (caught) {
-      setPools(FALLBACK_POOLS);
-      setSource("fallback");
+      const allowFallback = !STORE_BUILD && RELEASE_MODE === "DEVNET_STORE_DEMO";
+      setPools(allowFallback ? FALLBACK_POOLS : []);
+      setSource(allowFallback ? "fallback" : "unavailable");
       setClusterUrl(undefined);
       setConfig(null);
+      setPublicConfig(null);
       setError(caught instanceof Error ? caught.message : "Backend unavailable");
       setSelectedPoolId((current: string) =>
         FALLBACK_POOLS.some((pool: Pool) => pool.id === current)
@@ -412,10 +484,21 @@ export function LuckyMeScreen() {
         ? "Fallback"
         : source === "static"
           ? "Static"
+          : source === "unavailable"
+            ? "Unavailable"
           : "Backend";
   const splitLabel = `${formatBps(selectedPool.mainPrizeBps)} / ${formatBps(
     selectedPool.houseFeeBps,
   )} / ${formatBps(selectedPool.jackpotBps)}`;
+  const mode = publicConfig?.mode ?? RELEASE_MODE;
+  const randomnessMode = publicConfig?.randomnessMode ?? "commit_reveal_demo";
+  const modeBanner = mode === "DEVNET_STORE_DEMO"
+    ? "DEVNET MODE - no real funds"
+    : "MAINNET BETA CANDIDATE - disabled until production randomness";
+  const apiConfigError =
+    !API_BASE_URL && (STORE_BUILD || RELEASE_MODE !== "DEVNET_STORE_DEMO")
+      ? "Missing EXPO_PUBLIC_LUCKYME_API_URL for store/production build"
+      : null;
 
   useEffect(() => {
     setPendingTransaction(null);
@@ -635,6 +718,21 @@ export function LuckyMeScreen() {
           {error ? <Text style={styles.errorText}>Offline: {error}</Text> : null}
         </View>
 
+        {apiConfigError ? (
+          <View style={styles.blockingPanel}>
+            <Text style={styles.sectionTitle}>Configuration required</Text>
+            <Text style={styles.infoText}>{apiConfigError}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.modeBanner}>
+          <Text style={styles.modeTitle}>{modeBanner}</Text>
+          <Text style={styles.modeText}>
+            Mode {mode} | Randomness {randomnessMode} | Cluster{" "}
+            {publicConfig?.cluster ?? sourceLabel}
+          </Text>
+        </View>
+
         <FlatList
           data={pools}
           keyExtractor={(item: Pool) => item.id}
@@ -685,8 +783,18 @@ export function LuckyMeScreen() {
             <Text style={styles.value}>{roundEnds}</Text>
           </View>
           <View style={styles.row}>
+            <Text style={styles.label}>Round length</Text>
+            <Text style={styles.value}>
+              {formatDuration(selectedPool.roundDurationSeconds)}
+            </Text>
+          </View>
+          <View style={styles.row}>
             <Text style={styles.label}>Tickets</Text>
             <Text style={styles.value}>{activeRound?.totalTickets ?? "0"}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Total pool</Text>
+            <Text style={styles.value}>{formatSol(activeRound?.totalSol)} SOL</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Your chance</Text>
@@ -754,6 +862,19 @@ export function LuckyMeScreen() {
                       Ends {formatRemaining(round.endTs, now)}
                     </Text>
                   )}
+                  <Text style={styles.historyMeta}>
+                    Randomness {round.randomnessProofStatus ?? "pending"} | Refund{" "}
+                    {round.refundMode
+                      ? "mode"
+                      : round.refundAvailable
+                        ? "available"
+                        : "not available"}
+                  </Text>
+                  {round.randomnessCommitment ? (
+                    <Text style={styles.historyMeta}>
+                      Commitment {shortAddress(round.randomnessCommitment)}
+                    </Text>
+                  ) : null}
                   {round.jackpotTriggered ? (
                     <Text style={styles.historyMeta}>
                       Jackpot {shortAddress(round.jackpotWinner)}
@@ -812,6 +933,50 @@ export function LuckyMeScreen() {
               1 / {config?.jackpotOddsDenominator ?? "--"}
             </Text>
           </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Randomness</Text>
+            <Text style={styles.value}>{randomnessMode}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Program</Text>
+            <Text style={styles.value}>{shortAddress(publicConfig?.programId)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Real funds</Text>
+            <Text style={styles.value}>
+              {publicConfig?.realFundsEnabled ? "Enabled" : "Disabled"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.roundPanel}>
+          <Text style={styles.sectionTitle}>How it works</Text>
+          <Text style={styles.infoText}>
+            Buy tickets into the selected fixed pool. The round closes after the
+            countdown, then settlement pays the winner according to the public
+            split shown above.
+          </Text>
+          <Text style={styles.infoText}>
+            Current demo randomness is commit-reveal with refund after timeout.
+            If the reveal is missing, refundable entries are shown and funds can
+            be returned to entry owners.
+          </Text>
+        </View>
+
+        <View style={styles.roundPanel}>
+          <Text style={styles.sectionTitle}>Safety & Transparency</Text>
+          <Text style={styles.infoText}>
+            The app never handles private keys. Your wallet signs the reviewed
+            transaction. Program, vault, treasury, fee, randomness, and refund
+            status are displayed before signing.
+          </Text>
+          <Text style={styles.infoText}>
+            DEVNET_STORE_DEMO is for store review and testing only: no real SOL,
+            no real prizes, and no mainnet claims.
+          </Text>
+          <Text style={styles.linkText}>Terms: {TERMS_URL}</Text>
+          <Text style={styles.linkText}>Privacy: {PRIVACY_URL}</Text>
+          <Text style={styles.linkText}>Support: {SUPPORT_URL}</Text>
         </View>
 
         <View style={styles.stepper}>
@@ -1041,6 +1206,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 6,
   },
+  blockingPanel: {
+    gap: 8,
+    borderColor: "#ff9b8f",
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: "#261819",
+    padding: 16,
+  },
+  modeBanner: {
+    gap: 6,
+    borderColor: "#f2b84b",
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: "#241f15",
+    padding: 14,
+  },
+  modeTitle: {
+    color: "#f7f3ea",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  modeText: {
+    color: "#ffd982",
+    fontSize: 12,
+    lineHeight: 17,
+  },
   poolList: {
     gap: 10,
   },
@@ -1164,6 +1355,16 @@ const styles = StyleSheet.create({
   emptyText: {
     color: "#98a2ad",
     fontSize: 13,
+  },
+  infoText: {
+    color: "#c7d0d9",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  linkText: {
+    color: "#9ee8ff",
+    fontSize: 13,
+    lineHeight: 19,
   },
   reviewNote: {
     color: "#ffd982",

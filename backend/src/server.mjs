@@ -1,7 +1,15 @@
 import { createHash } from "node:crypto";
 import http from "node:http";
 import { URL } from "node:url";
-import { FIXED_POOLS, lamportsToSol, settleRound } from "../../sim/luckyme.mjs";
+import {
+  DEFAULT_HOUSE_FEE_BPS,
+  DEFAULT_JACKPOT_BPS,
+  DEFAULT_MAIN_PRIZE_BPS,
+  DEFAULT_ROUND_DURATION_SECONDS,
+  FIXED_POOLS,
+  lamportsToSol,
+  settleRound,
+} from "../../sim/luckyme.mjs";
 import {
   BN,
   POOLS as ONCHAIN_POOLS,
@@ -21,7 +29,6 @@ import {
 
 const PORT = Number(process.env.PORT ?? 8788);
 const HOST = process.env.HOST ?? "127.0.0.1";
-const DEFAULT_ROUND_DURATION_SECONDS = 300;
 const REFUND_DELAY_SECONDS = 600;
 const REFUND_SCAN_ROUNDS = Number(process.env.REFUND_SCAN_ROUNDS ?? 20);
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES ?? 100_000);
@@ -29,7 +36,14 @@ const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 120);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT === "true";
-const ANCHOR_PROVIDER_URL = process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
+const ANCHOR_PROVIDER_URL = process.env.ANCHOR_PROVIDER_URL ?? "https://api.devnet.solana.com";
+const RELEASE_MODE = process.env.LUCKYME_RELEASE_MODE ?? "DEVNET_STORE_DEMO";
+const RANDOMNESS_MODE = process.env.LUCKYME_RANDOMNESS_MODE ?? "commit_reveal_demo";
+const PRODUCTION_RANDOMNESS_ENABLED = process.env.LUCKYME_PRODUCTION_RANDOMNESS === "true";
+const STRICT_ONCHAIN =
+  process.env.LUCKYME_STRICT_ONCHAIN === "true" ||
+  process.env.LUCKYME_STORE_BUILD === "true" ||
+  process.env.NODE_ENV === "production";
 const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
 const STATIC_POOL_BY_SLUG = new Map(FIXED_POOLS.map((pool) => [pool.id, pool]));
 const ONCHAIN_POOL_BY_SLUG = new Map(
@@ -54,7 +68,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/health") {
-    return json(res, 200, { ok: true, service: "luckyme-dev-api" });
+    return json(res, 200, {
+      ok: true,
+      service: "luckyme-dev-api",
+      mode: RELEASE_MODE,
+      cluster: clusterName(ANCHOR_PROVIDER_URL),
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/config") {
+    return json(res, 200, await getPublicConfig());
   }
 
   if (req.method === "GET" && url.pathname === "/program") {
@@ -66,6 +89,13 @@ const server = http.createServer(async (req, res) => {
       const playerParam = url.searchParams.get("player");
       const player = playerParam ? parsePublicKey(playerParam, "player") : null;
       const state = await getProgramState({ player });
+      if (STRICT_ONCHAIN && !state.onchain.available) {
+        return json(res, 503, {
+          error: "onchain_state_unavailable",
+          message: "On-chain state is required in store/production mode",
+          onchain: state.onchain,
+        });
+      }
       return json(res, 200, {
         source: state.onchain.available ? "onchain" : "static",
         onchain: state.onchain,
@@ -189,7 +219,10 @@ async function getProgramState({ player } = {}) {
   const staticPools = buildStaticPools();
 
   try {
-    const { connection, program, url } = createClient({ requireSigner: false });
+    const { connection, program, url } = createClient({
+      requireSigner: false,
+      url: ANCHOR_PROVIDER_URL,
+    });
     const configAddress = deriveConfig();
     const programAccount = await connection.getAccountInfo(PROGRAM_ID, "confirmed");
     const hasConfig = await accountExists(connection, configAddress);
@@ -306,13 +339,59 @@ async function getProgramState({ player } = {}) {
   }
 }
 
+async function getPublicConfig() {
+  const state = await getProgramState();
+  const config = state.config ?? {};
+  const onchainPools = state.pools ?? [];
+  const firstPool = onchainPools.find((pool) => pool.initialized) ?? onchainPools[0] ?? {};
+  const houseFeeBps = Number(config.houseFeeBps ?? DEFAULT_HOUSE_FEE_BPS);
+  const jackpotBps = Number(config.jackpotBps ?? DEFAULT_JACKPOT_BPS);
+  const roundDurationSeconds = Number(
+    config.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS,
+  );
+
+  return {
+    service: "luckyme-dev-api",
+    mode: RELEASE_MODE,
+    supportedModes: ["DEVNET_STORE_DEMO", "MAINNET_BETA_CANDIDATE"],
+    cluster: clusterName(ANCHOR_PROVIDER_URL),
+    clusterUrl: ANCHOR_PROVIDER_URL,
+    programId: PROGRAM_ID.toBase58(),
+    onchainAvailable: state.onchain.available,
+    onchain: state.onchain,
+    randomnessMode: RANDOMNESS_MODE,
+    productionRandomnessEnabled: PRODUCTION_RANDOMNESS_ENABLED,
+    devnetOnly: RELEASE_MODE === "DEVNET_STORE_DEMO",
+    realFundsEnabled: false,
+    economics: {
+      mainPrizeBps: 10_000 - houseFeeBps - jackpotBps,
+      houseFeeBps,
+      jackpotBps,
+      roundDurationSeconds,
+      refundDelaySeconds: REFUND_DELAY_SECONDS,
+      jackpotOddsDenominator: config.jackpotOddsDenominator ?? null,
+    },
+    treasury: config.treasury ?? null,
+    authority: config.authority ?? null,
+    poolVaultExample: firstPool.addresses?.poolVault ?? null,
+    jackpotVaultExample: firstPool.addresses?.jackpotVault ?? null,
+    limitations: [
+      "DEVNET_STORE_DEMO uses commit-reveal randomness and no real funds.",
+      "MAINNET_BETA_CANDIDATE remains disabled until production randomness, legal review, and multisig controls are complete.",
+    ],
+  };
+}
+
 async function buildBuyTicketsTransaction(payload) {
   const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
   const ticketCount = parseTicketCount(payload.ticketCount);
   const player = parsePublicKey(payload.player, "player");
   enforceSubjectRateLimit(player.toBase58());
   const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
-  const { connection, program, url } = createClient({ requireSigner: false });
+  const { connection, program, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
   const config = deriveConfig();
   const pool = derivePool(config, poolSpec.id);
   const poolVault = derivePoolVault(pool);
@@ -410,7 +489,10 @@ async function buildRefundEntryTransaction(payload) {
   enforceSubjectRateLimit(player.toBase58());
   enforceSubjectRateLimit(feePayer.toBase58());
   const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
-  const { connection, program, url } = createClient({ requireSigner: false });
+  const { connection, program, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
   const config = deriveConfig();
   const pool = derivePool(config, poolSpec.id);
   const poolVault = derivePoolVault(pool);
@@ -497,7 +579,10 @@ async function buildSettleRoundTransaction(payload) {
   enforceSubjectRateLimit(settler.toBase58());
   const reveal = parseRevealHex(payload.randomnessReveal ?? payload.reveal);
   const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
-  const { connection, program, url } = createClient({ requireSigner: false });
+  const { connection, program, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
   const configAddress = deriveConfig();
   const config = await program.account.config.fetch(configAddress);
   const pool = derivePool(configAddress, poolSpec.id);
@@ -664,7 +749,10 @@ async function submitSignedTransaction(payload) {
     payload.signedTransactionBase64,
     "signedTransactionBase64",
   );
-  const { connection, url } = createClient({ requireSigner: false });
+  const { connection, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
   const rawTransaction = Buffer.from(signedTransactionBase64, "base64");
   const signature = await connection.sendRawTransaction(rawTransaction, {
     maxRetries: 3,
@@ -710,6 +798,10 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
       jackpotTriggered: round.jackpotTriggered,
       winner: round.winner.toBase58(),
       jackpotWinner: round.jackpotWinner.toBase58(),
+      randomnessCommitment: Buffer.from(round.randomnessCommitment).toString("hex"),
+      randomness: Buffer.from(round.randomness).toString("hex"),
+      randomnessMode: RANDOMNESS_MODE,
+      randomnessProofStatus: randomnessProofStatus(round),
       refundDelaySeconds: REFUND_DELAY_SECONDS,
       refundAfterTs: refundState.refundAfterTs,
       refundAvailable: refundState.refundAvailable,
@@ -733,7 +825,10 @@ async function getRefundableEntries(url) {
   const poolSlugs = poolFilter
     ? [parsePoolSlug(poolFilter)]
     : [...ONCHAIN_POOL_BY_SLUG.keys()];
-  const { connection, program, url: clusterUrl } = createClient({ requireSigner: false });
+  const { connection, program, url: clusterUrl } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
   const configAddress = deriveConfig();
   const hasConfig = await accountExists(connection, configAddress);
 
@@ -896,9 +991,9 @@ function poolPayloadFromStatic(staticPool, poolSpec) {
     ticketPriceLamports: ticketPriceLamports.toString(),
     ticketPriceSol: lamportsToSol(ticketPriceLamports),
     roundDurationSeconds: DEFAULT_ROUND_DURATION_SECONDS,
-    mainPrizeBps: 9500,
-    houseFeeBps: 300,
-    jackpotBps: 200,
+    mainPrizeBps: Number(DEFAULT_MAIN_PRIZE_BPS),
+    houseFeeBps: Number(DEFAULT_HOUSE_FEE_BPS),
+    jackpotBps: Number(DEFAULT_JACKPOT_BPS),
     recentRounds: [],
   };
 }
@@ -1094,6 +1189,13 @@ function isRefundMode(round) {
     Array.from(round.randomness).every((byte) => byte === 0);
 }
 
+function isEmptyClosedRound(round) {
+  return isRefundMode(round) &&
+    bigintFromAnchor(round.totalTickets) === 0n &&
+    bigintFromAnchor(round.totalLamports) === 0n &&
+    Number(round.entrantCount) === 0;
+}
+
 function rateLimitAllows(req) {
   const now = Date.now();
   const clientId = getClientId(req);
@@ -1137,11 +1239,29 @@ function getClientId(req) {
 }
 
 function validateRuntimeConfig() {
+  if (!["DEVNET_STORE_DEMO", "MAINNET_BETA_CANDIDATE"].includes(RELEASE_MODE)) {
+    throw new Error("LUCKYME_RELEASE_MODE must be DEVNET_STORE_DEMO or MAINNET_BETA_CANDIDATE");
+  }
+
+  if (
+    RELEASE_MODE === "DEVNET_STORE_DEMO" &&
+    isMainnetUrl(ANCHOR_PROVIDER_URL)
+  ) {
+    throw new Error("DEVNET_STORE_DEMO cannot use a mainnet RPC");
+  }
+
+  if (
+    RELEASE_MODE === "MAINNET_BETA_CANDIDATE" &&
+    (!PRODUCTION_RANDOMNESS_ENABLED || RANDOMNESS_MODE === "commit_reveal_demo")
+  ) {
+    throw new Error("MAINNET_BETA_CANDIDATE requires production randomness");
+  }
+
   if (isMainnetUrl(ANCHOR_PROVIDER_URL)) {
     const allowed = (
       process.env.LUCKYME_ENABLE_MAINNET === "true" &&
       process.env.LUCKYME_LEGAL_SIGNOFF === "true" &&
-      process.env.LUCKYME_PRODUCTION_RANDOMNESS === "true" &&
+      PRODUCTION_RANDOMNESS_ENABLED &&
       process.env.LUCKYME_MULTISIG_SIGNOFF === "true"
     );
 
@@ -1169,6 +1289,35 @@ function validateRuntimeConfig() {
 
 function isMainnetUrl(url) {
   return /mainnet|api\.mainnet-beta\.solana\.com/i.test(url);
+}
+
+function clusterName(url) {
+  if (isMainnetUrl(url)) {
+    return "mainnet-beta";
+  }
+  if (/devnet/i.test(url)) {
+    return "devnet";
+  }
+  if (/testnet/i.test(url)) {
+    return "testnet";
+  }
+  return "localnet";
+}
+
+function randomnessProofStatus(round) {
+  if (round.settled && Array.from(round.randomness).some((byte) => byte !== 0)) {
+    return "revealed";
+  }
+  if (isEmptyClosedRound(round)) {
+    return "empty_closed";
+  }
+  if (isRefundMode(round)) {
+    return "refund_mode";
+  }
+  if (Array.from(round.randomnessCommitment).some((byte) => byte !== 0)) {
+    return "committed";
+  }
+  return "missing";
 }
 
 function formatPercentRatio(numerator, denominator) {

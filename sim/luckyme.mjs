@@ -3,10 +3,14 @@ import { createHash } from "node:crypto";
 export const LAMPORTS_PER_SOL = 1_000_000_000n;
 export const BPS_DENOMINATOR = 10_000n;
 export const REFUND_DELAY_SECONDS = 600;
+export const DEFAULT_ROUND_DURATION_SECONDS = 3_600;
+export const DEFAULT_HOUSE_FEE_BPS = 100n;
+export const DEFAULT_JACKPOT_BPS = 100n;
+export const DEFAULT_MAIN_PRIZE_BPS = BPS_DENOMINATOR - DEFAULT_HOUSE_FEE_BPS - DEFAULT_JACKPOT_BPS;
 
 export const DEFAULT_CONFIG = Object.freeze({
-  houseFeeBps: 300n,
-  jackpotBps: 200n,
+  houseFeeBps: DEFAULT_HOUSE_FEE_BPS,
+  jackpotBps: DEFAULT_JACKPOT_BPS,
   jackpotOddsDenominator: 288n,
 });
 

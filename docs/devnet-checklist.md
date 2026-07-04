@@ -18,12 +18,14 @@
   - second refund still succeeds
   - normal settlement is rejected after refund mode starts
   - vault balance returns to the pre-round value after all refunds
+- Confirm zero-entry rounds can be closed after expiry with
+  `npm run round:close-empty`.
 - Deploy to devnet.
 - Publish and verify the devnet program id.
 - Initialize config with:
-  - house fee: `300` bps
-  - jackpot fee: `200` bps
-  - round duration: `300` seconds
+  - house fee: `100` bps
+  - jackpot fee: `100` bps
+  - round duration: `3600` seconds
   - jackpot odds denominator: `288`
 - Initialize three pools:
   - Mini: `5_000_000` lamports
@@ -54,6 +56,17 @@ See `docs/mainnet-readiness.md` for the required mainnet evidence.
 - For manual settlement, use `docs/manual-settlement.md` to verify the reveal,
   derive `winner_entry`/`jackpot_entry`, and simulate the unsigned transaction.
 - Use `GET /refunds` or `npm run refund:crank` to find abandoned-round refunds.
+- Use `DRY_RUN=true npm run round:open`, `DRY_RUN=true npm run round:settle`,
+  and `DRY_RUN=true npm run round:close-empty` for keeper rehearsals.
+
+## Store demo
+
+- Set `LUCKYME_RELEASE_MODE=DEVNET_STORE_DEMO`.
+- Set app `EXPO_PUBLIC_LUCKYME_STORE_BUILD=true`.
+- Set app `EXPO_PUBLIC_LUCKYME_API_URL` to a hosted devnet review backend.
+- Confirm the app displays `DEVNET MODE - no real funds`.
+- Confirm `docs/store-readiness.md`, `docs/legal-risk.md`, and
+  `docs/final-readiness-audit.md` are current.
 
 ## Launch gates
 

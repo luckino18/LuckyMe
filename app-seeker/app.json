@@ -7,7 +7,8 @@
     "scheme": "luckyme",
     "userInterfaceStyle": "dark",
     "android": {
-      "package": "com.luckyme.seeker"
+      "package": "com.luckyme.seeker",
+      "permissions": []
     }
   }
 }

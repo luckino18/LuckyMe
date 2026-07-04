@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_CONFIG,
+  DEFAULT_MAIN_PRIZE_BPS,
+  DEFAULT_ROUND_DURATION_SECONDS,
   FIXED_POOLS,
   chanceForPlayer,
   commitmentForReveal,
@@ -23,7 +25,14 @@ test("fixed pools use the intended ticket prices", () => {
   );
 });
 
-test("round settlement splits 95 percent prize, 3 percent house, 2 percent jackpot", () => {
+test("default economics use hourly rounds and a 98/1/1 split", () => {
+  assert.equal(DEFAULT_ROUND_DURATION_SECONDS, 3_600);
+  assert.equal(DEFAULT_MAIN_PRIZE_BPS, 9_800n);
+  assert.equal(DEFAULT_CONFIG.houseFeeBps, 100n);
+  assert.equal(DEFAULT_CONFIG.jackpotBps, 100n);
+});
+
+test("round settlement splits 98 percent prize, 1 percent house, 1 percent jackpot", () => {
   const result = settleRound({
     ticketPriceLamports: solToLamports("0.01"),
     entries: [
@@ -35,9 +44,9 @@ test("round settlement splits 95 percent prize, 3 percent house, 2 percent jackp
   });
 
   assert.equal(lamportsToSol(result.totalLamports), "0.2");
-  assert.equal(lamportsToSol(result.mainPrize), "0.19");
-  assert.equal(lamportsToSol(result.houseFee), "0.006");
-  assert.equal(lamportsToSol(result.jackpotAdd), "0.004");
+  assert.equal(lamportsToSol(result.mainPrize), "0.196");
+  assert.equal(lamportsToSol(result.houseFee), "0.002");
+  assert.equal(lamportsToSol(result.jackpotAdd), "0.002");
 });
 
 test("winning chance is proportional to ticket count", () => {
@@ -105,7 +114,7 @@ test("refunds are only available after the reveal timeout", () => {
   assert.equal(result.remainingTickets, 1n);
 });
 
-test("jackpot payout includes previous balance plus current 2 percent contribution", () => {
+test("jackpot payout includes previous balance plus current 1 percent contribution", () => {
   const result = settleRound({
     ticketPriceLamports: solToLamports("0.1"),
     jackpotBalanceLamports: solToLamports("2"),
@@ -121,8 +130,8 @@ test("jackpot payout includes previous balance plus current 2 percent contributi
   });
 
   assert.equal(result.jackpotTriggered, true);
-  assert.equal(lamportsToSol(result.jackpotAdd), "0.004");
-  assert.equal(lamportsToSol(result.jackpotPayout), "2.004");
+  assert.equal(lamportsToSol(result.jackpotAdd), "0.002");
+  assert.equal(lamportsToSol(result.jackpotPayout), "2.002");
   assert.equal(lamportsToSol(result.jackpotBalanceAfter), "0");
   assert.match(result.jackpotWinner, /alice|bob/);
 });

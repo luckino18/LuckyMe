@@ -1,176 +1,201 @@
 # LuckyMe
 
-LuckyMe is a transparent Solana devnet MVP for fixed-entry luck pools.
+LuckyMe is a transparent Solana mobile-first luck pool MVP for fixed-entry
+rounds. The current release target is a safe devnet store demo, not a real-money
+mainnet game.
 
-The repository is public from the first build stage so the program logic, pool math, client-facing IDL, simulator, and launch limitations can be reviewed early.
+The repository is public so the Anchor program, pool math, transaction builders,
+mobile app, CI, and launch limitations can be reviewed before any production
+claim.
 
 ## Status
 
+- Current mode: `DEVNET_STORE_DEMO`
 - Network target: devnet/localnet only
 - Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
 - Anchor target: `1.1.2`
 - Solana CLI target: `3.x`
-- Audit status: not audited
+- Audit status: not independently audited
 - Legal status: not reviewed for gambling, lottery, or sweepstakes compliance
 
 Do not use this code with mainnet funds.
 
+## Release Modes
+
+`DEVNET_STORE_DEMO` is the only enabled release mode. It is intended for Solana
+dApp Store / Seeker Store review while production randomness is not integrated.
+It uses devnet SOL only, has no real prizes, displays a devnet/no-real-funds
+banner in the app, and keeps commit-reveal randomness documented as a demo
+limitation.
+
+`MAINNET_BETA_CANDIDATE` is disabled by default. The backend refuses this mode
+unless production randomness is enabled, and mainnet RPC is blocked unless
+mainnet, legal, production randomness, and multisig signoff environment gates are
+all set. Do not enable it until `docs/mainnet-readiness.md` is complete.
+
 ## Game Model
 
-The first protocol target is deliberately small:
+The current default economics are:
 
 - fixed pools: `0.005 SOL`, `0.01 SOL`, `0.1 SOL`
-- round duration: 5 minutes
+- round duration: 1 hour
 - one main winner per round
-- main prize: 95% of the round pool
-- house fee: 3% of the round pool
-- jackpot contribution: 2% of the round pool
-- settlement is permissionless once a round has ended and the reveal is available
+- main prize: 98% of the round pool
+- house fee: 1% of the round pool
+- jackpot contribution: 1% of the round pool
 - no-reveal recovery: after a 10 minute reveal timeout, entrants can refund
   their own entry from the pool vault
 - abandoned-round recovery can also be cranked by a third-party fee payer; the
   refund always goes to `entry.player`
 
-Each pool has a fixed ticket price. Users buy one or more tickets in a single purchase per wallet per round. The round winner is selected by ticket number, so probability is proportional to tickets bought:
+Each pool has a fixed ticket price. A wallet can buy one or more tickets in a
+single purchase per round. The winner is selected by ticket number, so
+probability is proportional to tickets bought.
 
 ```text
 player_chance = player_tickets / total_round_tickets
+main_prize = total_pool * 98%
+house_fee = total_pool * 1%
+jackpot_add = total_pool * 1%
 ```
 
-Round settlement:
+## Randomness
 
-```text
-house_fee = total_pool * 3%
-jackpot_add = total_pool * 2%
-main_prize = total_pool - house_fee - jackpot_add
-```
+The current MVP uses single-provider commit-reveal:
 
-The jackpot is tracked per pool in the MVP to avoid cross-subsidizing low-stake and high-stake players.
+1. a round opens with `hash("luckyme-commit", reveal)`
+2. users buy tickets while the commitment is public
+3. settlement reveals the secret
+4. the program verifies the commitment and derives winning tickets from the
+   reveal, round key, and ticket count
+
+This is acceptable only for `DEVNET_STORE_DEMO`. A reveal provider can still
+withhold unfavorable reveals. Refunds prevent permanent pool-vault lockup, but
+they do not make the game fair enough for real-money mainnet. See
+`docs/randomness.md`.
 
 ## Repository Layout
 
 ```text
 programs/luckyme/   Anchor program
 sim/                Local economic model and tests
-backend/            Local dev API for pool metadata and simulations
-app-seeker/         Solana Seeker app screen prototype
+backend/            Local/devnet API, transaction builders, and safety guards
+app-seeker/         Solana Seeker mobile app prototype
 idl/                Public client-facing Anchor IDL
 sdk/                Public generated TypeScript types
-docs/               Deployment, settlement, and launch checklists
+docs/               Store, deployment, settlement, legal, and launch checklists
 ```
 
-Audit follow-up status is tracked in `docs/audit-closure.md`. Mainnet blockers
-and required evidence are tracked in `docs/mainnet-readiness.md`.
+Audit follow-up status is tracked in `docs/audit-closure.md`. Store submission
+readiness is tracked in `docs/store-readiness.md`. Mainnet blockers are tracked
+in `docs/mainnet-readiness.md`.
 
 ## Local Verification
 
-Install Node development dependencies:
+Install dependencies:
 
 ```bash
 npm ci
+npm install --prefix app-seeker --omit=optional
 ```
 
-Run the simulator tests:
+Run the full local verification set:
 
 ```bash
 npm test
-```
-
-Check the Rust program:
-
-```bash
 cargo check
-```
-
-Install and typecheck the Seeker app:
-
-```bash
-npm install --prefix app-seeker --omit=optional
+cargo test
 npm run app:typecheck
 npm --prefix app-seeker run doctor
-```
-
-Build the Anchor/SBF artifact:
-
-```bash
-anchor build
-```
-
-Run the local Anchor test flow. This uses the `test-short-timers` feature so
-localnet can exercise settlement and refund timeout paths without waiting for
-the production 60 second round duration plus 10 minute refund delay:
-
-```bash
+NO_DNA=1 anchor build --provider.cluster localnet
 npm run test:anchor
 ```
 
-Start the local dev API:
+## Backend
+
+Start the backend safely:
 
 ```bash
 npm run backend:start
 ```
 
-The backend binds to `127.0.0.1` by default, does not read a private wallet for
-read/build endpoints, and keeps `/transactions/submit` disabled unless
-`ENABLE_TRANSACTION_SUBMIT=true` is set.
+Safe defaults:
 
-Initialize config and the three fixed pools on the selected Anchor provider:
+- `ANCHOR_PROVIDER_URL=https://api.devnet.solana.com`
+- `LUCKYME_RELEASE_MODE=DEVNET_STORE_DEMO`
+- `LUCKYME_RANDOMNESS_MODE=commit_reveal_demo`
+- `HOST=127.0.0.1`
+- `ENABLE_TRANSACTION_SUBMIT=false`
+- read/build endpoints do not load a local private wallet
+
+Useful endpoints:
+
+- `GET /health`
+- `GET /config`
+- `GET /pools?player=<wallet-public-key>`
+- `GET /refunds`
+- `POST /transactions/buy-tickets`
+- `POST /transactions/settle-round`
+- `POST /transactions/refund-entry`
+
+For a trusted LAN dev session with a physical Seeker device:
 
 ```bash
-npm run init:pools
+HOST=0.0.0.0 ENABLE_TRANSACTION_SUBMIT=true npm run backend:start
 ```
 
-Run a full localnet smoke test after deploying the program to a local validator:
+Do not expose that LAN pattern as production infrastructure.
+
+## App
+
+Run the Expo dev build:
 
 ```bash
-LUCKYME_ROUND_DURATION_SECS=60 npm run localnet:smoke
+cd app-seeker
+npm run android
+EXPO_PUBLIC_LUCKYME_API_URL=http://<backend-host>:8788 npm run start -- --host lan
 ```
 
-The smoke test initializes config and pools if needed, opens a Normal pool round, buys tickets, waits until the round can settle, and settles the round on-chain. The production target remains 300 seconds; the 60 second value is only for fast local verification.
+For store/demo builds, `EXPO_PUBLIC_LUCKYME_API_URL` must be set. The app shows a
+blocking configuration error instead of silently falling back to localhost.
 
-## Randomness
+The app displays:
 
-The current MVP uses commit-reveal:
+- `DEVNET MODE - no real funds` banner
+- ticket price, total pool, countdown, and user chance
+- 98% / 1% / 1% split
+- treasury, vaults, program id, and cluster
+- randomness mode and proof status
+- recent winners, refund state, and transaction review before wallet signing
+- safety, transparency, terms, privacy, and support placeholders
 
-1. a round opens with `hash("luckyme-commit", reveal)`
-2. users buy tickets while the commitment is already public
-3. settlement reveals the secret
-4. the program verifies the commitment and derives the winning tickets from the reveal, round key, and ticket count
+## Keeper Scripts
 
-This is better than backend RNG, but it is not production-complete. The reveal provider can withhold an unfavorable reveal. If the reveal is withheld, the MVP allows each entrant to claim a refund after a 10 minute timeout, preventing permanent pool-vault lockup for that round. This refund path does not make the randomness fair for mainnet because the reveal provider can still selectively abandon unfavorable rounds.
+All keeper scripts print cluster and wallet, support dry-run where applicable,
+and refuse mainnet unless `CONFIRM_MAINNET=true`.
 
-Before any mainnet launch, the randomness design must use a verifiable source such as Switchboard, ORAO, Pyth Entropy, or a hardened multi-party commit-reveal design with slashing and fallback paths.
+```bash
+DRY_RUN=true npm run round:open
+DRY_RUN=true POOL=mini ROUND_ID=1 RANDOMNESS_REVEAL=<32-byte-hex> npm run round:settle
+DRY_RUN=true POOL=mini ROUND_ID=1 npm run round:close-empty
+DRY_RUN=true npm run refund:crank
+```
 
-## Settlement Tooling
+## Store Submission
 
-For devnet operations, the backend exposes unsigned transaction builders for:
+Use `DEVNET_STORE_DEMO` for the first Solana dApp Store / Seeker Store
+submission. See `docs/store-readiness.md` for the APK, metadata, policy, KYC/KYB,
+publisher wallet, screenshot, privacy, and terms checklist.
 
-- `buy_tickets`
-- `settle_round`
-- `refund_entry_after_timeout`
+## Mainnet Blockers
 
-`POST /transactions/settle-round` accepts a reveal, scans the on-chain `Entry`
-accounts for the round, computes the winner and jackpot entry, and returns a
-simulated unsigned transaction. See `docs/manual-settlement.md`.
+LuckyMe must remain devnet-only until these are complete:
 
-`GET /refunds` discovers refundable abandoned-round entries. `npm run
-refund:crank` can pay the transaction fee and crank refunds permissionlessly;
-the on-chain instruction still transfers lamports only to `entry.player`.
-
-The Anchor program emits events for config initialization, pool initialization,
-round opening, ticket purchases, settlement, refunds, and pause changes so a
-public indexer can track the state machine without private backend state.
-
-## Launch Gates
-
-LuckyMe should stay on devnet until these are complete:
-
-- independent smart contract audit
-- legal review for the intended jurisdictions
-- public verified program id and reproducible build notes
 - production randomness integration
-- multisig treasury and upgrade authority
+- independent smart-contract audit
+- written legal review for intended jurisdictions
+- multisig treasury, pause/admin, and upgrade authority
 - production backend behind proxy/WAF with strict CORS, persistent rate limits,
   monitoring, and no private key on the server
 - private security contact and bug bounty/disclosure process
-- responsible gaming controls
+- responsible gaming, age gate, geofencing, terms, privacy, and payout policy

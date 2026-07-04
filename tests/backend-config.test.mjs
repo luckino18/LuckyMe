@@ -10,7 +10,18 @@ test("backend refuses mainnet RPC without required signoffs", async () => {
   });
 
   assert.notEqual(result.code, 0);
-  assert.match(result.output, /Refusing mainnet RPC/);
+  assert.match(result.output, /DEVNET_STORE_DEMO cannot use a mainnet RPC/);
+});
+
+test("backend refuses mainnet beta candidate without production randomness", async () => {
+  const result = await runServerExpectingExit({
+    ANCHOR_PROVIDER_URL: "https://api.devnet.solana.com",
+    LUCKYME_RELEASE_MODE: "MAINNET_BETA_CANDIDATE",
+    LUCKYME_PRODUCTION_RANDOMNESS: "false",
+  });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.output, /MAINNET_BETA_CANDIDATE requires production randomness/);
 });
 
 test("backend production mode requires strict CORS", async () => {
@@ -47,6 +58,32 @@ test("backend transaction submit relay is disabled by default", async () => {
   }
 });
 
+test("backend exposes safe public config", async () => {
+  const port = await getFreePort();
+  const child = startServer({
+    PORT: String(port),
+    ANCHOR_PROVIDER_URL: "http://127.0.0.1:1",
+  });
+
+  try {
+    await waitForOutput(child, /LuckyMe dev API listening/);
+    const response = await fetch(`http://127.0.0.1:${port}/config`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.mode, "DEVNET_STORE_DEMO");
+    assert.equal(payload.randomnessMode, "commit_reveal_demo");
+    assert.equal(payload.economics.houseFeeBps, 100);
+    assert.equal(payload.economics.jackpotBps, 100);
+    assert.equal(payload.economics.mainPrizeBps, 9800);
+    assert.equal(payload.economics.roundDurationSeconds, 3600);
+    assert.equal(payload.realFundsEnabled, false);
+  } finally {
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  }
+});
+
 async function runServerExpectingExit(env) {
   const child = startServer(env);
   const [code] = await once(child, "exit");
@@ -63,6 +100,10 @@ function startServer(env) {
       ...process.env,
       HOST: "127.0.0.1",
       PORT: "0",
+      LUCKYME_RELEASE_MODE: "DEVNET_STORE_DEMO",
+      LUCKYME_RANDOMNESS_MODE: "commit_reveal_demo",
+      LUCKYME_STORE_BUILD: "false",
+      LUCKYME_STRICT_ONCHAIN: "false",
       LUCKYME_ENABLE_MAINNET: "false",
       LUCKYME_LEGAL_SIGNOFF: "false",
       LUCKYME_PRODUCTION_RANDOMNESS: "false",

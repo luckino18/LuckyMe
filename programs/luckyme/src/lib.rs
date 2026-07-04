@@ -7,6 +7,7 @@ declare_id!("4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3");
 const BPS_DENOMINATOR: u64 = 10_000;
 const MAX_FEE_BPS: u16 = 500;
 const MAX_JACKPOT_BPS: u16 = 500;
+const MAX_TICKETS_PER_ENTRY: u64 = 1_000;
 #[cfg(not(feature = "test-short-timers"))]
 const MIN_ROUND_DURATION_SECS: i64 = 60;
 #[cfg(feature = "test-short-timers")]
@@ -140,6 +141,10 @@ pub mod luckyme {
     pub fn buy_tickets(ctx: Context<BuyTickets>, ticket_count: u64) -> Result<()> {
         require!(!ctx.accounts.config.paused, LuckyMeError::Paused);
         require!(ticket_count > 0, LuckyMeError::InvalidTicketCount);
+        require!(
+            ticket_count <= MAX_TICKETS_PER_ENTRY,
+            LuckyMeError::InvalidTicketCount
+        );
 
         let now = Clock::get()?.unix_timestamp;
         require!(now < ctx.accounts.round.end_ts, LuckyMeError::RoundClosed);
@@ -407,6 +412,36 @@ pub mod luckyme {
         Ok(())
     }
 
+    pub fn close_empty_round_after_timeout(ctx: Context<CloseEmptyRoundAfterTimeout>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            now >= ctx.accounts.round.end_ts,
+            LuckyMeError::RoundStillOpen
+        );
+        require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
+        require!(
+            ctx.accounts.round.total_tickets == 0
+                && ctx.accounts.round.total_lamports == 0
+                && ctx.accounts.round.entrant_count == 0,
+            LuckyMeError::RoundHasEntries
+        );
+
+        let round = &mut ctx.accounts.round;
+        round.settled = true;
+        round.jackpot_triggered = false;
+        round.winner = Pubkey::default();
+        round.jackpot_winner = Pubkey::default();
+        round.randomness = [0; 32];
+
+        emit!(EmptyRoundClosed {
+            pool: ctx.accounts.pool.key(),
+            round: round.key(),
+            round_id: round.round_id,
+        });
+
+        Ok(())
+    }
+
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         ctx.accounts.config.paused = paused;
         emit!(PausedSet {
@@ -492,6 +527,13 @@ pub struct EntryRefunded {
     pub round_total_tickets: u64,
     pub round_total_lamports: u64,
     pub remaining_entrant_count: u32,
+}
+
+#[event]
+pub struct EmptyRoundClosed {
+    pub pool: Pubkey,
+    pub round: Pubkey,
+    pub round_id: u64,
 }
 
 #[event]
@@ -660,6 +702,18 @@ pub struct RefundEntryAfterTimeout<'info> {
     /// CHECK: PDA vault owned by this program; it only stores lamports.
     pub pool_vault: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CloseEmptyRoundAfterTimeout<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(has_one = config)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, has_one = pool)]
+    pub round: Account<'info, Round>,
 }
 
 #[derive(Accounts)]
@@ -859,6 +913,8 @@ pub enum LuckyMeError {
     RefundNotAvailable,
     #[msg("Entry has nothing to refund")]
     NothingToRefund,
+    #[msg("Round already has entries")]
+    RoundHasEntries,
 }
 
 #[cfg(test)]

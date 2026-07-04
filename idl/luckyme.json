@@ -117,6 +117,58 @@
       ]
     },
     {
+      "name": "close_empty_round_after_timeout",
+      "discriminator": [
+        234,
+        155,
+        116,
+        12,
+        103,
+        105,
+        47,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize_config",
       "discriminator": [
         208,
@@ -673,6 +725,19 @@
       ]
     },
     {
+      "name": "EmptyRoundClosed",
+      "discriminator": [
+        152,
+        13,
+        45,
+        105,
+        245,
+        8,
+        151,
+        214
+      ]
+    },
+    {
       "name": "EntryRefunded",
       "discriminator": [
         34,
@@ -861,6 +926,11 @@
       "code": 6021,
       "name": "NothingToRefund",
       "msg": "Entry has nothing to refund"
+    },
+    {
+      "code": 6022,
+      "name": "RoundHasEntries",
+      "msg": "Round already has entries"
     }
   ],
   "types": [
@@ -932,6 +1002,26 @@
           {
             "name": "round_duration_secs",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EmptyRoundClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_id",
+            "type": "u64"
           }
         ]
       }

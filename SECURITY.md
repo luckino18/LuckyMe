@@ -12,6 +12,8 @@ LuckyMe is an experimental Solana devnet MVP. Do not use it with mainnet funds.
 - There is no public bug bounty yet.
 - Backend production/mainnet guardrails exist, but they do not replace a real
   production security program.
+- The current store target is `DEVNET_STORE_DEMO`, with no real funds and no
+  real-money prizes.
 
 ## Supported Scope
 
@@ -39,6 +41,13 @@ Include:
 - minimal reproduction steps
 - whether funds can be locked, redirected, or unfairly settled
 
+Private reporting placeholder before mainnet:
+
+- dedicated security email or form
+- GitHub private vulnerability reporting enabled
+- encrypted contact if needed for sensitive proofs
+- triage owner and escalation backup
+
 ## Severity Guide
 
 - Critical: loss or theft of funds, arbitrary settlement manipulation, permanent
@@ -60,6 +69,26 @@ These are best-effort targets for the devnet MVP:
 - Medium/Low: triage when project time allows
 
 No SLA or bounty is promised until a production security program is announced.
+
+## Known Limitations
+
+- `commit_reveal_demo` randomness can be selectively withheld.
+- Refunds recover funds after timeout but do not make randomness production
+  grade.
+- No legal/compliance opinion has been completed.
+- No multisig authority handover has been completed.
+- No public bug bounty is funded yet.
+
+## Planned Bug Bounty
+
+Before any mainnet launch, publish:
+
+- bounty scope and excluded assets
+- severity-to-payout matrix
+- disclosure rules
+- response SLA
+- payout currency/process
+- safe harbor language reviewed by counsel
 
 ## Incident Response
 

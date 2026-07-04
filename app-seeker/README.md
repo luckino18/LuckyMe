@@ -1,31 +1,40 @@
 # LuckyMe Seeker App
 
-Mobile-first Android client for Solana Seeker.
+Mobile-first Android client for Solana Seeker and Solana dApp Store review.
 
-The current screen reads pool state, recent rounds, vault addresses, and
-treasury metadata from the backend `GET /pools` endpoint. It falls back to local
-static pool values when the backend or RPC is unavailable.
+The current app target is `DEVNET_STORE_DEMO`: devnet only, no real SOL, no real
+prizes, and visible safety/transparency copy.
+
+## API Configuration
 
 Set `EXPO_PUBLIC_LUCKYME_API_URL` before running the app:
 
-- iOS simulator / desktop preview: `http://localhost:8788`
+- desktop preview: `http://localhost:8788`
 - Android emulator: `http://10.0.2.2:8788`
 - physical Seeker device: `http://<mac-lan-ip>:8788`
 
-The backend binds to `127.0.0.1` by default. For a trusted LAN dev session,
-start it explicitly on all interfaces so a physical device can reach the Mac LAN
-IP:
+For store/demo builds, `EXPO_PUBLIC_LUCKYME_API_URL` is required. The app shows a
+blocking configuration error instead of silently falling back to localhost.
 
-```bash
-HOST=0.0.0.0 npm run backend:start
+Optional public env vars:
+
+```text
+EXPO_PUBLIC_LUCKYME_RELEASE_MODE=DEVNET_STORE_DEMO
+EXPO_PUBLIC_LUCKYME_STORE_BUILD=true
+EXPO_PUBLIC_LUCKYME_TERMS_URL=https://example.com/terms
+EXPO_PUBLIC_LUCKYME_PRIVACY_URL=https://example.com/privacy
+EXPO_PUBLIC_LUCKYME_SUPPORT_URL=https://example.com/support
 ```
 
-Do not use the LAN bind as a production exposure pattern.
+## Local Android Flow
 
-Mobile Wallet Adapter support requires a custom Expo development build. Expo Go
-is not enough because the wallet adapter and crypto polyfills use native modules.
+The backend binds to `127.0.0.1` by default. For a trusted LAN dev session:
 
-Local Android flow:
+```bash
+HOST=0.0.0.0 ENABLE_TRANSACTION_SUBMIT=true npm run backend:start
+```
+
+Run the app:
 
 ```bash
 npm ci
@@ -33,29 +42,25 @@ EXPO_PUBLIC_LUCKYME_API_URL=http://<mac-lan-ip>:8788 npm run android
 EXPO_PUBLIC_LUCKYME_API_URL=http://<mac-lan-ip>:8788 npm run start -- --host lan
 ```
 
-The wallet authorization chain defaults to `solana:devnet` for mobile wallet
-compatibility. For localnet testing, the app asks the wallet only to sign the
-transaction; the backend submits the signed transaction to the configured local
-RPC.
+Mobile Wallet Adapter support requires a custom Expo development build. Expo Go
+is not enough because wallet adapter and crypto polyfills use native modules.
 
-Because the backend submit relay is disabled by default, local mobile testing
-that relies on the relay must start the backend with:
+## Store-Visible Safety
 
-```bash
-HOST=0.0.0.0 ENABLE_TRANSACTION_SUBMIT=true npm run backend:start
-```
+The screen displays:
 
-The join flow asks the backend to build and simulate an unsigned transaction,
-then shows an in-app review with amount, cluster, program, wallet, and
-simulation status before asking the wallet to sign it. The backend never signs
-player transactions.
+- `DEVNET MODE - no real funds` banner
+- current release mode, cluster, and randomness mode
+- ticket price, total pool, countdown, user tickets, and user chance
+- 98% main prize, 1% house fee, 1% jackpot contribution
+- treasury address, vault addresses, and program id
+- round history, winner, refund state, and randomness proof status
+- transaction review before wallet signing
+- safety, how-it-works, terms, privacy, and support placeholders
 
-MVP screens:
+The wallet authorization chain defaults to `solana:devnet`. The backend submit
+relay is disabled by default; local mobile tests that rely on the relay must
+start the backend with `ENABLE_TRANSACTION_SUBMIT=true`.
 
-- pool list: Mini, Normal, High
-- active round: countdown, total tickets, jackpot, user tickets, user chance
-- join flow through Solana Mobile Wallet Adapter
-- round result and recent history
-- treasury/fee transparency screen
-
-The APK should sign only user-approved transactions. Winner selection and payouts must be verified by the Solana program.
+The app should sign only user-approved transactions. Winner selection and
+payouts must be verified by the Solana program.

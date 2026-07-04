@@ -123,6 +123,58 @@ export type Luckyme = {
       ]
     },
     {
+      "name": "closeEmptyRoundAfterTimeout",
+      "discriminator": [
+        234,
+        155,
+        116,
+        12,
+        103,
+        105,
+        47,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initializeConfig",
       "discriminator": [
         208,
@@ -679,6 +731,19 @@ export type Luckyme = {
       ]
     },
     {
+      "name": "emptyRoundClosed",
+      "discriminator": [
+        152,
+        13,
+        45,
+        105,
+        245,
+        8,
+        151,
+        214
+      ]
+    },
+    {
       "name": "entryRefunded",
       "discriminator": [
         34,
@@ -867,6 +932,11 @@ export type Luckyme = {
       "code": 6021,
       "name": "nothingToRefund",
       "msg": "Entry has nothing to refund"
+    },
+    {
+      "code": 6022,
+      "name": "roundHasEntries",
+      "msg": "Round already has entries"
     }
   ],
   "types": [
@@ -938,6 +1008,26 @@ export type Luckyme = {
           {
             "name": "roundDurationSecs",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "emptyRoundClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
           }
         ]
       }

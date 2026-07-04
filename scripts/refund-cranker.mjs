@@ -21,6 +21,7 @@ if (POOL_FILTER && !POOL_BY_SLUG.has(POOL_FILTER)) {
 }
 
 const { connection, payer, program, url } = createClient();
+requireMainnetConfirmation(url);
 const config = deriveConfig();
 const pools = POOL_FILTER ? [POOL_BY_SLUG.get(POOL_FILTER)] : POOLS;
 
@@ -149,4 +150,10 @@ function parsePositiveInteger(value, name) {
     throw new Error(`${name} must be a positive integer`);
   }
   return parsed;
+}
+
+function requireMainnetConfirmation(url) {
+  if (/mainnet|api\.mainnet-beta\.solana\.com/i.test(url) && process.env.CONFIRM_MAINNET !== "true") {
+    throw new Error("Refusing mainnet refund cranking without CONFIRM_MAINNET=true");
+  }
 }

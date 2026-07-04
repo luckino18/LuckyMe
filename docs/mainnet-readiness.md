@@ -10,6 +10,7 @@ complete before anyone can remove the devnet/localnet warning from the README.
 | Production randomness | Chosen provider/design, on-chain integration, async fulfillment/fallback tests, public provider account documentation, and proof that the operator cannot selectively finalize only favorable rounds. |
 | Legal/compliance | Written legal opinion for target jurisdictions, age gate, geofencing policy, terms, privacy policy, responsible gaming controls, tax/payout policy, and free-entry/sweepstakes analysis if applicable. |
 | Multisig authorities | Upgrade authority, treasury, pause/admin authority, and keeper roles separated and documented. Upgrade authority should not be a single hot wallet. |
+| Economics signoff | Mainnet candidate uses 1 hour rounds, 1% house fee, and either the documented 1% jackpot or a reviewed no-jackpot configuration. |
 | Independent audit | External audit against the final commit, generated IDL/SDK, deployed program id, and reproducible build artifact. |
 | Production backend | Strict CORS, proxy/WAF, persistent IP/wallet rate limiting, monitoring, alerting, body-size controls, no private key on the server, and submit relay disabled unless explicitly operated. |
 | Indexer and cranking | Public indexer/event parser or equivalent open tooling for settlement and refund discovery, plus runbooks for abandoned rounds. |
@@ -51,3 +52,13 @@ and implement one of:
 
 Any solution must preserve the no-reveal refund path as a recovery backup, not
 as the primary fairness mechanism.
+
+## Current Demo Economics
+
+- winner: 98%
+- house: 1%
+- jackpot contribution: 1%
+- round duration: 3600 seconds
+
+Changing these requires updating simulator tests, init scripts, backend static
+config, app fallback config, docs, and store copy in the same commit.
