@@ -7,8 +7,10 @@ Last updated: 2026-07-04 19:14 CEST
 - Public repo: https://github.com/luckino18/LuckyMe
 - Branch: `main`
 - Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
-- Latest pushed commit before this handoff update: `6c82871 Update devnet bootstrap handoff`
-- CI: https://github.com/luckino18/LuckyMe/actions/runs/28708667728
+- Latest pushed commit: `137a8e4 Add manual settlement tooling`
+- CI: https://github.com/luckino18/LuckyMe/actions/runs/28713697395
+- Devnet pre-release:
+  https://github.com/luckino18/LuckyMe/releases/tag/v0.1.0-devnet
 
 ## Current State
 
