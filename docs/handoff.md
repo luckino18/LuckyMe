@@ -1,16 +1,17 @@
 # LuckyMe Handoff
 
-Last updated: 2026-07-04 20:33 CEST
+Last updated: 2026-07-04 21:44 CEST
 
 ## Repository
 
 - Public repo: https://github.com/luckino18/LuckyMe
 - Branch: `main`
 - Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
-- Latest code/test commit: `2cbf191 Close audit hardening gaps`
-- CI: https://github.com/luckino18/LuckyMe/actions/runs/28715541850
+- Latest code/test commit: `0ed0bbc Prepare devnet store demo readiness`
+- CI: pending after push for the latest handoff; local verification is listed
+  below.
 - Devnet pre-release:
-  https://github.com/luckino18/LuckyMe/releases/tag/v0.1.2-devnet
+  https://github.com/luckino18/LuckyMe/releases/tag/v0.1.3-devnet
 
 ## Current State
 
@@ -369,11 +370,12 @@ External audit follow-up: no-reveal recovery and backend hardening:
   - deployed slot: `473962070`.
   - ProgramData length after deploy: `297944` bytes.
   - keeper balance after deploy: `2.87239378 SOL`.
-- Refund success was not exercised live on devnet in this handoff because a real
-  no-reveal refund requires an entered round, no settlement reveal, and waiting
-  `300 + 600` seconds before the instruction becomes valid. Local simulator and
-  Rust unit tests cover the timeout logic, refund-mode marker, and duplicate
-  refund prevention.
+- Refund success was not exercised live on devnet in that handoff because a
+  real no-reveal refund requires an entered round, no settlement reveal, and
+  waiting through the configured round duration plus the `600` second refund
+  delay. Current default store-demo rounds use `3600 + 600` seconds; local
+  simulator, Rust unit tests, and Anchor localnet tests cover the timeout logic,
+  refund-mode marker, and duplicate refund prevention.
 - Important remaining blocker: commit-reveal is still not production-grade
   randomness. The refund path prevents funds from being permanently stuck, but
   it does not stop selective reveal withholding. Mainnet still requires
@@ -465,6 +467,70 @@ NO_DNA=1 anchor build --provider.cluster localnet
 npm run test:anchor
 git diff --check
 ```
+
+External audit follow-up: Solana Mobile / Seeker store readiness:
+
+- Code/test commit: `0ed0bbc Prepare devnet store demo readiness`.
+- Explicit release modes are now documented and enforced:
+  `DEVNET_STORE_DEMO` is the only enabled public mode, while
+  `MAINNET_BETA_CANDIDATE` refuses to start without production randomness.
+- Default economics now match the auditor's store-demo target:
+  `3600` second rounds, `100` bps house fee, `100` bps jackpot fee, and a
+  `9800` bps main prize split.
+- Program hardening added `MAX_TICKETS_PER_ENTRY = 1000` and
+  `close_empty_round_after_timeout`, so zero-entry rounds can be closed after
+  expiry without weakening normal settlement constraints.
+- Public IDL and SDK were regenerated with `close_empty_round_after_timeout`,
+  `EmptyRoundClosed`, and `RoundHasEntries`.
+- Backend now defaults to devnet, exposes safe `GET /config`, reports
+  randomness proof status, refuses mainnet/store misconfiguration, and keeps
+  signer loading out of public read/build paths.
+- Keeper tooling now includes dry-run guarded scripts for open, settle,
+  close-empty, and refund cranking:
+  `npm run round:open`, `npm run round:settle`,
+  `npm run round:close-empty`, and `npm run refund:crank`.
+- Seeker app now has a visible `DEVNET MODE - no real funds` banner, store-build
+  localhost guard, explicit API configuration requirement, no Android
+  permissions, and transparency panels for fees, randomness, safety, terms,
+  privacy, and support placeholders.
+- Added store/legal/finality docs:
+  `docs/store-readiness.md`, `docs/randomness.md`, `docs/legal-risk.md`,
+  `docs/production-keeper.md`, and `docs/final-readiness-audit.md`.
+- Added `tests/docs-scripts.test.mjs` so documented `npm run ...` commands must
+  exist in the root or Seeker package.
+- No on-chain devnet deploy or keeper transaction was sent in this pass.
+
+Local verification for `0ed0bbc`:
+
+```bash
+node --check scripts/close-empty-round.mjs
+node --check backend/src/server.mjs
+node --check tests/anchor-localnet.test.mjs
+npm test
+npm run app:typecheck
+npm --prefix app-seeker run doctor
+cargo check
+cargo test
+NO_DNA=1 anchor build --provider.cluster localnet
+npm run test:anchor
+git diff --check
+```
+
+Latest local test results:
+
+- `npm test`: 15/15 passing.
+- `npm run test:anchor`: 7/7 passing on localnet with short timers.
+- `cargo test`: 4/4 passing.
+- `expo-doctor`: 20/20 checks passing.
+
+Remaining blockers before real-money mainnet:
+
+- Replace commit-reveal demo randomness with production VRF/Entropy or bonded
+  multi-party randomness with enforceable fallback.
+- Complete legal review for gambling/lottery/sweepstakes treatment.
+- Move upgrade, treasury, and pause authorities to multisig/timelock.
+- Stand up production monitoring, incident response, private security contact,
+  and bug bounty/disclosure process.
 
 ## Safety Notes
 
