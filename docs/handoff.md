@@ -1,6 +1,6 @@
 # LuckyMe Handoff
 
-Last updated: 2026-07-04 20:24 CEST
+Last updated: 2026-07-04 20:33 CEST
 
 ## Repository
 
@@ -8,9 +8,9 @@ Last updated: 2026-07-04 20:24 CEST
 - Branch: `main`
 - Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
 - Latest code/test commit: `2cbf191 Close audit hardening gaps`
-- CI: https://github.com/luckino18/LuckyMe/actions/runs/28714850371
+- CI: https://github.com/luckino18/LuckyMe/actions/runs/28715541850
 - Devnet pre-release:
-  https://github.com/luckino18/LuckyMe/releases/tag/v0.1.1-devnet
+  https://github.com/luckino18/LuckyMe/releases/tag/v0.1.2-devnet
 
 ## Current State
 
@@ -447,6 +447,8 @@ External audit follow-up: hardening closure matrix:
   settlement/refund docs, and security policy to match the new behavior.
 - Important: this does not solve production randomness, legal, or multisig by
   declaration. Those remain explicit external mainnet blockers.
+- GitHub prerelease `v0.1.2-devnet` was created for this source/test hardening
+  state. No new devnet on-chain deployment was performed for this release.
 
 Local verification for `2cbf191`:
 
