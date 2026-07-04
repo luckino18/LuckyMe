@@ -331,6 +331,34 @@ Mini Round 9 settlement:
   temporary `429 Too Many Requests` responses and one backend restart during the
   test. Use slower polling or a dedicated RPC for repeated phone/backend tests.
 
+External audit follow-up: no-reveal recovery and backend hardening:
+
+- Added program instruction `refund_entry_after_timeout`.
+- Refund delay: `600` seconds after `round.end_ts`.
+- Any caller can build/submit the refund transaction, but the refunded lamports
+  always go to `entry.player`.
+- The instruction does not change the `Round` or `Entry` account layout, so old
+  devnet entries remain decodable.
+- Refund mode uses existing fields: `round.settled = true`, default
+  `winner`/`jackpot_winner`, `jackpot_triggered = false`, and zero randomness.
+- Each refund zeroes `entry.ticket_count` and `entry.lamports`, decrements round
+  totals, and prevents duplicate refunds with `NothingToRefund`.
+- Normal settlement remains blocked after refund mode starts.
+- Backend `/pools` now reports `refundDelaySeconds`, `refundAfterTs`,
+  `refundAvailable`, and `refundMode`.
+- Backend `/transactions/refund-entry` builds and simulates unsigned refund
+  transactions for wallet signing.
+- Seeker shows `Refund entry` when a connected wallet has a refundable entry.
+- Backend hardening added: configurable `CORS_ORIGIN`, in-memory rate limiting,
+  `MAX_JSON_BYTES`, and `ENABLE_TRANSACTION_SUBMIT=false` support for public
+  deployments.
+- CI now runs `cargo test` in addition to `cargo check`, simulator tests, app
+  typecheck, Expo doctor, and dependency audits.
+- Important remaining blocker: commit-reveal is still not production-grade
+  randomness. The refund path prevents funds from being permanently stuck, but
+  it does not stop selective reveal withholding. Mainnet still requires
+  VRF/Entropy or a bonded multi-party reveal design.
+
 ## Safety Notes
 
 LuckyMe has lottery/gambling mechanics. Do not launch with real funds without:

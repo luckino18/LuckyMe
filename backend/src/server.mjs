@@ -19,16 +19,31 @@ import {
 
 const PORT = Number(process.env.PORT ?? 8788);
 const DEFAULT_ROUND_DURATION_SECONDS = 300;
+const REFUND_DELAY_SECONDS = 600;
+const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES ?? 100_000);
+const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000);
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 120);
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
+const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT !== "false";
+const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
 const STATIC_POOL_BY_SLUG = new Map(FIXED_POOLS.map((pool) => [pool.id, pool]));
 const ONCHAIN_POOL_BY_SLUG = new Map(
   ONCHAIN_POOLS.map((pool) => [pool.label.toLowerCase(), pool]),
 );
+const rateBuckets = new Map();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (req.method === "OPTIONS") {
     return empty(res, 204);
+  }
+
+  if (!rateLimitAllows(req)) {
+    return json(res, 429, {
+      error: "rate_limited",
+      message: "Too many requests",
+    });
   }
 
   if (req.method === "GET" && url.pathname === "/health") {
@@ -102,7 +117,26 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (req.method === "POST" && url.pathname === "/transactions/refund-entry") {
+    try {
+      const payload = await readJson(req);
+      return json(res, 200, await buildRefundEntryTransaction(payload));
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "transaction_build_failed",
+        message: error.message,
+      });
+    }
+  }
+
   if (req.method === "POST" && url.pathname === "/transactions/submit") {
+    if (!ENABLE_TRANSACTION_SUBMIT) {
+      return json(res, 403, {
+        error: "transaction_submit_disabled",
+        message: "Transaction relay is disabled",
+      });
+    }
+
     try {
       const payload = await readJson(req);
       return json(res, 200, await submitSignedTransaction(payload));
@@ -336,6 +370,89 @@ async function buildBuyTicketsTransaction(payload) {
   };
 }
 
+async function buildRefundEntryTransaction(payload) {
+  const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
+  const player = parsePublicKey(payload.player, "player");
+  const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
+  const { connection, program, url } = createClient();
+  const config = deriveConfig();
+  const pool = derivePool(config, poolSpec.id);
+  const poolVault = derivePoolVault(pool);
+  const poolAccount = await program.account.pool.fetch(pool);
+  const currentRound = numberFromAnchor(poolAccount.currentRound);
+  const roundId = parseRoundId(payload.roundId, currentRound);
+  const round = deriveRound(pool, roundId);
+  const roundAccount = await program.account.round.fetch(round);
+  const refundState = getRefundState(roundAccount);
+
+  if (!refundState.refundAvailable) {
+    throw httpError(
+      409,
+      "refund_not_available",
+      "Refund is not available for this round",
+    );
+  }
+
+  const entry = deriveEntry(round, player);
+  const userEntry = await fetchUserEntry(
+    program,
+    round,
+    player,
+    bigintFromAnchor(roundAccount.totalTickets),
+  );
+  if (!userEntry || BigInt(userEntry.lamports) === 0n) {
+    throw httpError(409, "nothing_to_refund", "Wallet has nothing to refund");
+  }
+
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  const transaction = await program.methods
+    .refundEntryAfterTimeout()
+    .accounts({
+      player,
+      config,
+      pool,
+      round,
+      entry,
+      poolVault,
+      systemProgram: SystemProgram.programId,
+    })
+    .transaction();
+
+  transaction.feePayer = player;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+
+  const transactionBase64 = transaction
+    .serialize({ requireAllSignatures: false, verifySignatures: false })
+    .toString("base64");
+  const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
+
+  return {
+    clusterUrl: url,
+    programId: PROGRAM_ID.toBase58(),
+    transactionBase64,
+    summary: {
+      action: "refund_entry_after_timeout",
+      pool: poolSlug,
+      roundId,
+      refundDelaySeconds: REFUND_DELAY_SECONDS,
+      refundAfterTs: refundState.refundAfterTs,
+      amountLamports: userEntry.lamports,
+      amountSol: lamportsToSol(BigInt(userEntry.lamports)),
+      player: player.toBase58(),
+      accounts: {
+        config: config.toBase58(),
+        pool: pool.toBase58(),
+        round: round.toBase58(),
+        entry: entry.toBase58(),
+        poolVault: poolVault.toBase58(),
+      },
+    },
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    simulation,
+  };
+}
+
 async function simulateUnsignedTransaction(connection, transactionBase64) {
   try {
     const result = await connection._rpcRequest("simulateTransaction", [
@@ -404,6 +521,7 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
   try {
     const round = await program.account.round.fetch(roundAddress);
     const totalTickets = bigintFromAnchor(round.totalTickets);
+    const refundState = getRefundState(round);
     return {
       address: roundAddress.toBase58(),
       roundId: numberFromAnchor(round.roundId),
@@ -418,6 +536,10 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
       jackpotTriggered: round.jackpotTriggered,
       winner: round.winner.toBase58(),
       jackpotWinner: round.jackpotWinner.toBase58(),
+      refundDelaySeconds: REFUND_DELAY_SECONDS,
+      refundAfterTs: refundState.refundAfterTs,
+      refundAvailable: refundState.refundAvailable,
+      refundMode: refundState.refundMode,
       userEntry: player
         ? await fetchUserEntry(program, roundAddress, player, totalTickets)
         : undefined,
@@ -496,7 +618,7 @@ async function readJson(req) {
 
   for await (const chunk of req) {
     totalLength += chunk.length;
-    if (totalLength > 1_000_000) {
+    if (totalLength > MAX_JSON_BYTES) {
       throw httpError(413, "payload_too_large", "Payload is too large");
     }
     chunks.push(chunk);
@@ -533,6 +655,19 @@ function parseTicketCount(value) {
   return ticketCount;
 }
 
+function parseRoundId(value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const roundId = Number(value);
+  if (!Number.isSafeInteger(roundId) || roundId < 1) {
+    throw httpError(400, "invalid_round_id", "roundId must be a positive integer");
+  }
+
+  return roundId;
+}
+
 function parsePublicKey(value, field) {
   try {
     return new PublicKey(String(value ?? ""));
@@ -557,7 +692,7 @@ function json(res, status, body) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
-    "access-control-allow-origin": "*",
+    "access-control-allow-origin": CORS_ORIGIN,
     "access-control-allow-headers": "content-type",
     "access-control-allow-methods": "GET, POST, OPTIONS",
   });
@@ -566,7 +701,7 @@ function json(res, status, body) {
 
 function empty(res, status) {
   res.writeHead(status, {
-    "access-control-allow-origin": "*",
+    "access-control-allow-origin": CORS_ORIGIN,
     "access-control-allow-headers": "content-type",
     "access-control-allow-methods": "GET, POST, OPTIONS",
   });
@@ -586,6 +721,53 @@ function serializeBigInts(value) {
       typeof inner === "bigint" ? inner.toString() : inner,
     ),
   );
+}
+
+function getRefundState(round) {
+  const endTs = numberFromAnchor(round.endTs);
+  const refundAfterTs = endTs + REFUND_DELAY_SECONDS;
+  const refundMode = isRefundMode(round);
+  const refundAvailable = (
+    (!round.settled || refundMode) &&
+    Math.floor(Date.now() / 1000) >= refundAfterTs &&
+    bigintFromAnchor(round.totalLamports) > 0n
+  );
+
+  return {
+    refundAfterTs,
+    refundAvailable,
+    refundMode,
+  };
+}
+
+function isRefundMode(round) {
+  return round.settled &&
+    !round.jackpotTriggered &&
+    round.winner.toBase58() === DEFAULT_PUBLIC_KEY &&
+    round.jackpotWinner.toBase58() === DEFAULT_PUBLIC_KEY &&
+    Array.from(round.randomness).every((byte) => byte === 0);
+}
+
+function rateLimitAllows(req) {
+  const now = Date.now();
+  const clientId = getClientId(req);
+  const existing = rateBuckets.get(clientId);
+
+  if (!existing || now >= existing.resetAt) {
+    rateBuckets.set(clientId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  existing.count += 1;
+  return existing.count <= RATE_LIMIT_MAX;
+}
+
+function getClientId(req) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.length > 0) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return req.socket.remoteAddress ?? "unknown";
 }
 
 function formatPercentRatio(numerator, denominator) {

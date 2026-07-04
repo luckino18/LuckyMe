@@ -36,6 +36,9 @@ type RoundState = {
   jackpotTriggered?: boolean;
   winner?: string;
   jackpotWinner?: string;
+  refundAfterTs?: number;
+  refundAvailable?: boolean;
+  refundMode?: boolean;
   userEntry?: {
     address: string;
     player: string;
@@ -84,18 +87,20 @@ type PoolsResponse = {
   pools?: Pool[];
 };
 
-type BuildBuyTicketsResponse = {
+type BuildTransactionResponse = {
   clusterUrl?: string;
   programId?: string;
   transactionBase64: string;
   summary: {
+    action: "buy_tickets" | "refund_entry_after_timeout";
     amountLamports?: string;
     amountSol: string;
     player?: string;
     pool: string;
     roundId: number;
     ticketPriceLamports?: string;
-    ticketCount: number;
+    ticketCount?: number;
+    refundAfterTs?: number;
   };
   simulation?: {
     ok: boolean;
@@ -267,6 +272,10 @@ function roundOutcome(round: RoundState, now: number) {
     return "Missing";
   }
 
+  if (round.refundMode) {
+    return round.totalTickets === "0" ? "Refunded" : "Refunding";
+  }
+
   if (round.settled) {
     return "Settled";
   }
@@ -294,9 +303,8 @@ export function LuckyMeScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [txSignature, setTxSignature] = useState<string | null>(null);
-  const [pendingJoin, setPendingJoin] = useState<BuildBuyTicketsResponse | null>(
-    null,
-  );
+  const [pendingTransaction, setPendingTransaction] =
+    useState<BuildTransactionResponse | null>(null);
 
   const loadPools = useCallback(async (silent = false) => {
     if (silent) {
@@ -410,7 +418,7 @@ export function LuckyMeScreen() {
   )} / ${formatBps(selectedPool.jackpotBps)}`;
 
   useEffect(() => {
-    setPendingJoin(null);
+    setPendingTransaction(null);
   }, [selectedPoolId, ticketCount, walletAddress]);
 
   const roundEndTs = activeRound?.endTs;
@@ -421,6 +429,9 @@ export function LuckyMeScreen() {
   const userAlreadyEnteredRound =
     Boolean(walletAddress && activeRound?.userEntry) &&
     Number(activeRound?.userEntry?.ticketCount ?? 0) > 0;
+  const refundAvailable =
+    Boolean(activeRound?.refundAvailable && activeRound?.userEntry) &&
+    activeRound?.userEntry?.lamports !== "0";
   const joinDisabled =
     !roundIsOpen ||
     userAlreadyEnteredRound ||
@@ -428,13 +439,20 @@ export function LuckyMeScreen() {
     loading ||
     refreshing ||
     submitting ||
-    Boolean(pendingJoin);
+    Boolean(pendingTransaction);
+  const refundDisabled =
+    !refundAvailable ||
+    source !== "onchain" ||
+    loading ||
+    refreshing ||
+    submitting ||
+    Boolean(pendingTransaction);
   const primaryDisabled = account ? joinDisabled : submitting;
   const primaryButtonLabel = !account
     ? "Connect wallet"
     : submitting
       ? "Preparing..."
-      : pendingJoin
+      : pendingTransaction
         ? "Review transaction"
         : !roundIsOpen
           ? "No open round"
@@ -462,10 +480,10 @@ export function LuckyMeScreen() {
     }
 
     setSubmitting(true);
-    setPendingJoin(null);
+    setPendingTransaction(null);
 
     try {
-      const built = await postJson<BuildBuyTicketsResponse>(
+      const built = await postJson<BuildTransactionResponse>(
         "/transactions/buy-tickets",
         {
           player: walletAddress,
@@ -478,7 +496,7 @@ export function LuckyMeScreen() {
         throw new Error(`Simulation failed: ${JSON.stringify(built.simulation.err)}`);
       }
 
-      setPendingJoin(built);
+      setPendingTransaction(built);
     } catch (caught) {
       setWalletError(
         caught instanceof Error ? caught.message : "Transaction build failed",
@@ -495,8 +513,61 @@ export function LuckyMeScreen() {
     walletAddress,
   ]);
 
+  const handleRefundAction = useCallback(async () => {
+    setWalletError(null);
+    setTxSignature(null);
+
+    if (!account || !walletAddress) {
+      try {
+        await connect();
+      } catch (caught) {
+        setWalletError(
+          caught instanceof Error ? caught.message : "Wallet connection failed",
+        );
+      }
+      return;
+    }
+
+    if (refundDisabled || !activeRound) {
+      return;
+    }
+
+    setSubmitting(true);
+    setPendingTransaction(null);
+
+    try {
+      const built = await postJson<BuildTransactionResponse>(
+        "/transactions/refund-entry",
+        {
+          player: walletAddress,
+          pool: selectedPool.id,
+          roundId: activeRound.roundId,
+        },
+      );
+
+      if (built.simulation && !built.simulation.ok) {
+        throw new Error(`Simulation failed: ${JSON.stringify(built.simulation.err)}`);
+      }
+
+      setPendingTransaction(built);
+    } catch (caught) {
+      setWalletError(
+        caught instanceof Error ? caught.message : "Refund build failed",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }, [
+    account,
+    activeRound,
+    connect,
+    refundDisabled,
+    selectedPool.id,
+    walletAddress,
+  ]);
+
   const handleConfirmPendingJoin = useCallback(async () => {
-    if (!pendingJoin) {
+    if (!pendingTransaction) {
       return;
     }
 
@@ -506,7 +577,7 @@ export function LuckyMeScreen() {
 
     try {
       const transaction = Transaction.from(
-        toUint8Array(pendingJoin.transactionBase64),
+        toUint8Array(pendingTransaction.transactionBase64),
       );
       const signedTransaction = await signTransaction(transaction);
       const signedTransactionBase64 = fromUint8Array(
@@ -520,14 +591,16 @@ export function LuckyMeScreen() {
       );
 
       setTxSignature(submitted.signature);
-      setPendingJoin(null);
+      setPendingTransaction(null);
       await loadPools(true);
     } catch (caught) {
-      setWalletError(caught instanceof Error ? caught.message : "Join failed");
+      setWalletError(
+        caught instanceof Error ? caught.message : "Transaction failed",
+      );
     } finally {
       setSubmitting(false);
     }
-  }, [loadPools, pendingJoin, signTransaction]);
+  }, [loadPools, pendingTransaction, signTransaction]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -766,12 +839,17 @@ export function LuckyMeScreen() {
           </Pressable>
         </View>
 
-        {pendingJoin ? (
+        {pendingTransaction ? (
           <View style={styles.reviewPanel}>
             <Text style={styles.sectionTitle}>Review transaction</Text>
             <View style={styles.row}>
               <Text style={styles.label}>Action</Text>
-              <Text style={styles.value}>Buy tickets</Text>
+              <Text style={styles.value}>
+                {pendingTransaction.summary.action ===
+                "refund_entry_after_timeout"
+                  ? "Refund entry"
+                  : "Buy tickets"}
+              </Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>Pool</Text>
@@ -779,38 +857,46 @@ export function LuckyMeScreen() {
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>Round</Text>
-              <Text style={styles.value}>{pendingJoin.summary.roundId}</Text>
+              <Text style={styles.value}>
+                {pendingTransaction.summary.roundId}
+              </Text>
             </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Tickets</Text>
-              <Text style={styles.value}>{pendingJoin.summary.ticketCount}</Text>
-            </View>
+            {pendingTransaction.summary.ticketCount ? (
+              <View style={styles.row}>
+                <Text style={styles.label}>Tickets</Text>
+                <Text style={styles.value}>
+                  {pendingTransaction.summary.ticketCount}
+                </Text>
+              </View>
+            ) : null}
             <View style={styles.row}>
               <Text style={styles.label}>Amount</Text>
               <Text style={styles.value}>
-                {formatSol(pendingJoin.summary.amountSol)} SOL
+                {formatSol(pendingTransaction.summary.amountSol)} SOL
               </Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>Cluster</Text>
               <Text style={styles.value}>
-                {pendingJoin.clusterUrl ?? clusterUrl ?? "--"}
+                {pendingTransaction.clusterUrl ?? clusterUrl ?? "--"}
               </Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>Program</Text>
-              <Text style={styles.value}>{shortAddress(pendingJoin.programId)}</Text>
+              <Text style={styles.value}>
+                {shortAddress(pendingTransaction.programId)}
+              </Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>Wallet</Text>
               <Text style={styles.value}>
-                {shortAddress(pendingJoin.summary.player ?? walletAddress)}
+                {shortAddress(pendingTransaction.summary.player ?? walletAddress)}
               </Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>Simulation</Text>
               <Text style={styles.value}>
-                {pendingJoin.simulation?.ok ? "Passed" : "Not available"}
+                {pendingTransaction.simulation?.ok ? "Passed" : "Not available"}
               </Text>
             </View>
             <Text style={styles.reviewNote}>
@@ -821,7 +907,7 @@ export function LuckyMeScreen() {
             <View style={styles.reviewActions}>
               <Pressable
                 disabled={submitting}
-                onPress={() => setPendingJoin(null)}
+                onPress={() => setPendingTransaction(null)}
                 style={styles.secondaryButton}
               >
                 <Text style={styles.secondaryText}>Cancel</Text>
@@ -847,24 +933,45 @@ export function LuckyMeScreen() {
           </View>
         ) : null}
 
-        {!pendingJoin ? (
-          <Pressable
-            disabled={primaryDisabled}
-            onPress={() => void handlePrimaryAction()}
-            style={[
-              styles.joinButton,
-              primaryDisabled && styles.joinButtonDisabled,
-            ]}
-          >
-            <Text
+        {!pendingTransaction ? (
+          <>
+            <Pressable
+              disabled={primaryDisabled}
+              onPress={() => void handlePrimaryAction()}
               style={[
-                styles.joinText,
-                primaryDisabled && styles.joinTextDisabled,
+                styles.joinButton,
+                primaryDisabled && styles.joinButtonDisabled,
               ]}
             >
-              {primaryButtonLabel}
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.joinText,
+                  primaryDisabled && styles.joinTextDisabled,
+                ]}
+              >
+                {primaryButtonLabel}
+              </Text>
+            </Pressable>
+            {refundAvailable ? (
+              <Pressable
+                disabled={refundDisabled}
+                onPress={() => void handleRefundAction()}
+                style={[
+                  styles.refundButton,
+                  refundDisabled && styles.joinButtonDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.refundText,
+                    refundDisabled && styles.joinTextDisabled,
+                  ]}
+                >
+                  Refund entry
+                </Text>
+              </Pressable>
+            ) : null}
+          </>
         ) : null}
         {walletError ? <Text style={styles.errorText}>{walletError}</Text> : null}
         {txSignature ? (
@@ -1127,11 +1234,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 16,
   },
+  refundButton: {
+    alignItems: "center",
+    borderColor: "#f2b84b",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingVertical: 16,
+  },
   joinButtonDisabled: {
     backgroundColor: "#5d6470",
   },
   joinText: {
     color: "#17120a",
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  refundText: {
+    color: "#f2b84b",
     fontSize: 17,
     fontWeight: "800",
   },

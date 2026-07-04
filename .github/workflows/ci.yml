@@ -44,3 +44,6 @@ jobs:
 
       - name: Check Anchor program Rust
         run: cargo check
+
+      - name: Run Anchor program Rust unit tests
+        run: cargo test

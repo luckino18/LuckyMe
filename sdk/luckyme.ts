@@ -354,6 +354,87 @@ export type Luckyme = {
       ]
     },
     {
+      "name": "refundEntryAfterTimeout",
+      "discriminator": [
+        172,
+        253,
+        138,
+        92,
+        31,
+        211,
+        240,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "entry",
+          "writable": true
+        },
+        {
+          "name": "poolVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "setPaused",
       "discriminator": [
         91,
@@ -683,6 +764,16 @@ export type Luckyme = {
       "code": 6019,
       "name": "alreadyEnteredRound",
       "msg": "Wallet already entered this round"
+    },
+    {
+      "code": 6020,
+      "name": "refundNotAvailable",
+      "msg": "Refund is not available yet"
+    },
+    {
+      "code": 6021,
+      "name": "nothingToRefund",
+      "msg": "Entry has nothing to refund"
     }
   ],
   "types": [

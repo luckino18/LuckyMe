@@ -33,13 +33,14 @@ Before mainnet, replace simple commit-reveal with one of:
 - multi-party commit-reveal
 - reveal bond plus fallback path
 
-The current commit-reveal MVP prevents arbitrary settlement randomness, but the reveal provider can still withhold a reveal.
+The current commit-reveal MVP prevents arbitrary settlement randomness, but the reveal provider can still withhold a reveal. Devnet now includes a no-reveal recovery path: after the reveal timeout, each entrant can refund their own entry. This prevents permanent pool-vault lockup, but it does not make the randomness production-grade.
 
 ## Mobile
 
 - Add Solana Mobile Wallet Adapter.
 - Add transaction builders for:
   - buy tickets
+  - refund entry after reveal timeout
   - open round
   - settle round
 - Show exact transaction effects before wallet approval.

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 export const LAMPORTS_PER_SOL = 1_000_000_000n;
 export const BPS_DENOMINATOR = 10_000n;
+export const REFUND_DELAY_SECONDS = 600;
 
 export const DEFAULT_CONFIG = Object.freeze({
   houseFeeBps: 300n,
@@ -95,6 +96,35 @@ export function settleRound({
     jackpotPayout: jackpotTriggered ? jackpotPotAfterAdd : 0n,
     jackpotBalanceAfter: jackpotTriggered ? 0n : jackpotPotAfterAdd,
     entries: builtEntries,
+  };
+}
+
+export function refundEntryAfterTimeout({
+  entries,
+  ticketPriceLamports,
+  player,
+  roundEndTs,
+  nowTs,
+  refundDelaySeconds = REFUND_DELAY_SECONDS,
+}) {
+  if (BigInt(nowTs) < BigInt(roundEndTs) + BigInt(refundDelaySeconds)) {
+    throw new Error("refund is not available yet");
+  }
+
+  const builtEntries = buildEntries(entries, ticketPriceLamports);
+  const entry = builtEntries.find((item) => item.player === player);
+  if (!entry || entry.lamports === 0n) {
+    throw new Error("entry has nothing to refund");
+  }
+
+  return {
+    player,
+    refundLamports: entry.lamports,
+    refundTickets: entry.tickets,
+    remainingLamports:
+      builtEntries.reduce((sum, item) => sum + item.lamports, 0n) - entry.lamports,
+    remainingTickets:
+      builtEntries.reduce((sum, item) => sum + item.tickets, 0n) - entry.tickets,
   };
 }
 

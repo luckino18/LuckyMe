@@ -9,6 +9,7 @@ const MAX_FEE_BPS: u16 = 500;
 const MAX_JACKPOT_BPS: u16 = 500;
 const MIN_ROUND_DURATION_SECS: i64 = 60;
 const MAX_ROUND_DURATION_SECS: i64 = 86_400;
+const REFUND_DELAY_SECS: i64 = 600;
 
 #[program]
 pub mod luckyme {
@@ -285,6 +286,54 @@ pub mod luckyme {
         Ok(())
     }
 
+    pub fn refund_entry_after_timeout(ctx: Context<RefundEntryAfterTimeout>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let refund_after = refund_deadline(ctx.accounts.round.end_ts)?;
+        require!(now >= refund_after, LuckyMeError::RefundNotAvailable);
+        require!(
+            !ctx.accounts.round.settled || round_is_refund_mode(&ctx.accounts.round),
+            LuckyMeError::RoundSettled
+        );
+        require!(
+            ctx.accounts.entry.lamports > 0,
+            LuckyMeError::NothingToRefund
+        );
+
+        let refund_lamports = ctx.accounts.entry.lamports;
+        let refund_tickets = ctx.accounts.entry.ticket_count;
+
+        transfer_lamports(
+            &ctx.accounts.pool_vault.to_account_info(),
+            &ctx.accounts.player.to_account_info(),
+            refund_lamports,
+        )?;
+
+        let round = &mut ctx.accounts.round;
+        round.settled = true;
+        round.jackpot_triggered = false;
+        round.winner = Pubkey::default();
+        round.jackpot_winner = Pubkey::default();
+        round.randomness = [0; 32];
+        round.total_lamports = round
+            .total_lamports
+            .checked_sub(refund_lamports)
+            .ok_or(LuckyMeError::MathOverflow)?;
+        round.total_tickets = round
+            .total_tickets
+            .checked_sub(refund_tickets)
+            .ok_or(LuckyMeError::MathOverflow)?;
+        round.entrant_count = round
+            .entrant_count
+            .checked_sub(1)
+            .ok_or(LuckyMeError::MathOverflow)?;
+
+        let entry = &mut ctx.accounts.entry;
+        entry.ticket_count = 0;
+        entry.lamports = 0;
+
+        Ok(())
+    }
+
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         ctx.accounts.config.paused = paused;
         Ok(())
@@ -427,6 +476,32 @@ pub struct SettleRound<'info> {
 }
 
 #[derive(Accounts)]
+pub struct RefundEntryAfterTimeout<'info> {
+    #[account(mut)]
+    pub player: SystemAccount<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(has_one = config)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, has_one = pool)]
+    pub round: Account<'info, Round>,
+    #[account(
+        mut,
+        constraint = entry.round == round.key(),
+        constraint = entry.player == player.key()
+    )]
+    pub entry: Account<'info, Entry>,
+    #[account(
+        mut,
+        seeds = [b"vault", pool.key().as_ref()],
+        bump = pool.vault_bump
+    )]
+    /// CHECK: PDA vault owned by this program; it only stores lamports.
+    pub pool_vault: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct SetPaused<'info> {
     #[account(address = config.authority)]
     pub authority: Signer<'info>,
@@ -517,6 +592,20 @@ fn entry_contains_ticket(entry: &Entry, ticket: u64) -> bool {
     ticket >= entry.ticket_start && ticket < end
 }
 
+fn refund_deadline(end_ts: i64) -> Result<i64> {
+    end_ts
+        .checked_add(REFUND_DELAY_SECS)
+        .ok_or(LuckyMeError::MathOverflow.into())
+}
+
+fn round_is_refund_mode(round: &Round) -> bool {
+    round.settled
+        && !round.jackpot_triggered
+        && round.winner == Pubkey::default()
+        && round.jackpot_winner == Pubkey::default()
+        && round.randomness == [0; 32]
+}
+
 fn random_mod(randomness: &[u8; 32], offset: usize, modulo: u64) -> u64 {
     let mut bytes = [0_u8; 8];
     bytes.copy_from_slice(&randomness[offset..offset + 8]);
@@ -605,4 +694,46 @@ pub enum LuckyMeError {
     MathOverflow,
     #[msg("Wallet already entered this round")]
     AlreadyEnteredRound,
+    #[msg("Refund is not available yet")]
+    RefundNotAvailable,
+    #[msg("Entry has nothing to refund")]
+    NothingToRefund,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refund_deadline_adds_delay() {
+        assert_eq!(refund_deadline(1_000).unwrap(), 1_600);
+    }
+
+    #[test]
+    fn refund_deadline_rejects_overflow() {
+        assert!(refund_deadline(i64::MAX).is_err());
+    }
+
+    #[test]
+    fn detects_refund_mode() {
+        let round = Round {
+            pool: Pubkey::new_unique(),
+            round_id: 1,
+            start_ts: 0,
+            end_ts: 60,
+            ticket_price_lamports: 1,
+            total_tickets: 0,
+            total_lamports: 0,
+            entrant_count: 0,
+            settled: true,
+            jackpot_triggered: false,
+            winner: Pubkey::default(),
+            jackpot_winner: Pubkey::default(),
+            randomness_commitment: [1; 32],
+            randomness: [0; 32],
+            bump: 255,
+        };
+
+        assert!(round_is_refund_mode(&round));
+    }
 }

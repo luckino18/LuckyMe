@@ -26,6 +26,8 @@ The first protocol target is deliberately small:
 - house fee: 3% of the round pool
 - jackpot contribution: 2% of the round pool
 - settlement is permissionless once a round has ended and the reveal is available
+- no-reveal recovery: after a 10 minute reveal timeout, entrants can refund
+  their own entry from the pool vault
 
 Each pool has a fixed ticket price. Users buy one or more tickets in a single purchase per wallet per round. The round winner is selected by ticket number, so probability is proportional to tickets bought:
 
@@ -124,7 +126,9 @@ The current MVP uses commit-reveal:
 3. settlement reveals the secret
 4. the program verifies the commitment and derives the winning tickets from the reveal, round key, and ticket count
 
-This is better than backend RNG, but it is not production-complete. The reveal provider can withhold an unfavorable reveal. Before any mainnet launch, the randomness design must use a verifiable source such as Switchboard, ORAO, or a hardened multi-party commit-reveal design with slashing and fallback paths.
+This is better than backend RNG, but it is not production-complete. The reveal provider can withhold an unfavorable reveal. If the reveal is withheld, the MVP allows each entrant to claim a refund after a 10 minute timeout, preventing permanent pool-vault lockup for that round. This refund path does not make the randomness fair for mainnet because the reveal provider can still selectively abandon unfavorable rounds.
+
+Before any mainnet launch, the randomness design must use a verifiable source such as Switchboard, ORAO, Pyth Entropy, or a hardened multi-party commit-reveal design with slashing and fallback paths.
 
 ## Launch Gates
 

@@ -6,6 +6,7 @@ import {
   chanceForPlayer,
   commitmentForReveal,
   lamportsToSol,
+  refundEntryAfterTimeout,
   settleRound,
   solToLamports,
   verifyReveal,
@@ -72,6 +73,36 @@ test("commit-reveal verification accepts only the committed reveal", () => {
 
   assert.equal(verifyReveal(commitment, "secret-round-42"), true);
   assert.equal(verifyReveal(commitment, "different-secret"), false);
+});
+
+test("refunds are only available after the reveal timeout", () => {
+  assert.throws(
+    () =>
+      refundEntryAfterTimeout({
+        ticketPriceLamports: solToLamports("0.01"),
+        entries: [{ player: "alice", tickets: 2n }],
+        player: "alice",
+        roundEndTs: 1_000,
+        nowTs: 1_599,
+      }),
+    /refund is not available yet/,
+  );
+
+  const result = refundEntryAfterTimeout({
+    ticketPriceLamports: solToLamports("0.01"),
+    entries: [
+      { player: "alice", tickets: 2n },
+      { player: "bob", tickets: 1n },
+    ],
+    player: "alice",
+    roundEndTs: 1_000,
+    nowTs: 1_600,
+  });
+
+  assert.equal(lamportsToSol(result.refundLamports), "0.02");
+  assert.equal(result.refundTickets, 2n);
+  assert.equal(lamportsToSol(result.remainingLamports), "0.01");
+  assert.equal(result.remainingTickets, 1n);
 });
 
 test("jackpot payout includes previous balance plus current 2 percent contribution", () => {

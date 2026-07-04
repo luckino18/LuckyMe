@@ -348,6 +348,87 @@
       ]
     },
     {
+      "name": "refund_entry_after_timeout",
+      "discriminator": [
+        172,
+        253,
+        138,
+        92,
+        31,
+        211,
+        240,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "entry",
+          "writable": true
+        },
+        {
+          "name": "pool_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "set_paused",
       "discriminator": [
         91,
@@ -677,6 +758,16 @@
       "code": 6019,
       "name": "AlreadyEnteredRound",
       "msg": "Wallet already entered this round"
+    },
+    {
+      "code": 6020,
+      "name": "RefundNotAvailable",
+      "msg": "Refund is not available yet"
+    },
+    {
+      "code": 6021,
+      "name": "NothingToRefund",
+      "msg": "Entry has nothing to refund"
     }
   ],
   "types": [
