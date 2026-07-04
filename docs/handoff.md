@@ -98,6 +98,7 @@ Current devnet status:
 - Phantom/player balance: `0 SOL`
 - `solana airdrop 0.5` to CLI failed with rate-limit
 - `solana airdrop 0.1` to Phantom failed with rate-limit
+- `solana airdrop 0.001` to CLI also failed with the same rate-limit on 2026-07-04
 - `devnet-pow 0.1.4` is installed
 - `devnet-pow` cannot bootstrap while the payer has `0` lamports, because it needs fee lamports and tries the same rate-limited `request_airdrop` path if payer has less than `5000` lamports
 - LuckyMe is not deployed on devnet yet
