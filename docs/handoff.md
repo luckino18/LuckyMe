@@ -1,14 +1,14 @@
 # LuckyMe Handoff
 
-Last updated: 2026-07-04
+Last updated: 2026-07-04 17:02 CEST
 
 ## Repository
 
 - Public repo: https://github.com/luckino18/LuckyMe
 - Branch: `main`
 - Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
-- Latest pushed commit: `53c51ea Add join transaction review step`
-- CI: https://github.com/luckino18/LuckyMe/actions/runs/28702120742
+- Latest pushed commit before this handoff update: `6c82871 Update devnet bootstrap handoff`
+- CI: https://github.com/luckino18/LuckyMe/actions/runs/28708667728
 
 ## Current State
 
@@ -72,7 +72,7 @@ npm test
 
 GitHub Actions passed on `main`.
 
-## Devnet Bootstrap
+## Devnet Deployment And Samsung Validation
 
 Solana CLI is configured for devnet:
 
@@ -92,54 +92,62 @@ Phantom/player address:
 EdWNHnbG1iQtaZ5BzZkzjsHopjfaQiB8Dzw1sRevrLHW
 ```
 
-Current devnet status:
+Devnet was funded manually after the public faucet rate limits blocked
+bootstrap. Do not pay for devnet SOL; test SOL has no monetary value.
 
-- CLI/deployer balance: `0 SOL`
-- Phantom/player balance: `0 SOL`
-- `solana airdrop 0.5` to CLI failed with rate-limit
-- `solana airdrop 0.1` to Phantom failed with rate-limit
-- `solana airdrop 0.001` to CLI also failed with the same rate-limit on 2026-07-04
-- `devnet-pow 0.1.4` is installed
-- `devnet-pow` cannot bootstrap while the payer has `0` lamports, because it needs fee lamports and tries the same rate-limited `request_airdrop` path if payer has less than `5000` lamports
-- LuckyMe is not deployed on devnet yet
-- rent-exempt minimum for `target/deploy/luckyme.so` is `1.93204032 SOL`
-- practical deployer target: at least `3 SOL`
+Program deployment:
 
-Alternative faucets to try manually with the CLI address:
+- program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
+- program data: `2BHrg3wqy2bcVtAp682exVGZEmrVJvey1WkjqxGCjWwh`
+- upgrade authority: `9DvCoJTwdf8CcQUPiLBWEu5Zx4GiYCg8G7LwKaZtZbFc`
+- last deployed slot: `473936216`
+- IDL metadata: `JEHgVkjaF6ATRTG7whkL6rx8KBnS6DPMtcfJFqxmjp19`
+- rent held by program: `1.93235352 SOL`
 
-- Chainstack: https://faucet.chainstack.com/solana-devnet-faucet
-- QuickNode: https://faucet.quicknode.com/solana/devnet
-- DevnetFaucet.org: https://www.devnetfaucet.org/
-- SolFaucet: https://solfaucet.com/
+Pool initialization:
 
-Do not pay for devnet SOL. Test SOL has no monetary value.
+- config: `Cvx2ffKnwanpUZGsDBKyo2uwoo6gjucQmrRZpiYVyKh`
+- Mini pool: `AgZCfxkrsUb5iYaR1DhANVdM133hBgGzB2TPZaExiGRv`
+- Normal pool: `14mtJnGcu3ASaM5ZvzsUcn2ZGjPR73tv5Fug9UWjSj9s`
+- High pool: `PL7Yn89kfs9FjVWcuHXcN6vcHkiN8wPABvE9L1bUH61`
 
-## Next Commands After Funding
+Live services:
 
-Once the CLI address has any fee lamports:
+- backend: `NO_DNA=1 ANCHOR_PROVIDER_URL=https://api.devnet.solana.com PORT=8788 node backend/src/server.mjs`
+- backend status source: `onchain`
+- app package on Samsung: `com.luckyme.seeker`
+- test device: Samsung `SM-S908B`
 
-```bash
-NO_DNA=1 solana balance 9DvCoJTwdf8CcQUPiLBWEu5Zx4GiYCg8G7LwKaZtZbFc --url devnet
-NO_DNA=1 devnet-pow mine -d 3 --reward 0.02 -u dev -t 3000000000
-NO_DNA=1 solana balance --url devnet
-```
+Phantom/player setup:
 
-After the deployer has around `3 SOL`:
+- Phantom/player address: `EdWNHnbG1iQtaZ5BzZkzjsHopjfaQiB8Dzw1sRevrLHW`
+- Phantom must be in Developer Settings with `Solana Devnet` selected. The
+  Phantom banner still says `Testnet Mode`; that banner is generic for
+  non-mainnet mode and is not sufficient to distinguish Testnet from Devnet.
+- CLI transferred `0.5 SOL` devnet to Phantom before the test.
 
-```bash
-NO_DNA=1 anchor deploy --provider.cluster devnet
-NO_DNA=1 ANCHOR_PROVIDER_URL=https://api.devnet.solana.com npm run init:pools
-NO_DNA=1 solana program show 4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3 --url devnet
-```
+Devnet Samsung result:
 
-Then:
+- Mini round `7` opened on devnet.
+- round address: `GKwsvpTeCejnDopJSnbCNAsbE4PhScFgYk7GR7dziFUX`
+- open-round tx: `3VJ77oP2FHytMRonzGjsVh7u55ttYXmzrNQu3NcPXAzGuyAjMxutiJ4QvFbebqJr4HV1nEzMdzT6fQSgEbSGHkh`
+- reveal for settle: `3c59f4b6f053fb4f63e4617342d18037aeebd8b85a6cdcaf38c781c43e0b528e`
+- user manually confirmed Phantom transaction.
+- backend confirmed `totalTickets: 1`, `totalSol: 0.005`, `entrantCount: 1`.
+- Phantom/player balance after buy: `0.493354 SOL`.
+- deployer/keeper balance after buy check: `3.0222605 SOL`.
+- app displayed Round 7, Tickets 1, Pool `0.005 SOL`, source `On-chain RPC`.
 
-1. Start backend with `ANCHOR_PROVIDER_URL=https://api.devnet.solana.com`.
-2. Start Seeker app with `EXPO_PUBLIC_LUCKYME_API_URL=http://<mac-lan-ip>:8788`.
-3. Fund Phantom with a small amount of devnet SOL.
-4. Open a small round.
-5. Verify the in-app review panel.
-6. Let the user manually approve in Phantom.
+Known follow-up:
+
+- The app displayed `Your chance 50.00%` after the first ticket was purchased.
+  That value is the projected chance for buying one more ticket
+  (`ticketCount / (currentTickets + ticketCount)`), not the already-owned
+  player chance. Rename it or compute the connected wallet's actual entry
+  count before production.
+- Round 7 settlement is pending. Use the reveal above after the round closes,
+  and require explicit approval before sending the keeper settlement
+  transaction.
 
 ## Safety Notes
 
