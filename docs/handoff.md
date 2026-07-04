@@ -333,6 +333,7 @@ Mini Round 9 settlement:
 
 External audit follow-up: no-reveal recovery and backend hardening:
 
+- Code commit deployed/tested: `cbba6f9 Add no-reveal refund path`.
 - Added program instruction `refund_entry_after_timeout`.
 - Refund delay: `600` seconds after `round.end_ts`.
 - Any caller can build/submit the refund transaction, but the refunded lamports
@@ -354,6 +355,21 @@ External audit follow-up: no-reveal recovery and backend hardening:
   deployments.
 - CI now runs `cargo test` in addition to `cargo check`, simulator tests, app
   typecheck, Expo doctor, and dependency audits.
+- GitHub CI run for this commit: `28713207257`, success.
+- Devnet deploy:
+  - ProgramData was extended by 10240 bytes.
+  - extend tx:
+    `2j21ZgDo9GayFHLwzjH6h3RtyzRZcYnKjh4utuGsVQciFePda5T74cSkzwkmna6zDu6B3Wq7ZAKqXNXnU9ws8zRY`
+  - deploy tx:
+    `2jyNVm2zaVxUw3AEeKdDQvNh6ZhYmLAhjWfwDiNv5Ct3Z8rACGx7hTKEwty3nhdZWoq8LwwACkQoN7tBK4jKNhJj`
+  - deployed slot: `473962070`.
+  - ProgramData length after deploy: `297944` bytes.
+  - keeper balance after deploy: `2.87239378 SOL`.
+- Refund success was not exercised live on devnet in this handoff because a real
+  no-reveal refund requires an entered round, no settlement reveal, and waiting
+  `300 + 600` seconds before the instruction becomes valid. Local simulator and
+  Rust unit tests cover the timeout logic, refund-mode marker, and duplicate
+  refund prevention.
 - Important remaining blocker: commit-reveal is still not production-grade
   randomness. The refund path prevents funds from being permanently stuck, but
   it does not stop selective reveal withholding. Mainnet still requires
