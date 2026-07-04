@@ -26,6 +26,9 @@ Date: 2026-07-04
 - Store builds require `EXPO_PUBLIC_LUCKYME_API_URL`.
 - Refund cranker exists and has dry-run mode.
 - Round open and settle keeper scripts exist and have dry-run/mainnet guards.
+- ORAO VRF provider path exists with `RoundRandomness` sidecar,
+  `request_randomness`, `settle_round_with_provider_randomness`, backend
+  builders, status endpoint, keeper scripts, and local state-machine tests.
 - Anchor events are present and public IDL/SDK include them.
 - CI includes root/app audits, simulator tests, app typecheck, Expo doctor,
   cargo check/test, Anchor build, and Anchor localnet tests.
@@ -34,13 +37,13 @@ Date: 2026-07-04
 
 Code blockers:
 
-- production randomness provider integration
-- production indexer/monitoring
+- funded devnet ORAO request/fulfillment/settlement evidence
+- production indexer/monitoring for provider requests, settlements, and refunds
 - APK release signing pipeline and screenshots
 
 Provider blockers:
 
-- VRF/Entropy provider account, fee funding, fulfillment, and runbook
+- keeper wallet fee funding, ORAO fulfillment monitoring, and runbook
 - hosted devnet review backend for store review
 
 Legal blockers:

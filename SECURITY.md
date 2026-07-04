@@ -5,8 +5,9 @@ LuckyMe is an experimental Solana devnet MVP. Do not use it with mainnet funds.
 ## Current Status
 
 - The program has not been externally audited.
-- The randomness design is an MVP commit-reveal flow. It has a no-reveal refund
-  path, but it is not production-grade randomness.
+- `commit_reveal_demo` remains devnet-only. The repo also includes an ORAO VRF
+  provider path, but mainnet still requires funded provider evidence, final
+  audit, legal review, and operational signoff.
 - The economic model includes gambling-like mechanics and requires legal review
   before any real-money launch.
 - There is no public bug bounty yet.
@@ -72,9 +73,12 @@ No SLA or bounty is promised until a production security program is announced.
 
 ## Known Limitations
 
-- `commit_reveal_demo` randomness can be selectively withheld.
-- Refunds recover funds after timeout but do not make randomness production
-  grade.
+- `commit_reveal_demo` randomness can be selectively withheld and is blocked
+  from `MAINNET_BETA_CANDIDATE`.
+- ORAO VRF settlement verifies owner, PDA, seed, and fulfilled account data, but
+  live provider operations still need monitoring and final audit evidence.
+- Refunds recover funds after timeout but remain a recovery path, not a
+  substitute for fulfilled provider randomness.
 - No legal/compliance opinion has been completed.
 - No multisig authority handover has been completed.
 - No public bug bounty is funded yet.

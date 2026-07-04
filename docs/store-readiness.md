@@ -18,10 +18,14 @@
 - CI runs simulator tests, app typecheck, Expo doctor, cargo check/test, Anchor
   build, and Anchor localnet tests.
 - Refund discovery and cranking tooling exists.
+- ORAO provider-randomness path exists behind `LUCKYME_RANDOMNESS_MODE=orao_vrf`
+  with sidecar state, backend builders, keeper scripts, and local state-machine
+  tests.
 
 ## Not Ready
 
-- Production randomness provider not integrated.
+- Production randomness still needs live funded devnet ORAO request,
+  fulfillment, and settlement evidence before any mainnet claim.
 - Legal/compliance review not complete.
 - Mainnet multisig authority handover not complete.
 - Release APK, icon, screenshots, privacy URL, terms URL, support URL, and
@@ -30,8 +34,9 @@
 ## DEVNET_STORE_DEMO Submission Steps
 
 1. Start backend on devnet with `LUCKYME_RELEASE_MODE=DEVNET_STORE_DEMO`.
-2. Confirm `GET /config` returns devnet, 98/1/1 economics, and
-   `commit_reveal_demo`.
+2. Confirm `GET /config` returns devnet, 98/1/1 economics, and the intended
+   randomness mode. Store demo can use `commit_reveal_demo`; ORAO review runs
+   should use `orao_vrf`.
 3. Build a signed release APK with `EXPO_PUBLIC_LUCKYME_API_URL` pointing to the
    review backend.
 4. Capture screenshots showing the devnet banner, pool screen, transparency
@@ -98,4 +103,4 @@ and review of policy/developer agreement.
 - App fails loudly if store build has no API URL.
 - Transaction review shown before wallet signing.
 - Program id and cluster visible.
-- Known randomness limitation visible.
+- Randomness mode and proof/status visible.

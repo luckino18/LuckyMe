@@ -4,22 +4,25 @@ LuckyMe settlement is permissionless only if the caller can provide the correct
 entry accounts. This document describes the devnet tooling for finding those
 accounts without relying on private backend state.
 
-The current commit-reveal design is still not mainnet-ready. A reveal provider
-can withhold a bad reveal. The refund path only prevents permanent pool-vault
-lockup after the reveal timeout.
+`commit_reveal_demo` is still not mainnet-ready because a reveal provider can
+withhold a bad reveal. `orao_vrf` settles only from a fulfilled ORAO request
+account verified by the on-chain program. The refund path remains available
+after timeout if settlement cannot complete.
 
 ## Requirements
 
 - a Solana wallet that will pay the settlement transaction fee
 - the pool slug: `mini`, `normal`, or `high`
 - the round id
-- the 32-byte randomness reveal in hex
+- for `commit_reveal_demo`: the 32-byte randomness reveal in hex
+- for `orao_vrf`: a fulfilled ORAO request account recorded in the LuckyMe
+  `RoundRandomness` sidecar
 - RPC access to the selected cluster
 
 The wallet that settles does not need to be the winner or the keeper that opened
 the round.
 
-## Build A Settlement Transaction
+## Build A Commit-Reveal Settlement Transaction
 
 Start the backend against devnet. Keep the submit relay disabled for public
 deployments:
@@ -76,6 +79,60 @@ sha256("luckyme-round-randomness" || round_pubkey || total_tickets_le || reveal)
 
 If no entry contains a derived ticket, the builder returns an error instead of
 guessing an account.
+
+## Build An ORAO Provider Settlement Transaction
+
+Provider mode is enabled with:
+
+```bash
+LUCKYME_RANDOMNESS_MODE=orao_vrf npm run backend:start
+```
+
+After the round closes, record the LuckyMe sidecar and request ORAO randomness
+from a keeper wallet:
+
+```bash
+LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=mini ROUND_ID=9 npm run randomness:request
+LUCKYME_RANDOMNESS_MODE=orao_vrf POOL=mini ROUND_ID=9 npm run randomness:request
+```
+
+Check fulfillment:
+
+```bash
+LUCKYME_RANDOMNESS_MODE=orao_vrf POOL=mini ROUND_ID=9 npm run randomness:status
+curl -s http://localhost:8788/rounds/mini/9/randomness
+```
+
+After ORAO reports `fulfilled`, ask the backend to compute accounts and build an
+unsigned provider-settlement transaction:
+
+```bash
+curl -s -X POST http://localhost:8788/transactions/settle-provider-round \
+  -H 'content-type: application/json' \
+  -d '{
+    "settler": "<wallet-paying-fees>",
+    "pool": "mini",
+    "roundId": 9
+  }'
+```
+
+The builder:
+
+1. fetches the LuckyMe sidecar PDA for the round
+2. verifies the ORAO request account exists and is owned by the configured ORAO
+   program id
+3. parses ORAO `RandomnessV2` and requires `fulfilled`
+4. checks the fulfilled seed against the LuckyMe sidecar seed
+5. derives LuckyMe randomness from the 64-byte ORAO value
+6. scans all `Entry` accounts for the round
+7. builds and simulates `settle_round_with_provider_randomness`
+
+The keeper can also settle directly:
+
+```bash
+LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=mini ROUND_ID=9 npm run randomness:settle
+LUCKYME_RANDOMNESS_MODE=orao_vrf POOL=mini ROUND_ID=9 npm run randomness:settle
+```
 
 ## Empty Rounds
 

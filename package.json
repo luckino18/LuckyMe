@@ -16,6 +16,9 @@
     "round:settle": "node scripts/settle-round.mjs",
     "round:close-empty": "node scripts/close-empty-round.mjs",
     "refund:crank": "node scripts/refund-cranker.mjs",
+    "randomness:request": "node scripts/randomness-request.mjs",
+    "randomness:status": "node scripts/randomness-status.mjs",
+    "randomness:settle": "node scripts/randomness-settle.mjs",
     "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
     "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/docs-scripts.test.mjs",
     "sim:demo": "node sim/demo.mjs"
@@ -23,5 +26,8 @@
   "devDependencies": {
     "@coral-xyz/anchor": "0.32.1",
     "@solana/web3.js": "1.98.4"
+  },
+  "dependencies": {
+    "@orao-network/solana-vrf": "0.8.0"
   }
 }

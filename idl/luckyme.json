@@ -481,6 +481,94 @@
       "args": []
     },
     {
+      "name": "request_randomness",
+      "discriminator": [
+        213,
+        5,
+        173,
+        166,
+        37,
+        236,
+        31,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round"
+        },
+        {
+          "name": "round_randomness",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100,
+                  95,
+                  114,
+                  97,
+                  110,
+                  100,
+                  111,
+                  109,
+                  110,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "set_paused",
       "discriminator": [
         91,
@@ -654,6 +742,163 @@
           }
         }
       ]
+    },
+    {
+      "name": "settle_round_with_provider_randomness",
+      "discriminator": [
+        130,
+        50,
+        207,
+        102,
+        181,
+        238,
+        233,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "round_randomness",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100,
+                  95,
+                  114,
+                  97,
+                  110,
+                  100,
+                  111,
+                  109,
+                  110,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider_randomness"
+        },
+        {
+          "name": "pool_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "jackpot_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  97,
+                  99,
+                  107,
+                  112,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner",
+          "writable": true
+        },
+        {
+          "name": "winner_entry"
+        },
+        {
+          "name": "jackpot_winner",
+          "writable": true
+        },
+        {
+          "name": "jackpot_entry"
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -707,6 +952,19 @@
         78,
         116,
         174
+      ]
+    },
+    {
+      "name": "RoundRandomness",
+      "discriminator": [
+        118,
+        25,
+        18,
+        215,
+        142,
+        125,
+        246,
+        13
       ]
     }
   ],
@@ -774,6 +1032,32 @@
         198,
         254,
         229
+      ]
+    },
+    {
+      "name": "RandomnessFulfilled",
+      "discriminator": [
+        61,
+        67,
+        128,
+        142,
+        15,
+        77,
+        223,
+        252
+      ]
+    },
+    {
+      "name": "RandomnessRequested",
+      "discriminator": [
+        10,
+        64,
+        183,
+        29,
+        104,
+        63,
+        90,
+        149
       ]
     },
     {
@@ -931,6 +1215,26 @@
       "code": 6022,
       "name": "RoundHasEntries",
       "msg": "Round already has entries"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidRandomnessProvider",
+      "msg": "Invalid randomness provider"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidRandomnessStatus",
+      "msg": "Invalid randomness status"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidRandomnessProviderAccount",
+      "msg": "Invalid randomness provider account"
+    },
+    {
+      "code": 6026,
+      "name": "RandomnessNotFulfilled",
+      "msg": "Provider randomness is not fulfilled"
     }
   ],
   "types": [
@@ -1195,6 +1499,149 @@
       }
     },
     {
+      "name": "RandomnessFulfilled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": {
+              "defined": {
+                "name": "RandomnessProvider"
+              }
+            }
+          },
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "seed",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "client",
+            "type": "pubkey"
+          },
+          {
+            "name": "randomness_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RandomnessProvider",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "CommitRevealDemo"
+          },
+          {
+            "name": "OraoVrf"
+          },
+          {
+            "name": "FutureProvider"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RandomnessRequested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": {
+              "defined": {
+                "name": "RandomnessProvider"
+              }
+            }
+          },
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "seed",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RandomnessStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "NotRequested"
+          },
+          {
+            "name": "Requested"
+          },
+          {
+            "name": "Fulfilled"
+          },
+          {
+            "name": "Settled"
+          },
+          {
+            "name": "RefundMode"
+          }
+        ]
+      }
+    },
+    {
       "name": "Round",
       "type": {
         "kind": "struct",
@@ -1314,6 +1761,68 @@
       }
     },
     {
+      "name": "RoundRandomness",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "provider",
+            "type": {
+              "defined": {
+                "name": "RandomnessProvider"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "RandomnessStatus"
+              }
+            }
+          },
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "randomness_seed",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "randomness_value",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "randomness_requested_at",
+            "type": "i64"
+          },
+          {
+            "name": "randomness_fulfilled_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "RoundSettled",
       "type": {
         "kind": "struct",
@@ -1377,6 +1886,14 @@
                 "u8",
                 32
               ]
+            }
+          },
+          {
+            "name": "randomness_provider",
+            "type": {
+              "defined": {
+                "name": "RandomnessProvider"
+              }
             }
           }
         ]

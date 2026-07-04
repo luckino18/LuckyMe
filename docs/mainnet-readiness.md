@@ -7,7 +7,7 @@ complete before anyone can remove the devnet/localnet warning from the README.
 
 | Gate | Required Evidence |
 | --- | --- |
-| Production randomness | Chosen provider/design, on-chain integration, async fulfillment/fallback tests, public provider account documentation, and proof that the operator cannot selectively finalize only favorable rounds. |
+| Production randomness | ORAO provider path is implemented, but mainnet still needs funded devnet evidence, provider monitoring, operational signoff, and final audit proof that commit-reveal cannot be used for mainnet settlement. |
 | Legal/compliance | Written legal opinion for target jurisdictions, age gate, geofencing policy, terms, privacy policy, responsible gaming controls, tax/payout policy, and free-entry/sweepstakes analysis if applicable. |
 | Multisig authorities | Upgrade authority, treasury, pause/admin authority, and keeper roles separated and documented. Upgrade authority should not be a single hot wallet. |
 | Economics signoff | Mainnet candidate uses 1 hour rounds, 1% house fee, and either the documented 1% jackpot or a reviewed no-jackpot configuration. |
@@ -28,6 +28,13 @@ LUCKYME_PRODUCTION_RANDOMNESS=true
 LUCKYME_MULTISIG_SIGNOFF=true
 ```
 
+`MAINNET_BETA_CANDIDATE` also refuses `commit_reveal_demo`; it requires:
+
+```bash
+LUCKYME_RANDOMNESS_MODE=orao_vrf
+LUCKYME_PRODUCTION_RANDOMNESS=true
+```
+
 `NODE_ENV=production` also refuses:
 
 - `CORS_ORIGIN=*`
@@ -37,21 +44,32 @@ LUCKYME_MULTISIG_SIGNOFF=true
 These checks are not a substitute for the gates above. They are there to prevent
 accidental production exposure while the project is still an MVP.
 
-## Randomness Options To Evaluate
+## Randomness Status
 
-The current commit-reveal path remains only a devnet MVP. Before mainnet, select
-and implement one of:
+Selected first provider: ORAO Classic VRF.
 
-- Switchboard randomness with the documented commit/generate/reveal flow and
-  payment taken before user outcomes can be evaluated.
-- ORAO VRF with CPI request/fulfillment and provider-account documentation.
-- Another verifiable randomness provider with equivalent censorship/fallback
-  guarantees.
-- Bonded multi-party commit-reveal where withholding has a clear economic
-  penalty and fallback path.
+Implemented in this repo:
 
-Any solution must preserve the no-reveal refund path as a recovery backup, not
-as the primary fairness mechanism.
+- `request_randomness` records an ORAO seed and request PDA in a
+  `RoundRandomness` sidecar after a round closes. The seed includes final round
+  ticket state and the request instruction slot, so the exact seed is not fully
+  knowable before ticket sales end.
+- `settle_round_with_provider_randomness` verifies the ORAO request owner, PDA,
+  seed, and fulfilled `RandomnessV2` account before deriving the winner.
+- Backend exposes `/transactions/request-randomness`,
+  `/rounds/:round/randomness`, and `/transactions/settle-provider-round`.
+- Keeper scripts expose `npm run randomness:request`,
+  `npm run randomness:status`, and `npm run randomness:settle`.
+- Commit-reveal settlement remains only for `DEVNET_STORE_DEMO`.
+
+Still required before mainnet:
+
+- run and archive a funded devnet ORAO request, fulfillment, and settlement
+  transcript;
+- monitor pending ORAO requests and abandoned rounds;
+- document keeper wallet funding and fee policy;
+- get the final deployed commit externally audited;
+- keep no-reveal refund as a backup recovery path, not as the fairness source.
 
 ## Current Demo Economics
 

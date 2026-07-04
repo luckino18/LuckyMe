@@ -6,13 +6,16 @@ import anchor from "@coral-xyz/anchor";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import {
   BN,
+  ORAO_VRF_PROGRAM_ID,
   SystemProgram,
   deriveConfig,
   deriveEntry,
+  deriveOraoRandomnessAccount,
   deriveJackpotVault,
   derivePool,
   derivePoolVault,
   deriveRound,
+  deriveRoundRandomnessAccount,
 } from "../scripts/anchor-client.mjs";
 
 const CLOCK_SYSVAR = new PublicKey("SysvarC1ock11111111111111111111111111111111");
@@ -59,6 +62,7 @@ test("localnet buy, settlement, and refund-mode state machine", async () => {
   await testSettlementFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault });
   await testRefundModeFlow({ program, provider, authority, config, pool, poolVault, jackpotVault });
   await testPauseAndEmptyRoundFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault });
+  await testProviderRandomnessRequestAndRefundFlow({ program, provider, authority, config, pool, poolVault, jackpotVault });
 });
 
 async function testSettlementFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault }) {
@@ -603,6 +607,173 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
   );
 }
 
+async function testProviderRandomnessRequestAndRefundFlow({ program, provider, authority, config, pool, poolVault, jackpotVault }) {
+  const player = Keypair.generate();
+  await fund(provider, player.publicKey);
+
+  const reveal = Buffer.from("provider-round-reveal-0000000000", "utf8");
+  const commitment = commitmentForReveal(reveal);
+  const roundId = 4;
+  const round = deriveRound(pool, roundId);
+  const entry = deriveEntry(round, player.publicKey);
+  const roundRandomness = deriveRoundRandomnessAccount(round);
+  const vaultBefore = await provider.connection.getBalance(poolVault);
+
+  await program.methods
+    .openRound([...commitment])
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      pool,
+      round,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  await buyTickets({ program, player, config, pool, round, entry, poolVault, ticketCount: 2 });
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .requestRandomness()
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          pool,
+          round,
+          roundRandomness,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "RoundStillOpen",
+  );
+
+  let roundAccount = await program.account.round.fetch(round);
+  await waitForClock(provider, Number(roundAccount.endTs), "provider randomness request");
+
+  await program.methods
+    .requestRandomness()
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      pool,
+      round,
+      roundRandomness,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  const sidecar = await program.account.roundRandomness.fetch(roundRandomness);
+  assert.equal(sidecar.round.toBase58(), round.toBase58());
+  assert.deepEqual(sidecar.provider, { oraoVrf: {} });
+  assert.deepEqual(sidecar.status, { requested: {} });
+  const seed = Buffer.from(sidecar.randomnessSeed);
+  const request = deriveOraoRandomnessAccount(seed);
+  assert.equal(sidecar.request.toBase58(), request.toBase58());
+  assert.notDeepEqual(seed, Buffer.alloc(32));
+
+  await expectFailure(
+    () =>
+      program.methods
+        .settleRoundWithProviderRandomness()
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          pool,
+          round,
+          roundRandomness,
+          providerRandomness: request,
+          poolVault,
+          jackpotVault,
+          winner: player.publicKey,
+          winnerEntry: entry,
+          jackpotWinner: player.publicKey,
+          jackpotEntry: entry,
+          treasury: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "provider settlement without ORAO fulfillment fails",
+  );
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .settleRoundWithProviderRandomness()
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          pool,
+          round,
+          roundRandomness,
+          providerRandomness: authority.publicKey,
+          poolVault,
+          jackpotVault,
+          winner: player.publicKey,
+          winnerEntry: entry,
+          jackpotWinner: player.publicKey,
+          jackpotEntry: entry,
+          treasury: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "InvalidRandomnessProviderAccount",
+  );
+
+  roundAccount = await program.account.round.fetch(round);
+  await waitForClock(
+    provider,
+    Number(roundAccount.endTs) + REFUND_DELAY_SECONDS,
+    "provider refund timeout",
+  );
+
+  await program.methods
+    .refundEntryAfterTimeout()
+    .accounts({
+      player: player.publicKey,
+      config,
+      pool,
+      round,
+      entry,
+      poolVault,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  roundAccount = await program.account.round.fetch(round);
+  assert.equal(roundAccount.settled, true);
+  assert.equal(roundAccount.totalTickets.toString(), "0");
+  assert.equal(roundAccount.totalLamports.toString(), "0");
+  assert.equal(roundAccount.entrantCount, 0);
+  assert.equal(await provider.connection.getBalance(poolVault), vaultBefore);
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .settleRoundWithProviderRandomness()
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          pool,
+          round,
+          roundRandomness,
+          providerRandomness: authority.publicKey,
+          poolVault,
+          jackpotVault,
+          winner: player.publicKey,
+          winnerEntry: entry,
+          jackpotWinner: player.publicKey,
+          jackpotEntry: entry,
+          treasury: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "RoundSettled",
+  );
+
+  assert.equal(ORAO_VRF_PROGRAM_ID.toBase58(), "VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y");
+}
+
 async function buyTickets({ program, player, config, pool, round, entry, poolVault, ticketCount }) {
   await program.methods
     .buyTickets(new BN(ticketCount))
@@ -659,6 +830,15 @@ async function expectAnchorError(fn, code) {
     throw error;
   }
   throw new Error(`Expected Anchor error ${code}`);
+}
+
+async function expectFailure(fn, label) {
+  try {
+    await fn();
+  } catch {
+    return;
+  }
+  throw new Error(`Expected failure: ${label}`);
 }
 
 function commitmentForReveal(reveal) {

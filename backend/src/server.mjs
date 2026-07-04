@@ -12,6 +12,7 @@ import {
 } from "../../sim/luckyme.mjs";
 import {
   BN,
+  ORAO_VRF_PROGRAM_ID,
   POOLS as ONCHAIN_POOLS,
   PROGRAM_ID,
   PublicKey,
@@ -20,10 +21,14 @@ import {
   createClient,
   deriveConfig,
   deriveEntry,
+  deriveOraoRandomnessAccount,
   deriveJackpotVault,
   derivePool,
   derivePoolVault,
+  deriveProviderRoundRandomness,
   deriveRound,
+  deriveRoundRandomnessAccount,
+  parseOraoRandomnessV2,
   u64Le,
 } from "../../scripts/anchor-client.mjs";
 
@@ -40,6 +45,10 @@ const ANCHOR_PROVIDER_URL = process.env.ANCHOR_PROVIDER_URL ?? "https://api.devn
 const RELEASE_MODE = process.env.LUCKYME_RELEASE_MODE ?? "DEVNET_STORE_DEMO";
 const RANDOMNESS_MODE = process.env.LUCKYME_RANDOMNESS_MODE ?? "commit_reveal_demo";
 const PRODUCTION_RANDOMNESS_ENABLED = process.env.LUCKYME_PRODUCTION_RANDOMNESS === "true";
+const ORAO_PROGRAM_ID = parsePublicKeyConfig(
+  process.env.LUCKYME_ORAO_PROGRAM_ID ?? ORAO_VRF_PROGRAM_ID.toBase58(),
+  "LUCKYME_ORAO_PROGRAM_ID",
+);
 const STRICT_ONCHAIN =
   process.env.LUCKYME_STRICT_ONCHAIN === "true" ||
   process.env.LUCKYME_STORE_BUILD === "true" ||
@@ -121,6 +130,21 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  const roundRandomnessMatch = url.pathname.match(/^\/rounds\/([^/]+)\/randomness$/);
+  const poolRoundRandomnessMatch = url.pathname.match(/^\/rounds\/([^/]+)\/([^/]+)\/randomness$/);
+  if (req.method === "GET" && (roundRandomnessMatch || poolRoundRandomnessMatch)) {
+    try {
+      const pool = poolRoundRandomnessMatch?.[1] ?? url.searchParams.get("pool") ?? "normal";
+      const roundId = poolRoundRandomnessMatch?.[2] ?? roundRandomnessMatch?.[1];
+      return json(res, 200, await getRoundRandomness(pool, roundId));
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "randomness_fetch_failed",
+        message: error.message,
+      });
+    }
+  }
+
   if (req.method === "GET" && url.pathname === "/simulate") {
     const poolId = url.searchParams.get("pool") ?? "normal";
     const pool = FIXED_POOLS.find((item) => item.id === poolId);
@@ -181,6 +205,30 @@ const server = http.createServer(async (req, res) => {
     try {
       const payload = await readJson(req);
       return json(res, 200, await buildSettleRoundTransaction(payload));
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "transaction_build_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/transactions/request-randomness") {
+    try {
+      const payload = await readJson(req);
+      return json(res, 200, await buildRequestRandomnessTransaction(payload));
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "transaction_build_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/transactions/settle-provider-round") {
+    try {
+      const payload = await readJson(req);
+      return json(res, 200, await buildSettleProviderRoundTransaction(payload));
     } catch (error) {
       return json(res, error.status ?? 500, {
         error: error.code ?? "transaction_build_failed",
@@ -353,6 +401,7 @@ async function getPublicConfig() {
   return {
     service: "luckyme-dev-api",
     mode: RELEASE_MODE,
+    releaseMode: RELEASE_MODE,
     supportedModes: ["DEVNET_STORE_DEMO", "MAINNET_BETA_CANDIDATE"],
     cluster: clusterName(ANCHOR_PROVIDER_URL),
     clusterUrl: ANCHOR_PROVIDER_URL,
@@ -360,7 +409,15 @@ async function getPublicConfig() {
     onchainAvailable: state.onchain.available,
     onchain: state.onchain,
     randomnessMode: RANDOMNESS_MODE,
+    supportedRandomnessModes: ["commit_reveal_demo", "orao_vrf"],
     productionRandomnessEnabled: PRODUCTION_RANDOMNESS_ENABLED,
+    randomnessProvider: {
+      mode: RANDOMNESS_MODE,
+      provider: RANDOMNESS_MODE === "orao_vrf" ? "orao_vrf" : "commit_reveal_demo",
+      oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+      failover: "none",
+      commitRevealAllowed: RELEASE_MODE === "DEVNET_STORE_DEMO",
+    },
     devnetOnly: RELEASE_MODE === "DEVNET_STORE_DEMO",
     realFundsEnabled: false,
     economics: {
@@ -573,6 +630,14 @@ async function buildRefundEntryTransaction(payload) {
 }
 
 async function buildSettleRoundTransaction(payload) {
+  if (RANDOMNESS_MODE !== "commit_reveal_demo") {
+    throw httpError(
+      409,
+      "commit_reveal_settlement_disabled",
+      "Use /transactions/settle-provider-round when LUCKYME_RANDOMNESS_MODE=orao_vrf",
+    );
+  }
+
   const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
   const roundId = parseRoundId(payload.roundId);
   const settler = parsePublicKey(payload.settler ?? payload.keeper, "settler");
@@ -712,6 +777,263 @@ async function buildSettleRoundTransaction(payload) {
   };
 }
 
+async function buildRequestRandomnessTransaction(payload) {
+  requireOraoMode();
+  const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
+  const roundId = parseRoundId(payload.roundId);
+  const keeper = parsePublicKey(payload.keeper ?? payload.feePayer, "keeper");
+  enforceSubjectRateLimit(keeper.toBase58());
+
+  const { connection, program, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
+  const { config, pool, round, roundAccount, poolSpec } = await fetchRoundContext(
+    program,
+    poolSlug,
+    roundId,
+  );
+  const sidecar = deriveRoundRandomnessAccount(round);
+
+  assertRoundReadyForProviderRequest(roundAccount);
+  if (await accountExists(connection, sidecar)) {
+    throw httpError(
+      409,
+      "randomness_already_requested",
+      "RoundRandomness sidecar already exists for this round",
+    );
+  }
+
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  const transaction = await program.methods
+    .requestRandomness()
+    .accounts({
+      keeper,
+      config,
+      pool,
+      round,
+      roundRandomness: sidecar,
+      systemProgram: SystemProgram.programId,
+    })
+    .transaction();
+
+  transaction.feePayer = keeper;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+
+  const transactionBase64 = transaction
+    .serialize({ requireAllSignatures: false, verifySignatures: false })
+    .toString("base64");
+  const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
+
+  return {
+    clusterUrl: url,
+    programId: PROGRAM_ID.toBase58(),
+    transactionBase64,
+    summary: {
+      action: "request_randomness",
+      randomnessMode: RANDOMNESS_MODE,
+      provider: "orao_vrf",
+      pool: poolSlug,
+      poolLabel: poolSpec.label,
+      roundId,
+      keeper: keeper.toBase58(),
+      seedDerivation: "recorded on-chain at execution using final round state and request slot",
+      accounts: {
+        config: config.toBase58(),
+        pool: pool.toBase58(),
+        round: round.toBase58(),
+        roundRandomness: sidecar.toBase58(),
+        oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+      },
+    },
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    simulation,
+  };
+}
+
+async function buildSettleProviderRoundTransaction(payload) {
+  requireOraoMode();
+  const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
+  const roundId = parseRoundId(payload.roundId);
+  const settler = parsePublicKey(payload.settler ?? payload.keeper, "settler");
+  enforceSubjectRateLimit(settler.toBase58());
+
+  const { connection, program, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
+  const { config, configAccount, pool, poolAccount, round, roundAccount, poolSpec } =
+    await fetchRoundContext(program, poolSlug, roundId);
+  const poolVault = derivePoolVault(pool);
+  const jackpotVault = deriveJackpotVault(pool);
+  const sidecar = deriveRoundRandomnessAccount(round);
+
+  if (roundAccount.settled) {
+    throw httpError(409, "round_settled", "Round is already settled");
+  }
+
+  const endTs = numberFromAnchor(roundAccount.endTs);
+  if (Math.floor(Date.now() / 1000) < endTs) {
+    throw httpError(409, "round_still_open", "Round is still open");
+  }
+
+  const totalTickets = bigintFromAnchor(roundAccount.totalTickets);
+  if (totalTickets === 0n) {
+    throw httpError(409, "empty_round", "Round has no tickets");
+  }
+
+  const sidecarAccount = await fetchRoundRandomnessSidecar(program, sidecar);
+  if (!sidecarAccount) {
+    throw httpError(
+      409,
+      "randomness_not_requested",
+      "Run /transactions/request-randomness and the ORAO keeper request first",
+    );
+  }
+
+  const request = sidecarAccount.request;
+  const providerAccount = await connection.getAccountInfo(request, "confirmed");
+  if (!providerAccount) {
+    throw httpError(
+      409,
+      "provider_randomness_missing",
+      "ORAO randomness request account does not exist yet",
+    );
+  }
+  if (!providerAccount.owner.equals(ORAO_PROGRAM_ID)) {
+    throw httpError(
+      409,
+      "invalid_provider_randomness_owner",
+      "ORAO randomness account is not owned by the configured ORAO program",
+    );
+  }
+
+  const parsedRandomness = parseOraoRandomnessV2(providerAccount.data);
+  if (parsedRandomness.status !== "fulfilled") {
+    throw httpError(
+      409,
+      "provider_randomness_not_fulfilled",
+      parsedRandomness.error ?? "ORAO randomness is not fulfilled",
+    );
+  }
+  if (!parsedRandomness.seed.equals(Buffer.from(sidecarAccount.randomnessSeed))) {
+    throw httpError(
+      409,
+      "provider_randomness_seed_mismatch",
+      "ORAO randomness seed does not match LuckyMe sidecar",
+    );
+  }
+
+  const entries = await fetchEntriesForRound(program, round);
+  const randomness = deriveProviderRoundRandomness(
+    round,
+    totalTickets,
+    parsedRandomness.randomness,
+  );
+  const winningTicket = randomMod(randomness, 0, totalTickets);
+  const winnerEntry = findEntryByTicket(entries, winningTicket, "winner");
+  const jackpotRoll = randomMod(
+    randomness,
+    8,
+    bigintFromAnchor(configAccount.jackpotOddsDenominator),
+  );
+  const jackpotTriggered = jackpotRoll === 0n;
+  const jackpotTicket = randomMod(randomness, 16, totalTickets);
+  const jackpotEntry = findEntryByTicket(entries, jackpotTicket, "jackpot");
+
+  const totalLamports = bigintFromAnchor(roundAccount.totalLamports);
+  const houseFee = bpsAmount(totalLamports, bigintFromAnchor(configAccount.houseFeeBps));
+  const jackpotAdd = bpsAmount(totalLamports, bigintFromAnchor(configAccount.jackpotBps));
+  const mainPrize = totalLamports - houseFee - jackpotAdd;
+  const jackpotPayout = jackpotTriggered
+    ? bigintFromAnchor(poolAccount.jackpotLamports) + jackpotAdd
+    : 0n;
+
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  const transaction = await program.methods
+    .settleRoundWithProviderRandomness()
+    .accounts({
+      keeper: settler,
+      config,
+      pool,
+      round,
+      roundRandomness: sidecar,
+      providerRandomness: request,
+      poolVault,
+      jackpotVault,
+      winner: winnerEntry.player,
+      winnerEntry: winnerEntry.address,
+      jackpotWinner: jackpotEntry.player,
+      jackpotEntry: jackpotEntry.address,
+      treasury: configAccount.treasury,
+      systemProgram: SystemProgram.programId,
+    })
+    .transaction();
+
+  transaction.feePayer = settler;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+
+  const transactionBase64 = transaction
+    .serialize({ requireAllSignatures: false, verifySignatures: false })
+    .toString("base64");
+  const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
+
+  return {
+    clusterUrl: url,
+    programId: PROGRAM_ID.toBase58(),
+    transactionBase64,
+    summary: {
+      action: "settle_round_with_provider_randomness",
+      randomnessMode: RANDOMNESS_MODE,
+      provider: "orao_vrf",
+      pool: poolSlug,
+      poolLabel: poolSpec.label,
+      roundId,
+      settler: settler.toBase58(),
+      request: request.toBase58(),
+      seed: Buffer.from(sidecarAccount.randomnessSeed).toString("hex"),
+      providerRandomnessHash: parsedRandomness.randomnessHash.toString("hex"),
+      derivedRandomness: randomness.toString("hex"),
+      totalTickets: totalTickets.toString(),
+      totalLamports: totalLamports.toString(),
+      totalSol: lamportsToSol(totalLamports),
+      winnerTicket: winningTicket.toString(),
+      winner: winnerEntry.player.toBase58(),
+      jackpotRoll: jackpotRoll.toString(),
+      jackpotTriggered,
+      jackpotTicket: jackpotTicket.toString(),
+      jackpotWinner: jackpotTriggered ? jackpotEntry.player.toBase58() : null,
+      mainPrizeLamports: mainPrize.toString(),
+      mainPrizeSol: lamportsToSol(mainPrize),
+      houseFeeLamports: houseFee.toString(),
+      houseFeeSol: lamportsToSol(houseFee),
+      jackpotAddLamports: jackpotAdd.toString(),
+      jackpotAddSol: lamportsToSol(jackpotAdd),
+      jackpotPayoutLamports: jackpotPayout.toString(),
+      jackpotPayoutSol: lamportsToSol(jackpotPayout),
+      accounts: {
+        config: config.toBase58(),
+        pool: pool.toBase58(),
+        round: round.toBase58(),
+        roundRandomness: sidecar.toBase58(),
+        providerRandomness: request.toBase58(),
+        poolVault: poolVault.toBase58(),
+        jackpotVault: jackpotVault.toBase58(),
+        winner: winnerEntry.player.toBase58(),
+        winnerEntry: winnerEntry.address.toBase58(),
+        jackpotWinner: jackpotEntry.player.toBase58(),
+        jackpotEntry: jackpotEntry.address.toBase58(),
+        treasury: configAccount.treasury.toBase58(),
+      },
+      entriesScanned: entries.length,
+    },
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    simulation,
+  };
+}
+
 async function simulateUnsignedTransaction(connection, transactionBase64) {
   try {
     const result = await connection._rpcRequest("simulateTransaction", [
@@ -784,6 +1106,14 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
     const round = await program.account.round.fetch(roundAddress);
     const totalTickets = bigintFromAnchor(round.totalTickets);
     const refundState = getRefundState(round);
+    const providerRandomness = await getRoundRandomnessState(
+      program.provider.connection,
+      program,
+      poolAddress,
+      roundAddress,
+      roundId,
+      totalTickets,
+    );
     return {
       address: roundAddress.toBase58(),
       roundId: numberFromAnchor(round.roundId),
@@ -802,6 +1132,7 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
       randomness: Buffer.from(round.randomness).toString("hex"),
       randomnessMode: RANDOMNESS_MODE,
       randomnessProofStatus: randomnessProofStatus(round),
+      providerRandomness,
       refundDelaySeconds: REFUND_DELAY_SECONDS,
       refundAfterTs: refundState.refundAfterTs,
       refundAvailable: refundState.refundAvailable,
@@ -816,6 +1147,161 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
       roundId,
       missing: true,
     };
+  }
+}
+
+async function getRoundRandomness(poolInput, roundIdInput) {
+  const poolSlug = parsePoolSlug(poolInput);
+  const roundId = parseRoundId(roundIdInput);
+  const { connection, program, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
+  const { pool, round, roundAccount } = await fetchRoundContext(program, poolSlug, roundId);
+  const status = await getRoundRandomnessState(
+    connection,
+    program,
+    pool,
+    round,
+    roundId,
+    bigintFromAnchor(roundAccount.totalTickets),
+  );
+  const refundState = getRefundState(roundAccount);
+
+  return {
+    clusterUrl: url,
+    programId: PROGRAM_ID.toBase58(),
+    randomnessMode: RANDOMNESS_MODE,
+    provider: RANDOMNESS_MODE === "orao_vrf" ? "orao_vrf" : "commit_reveal_demo",
+    pool: poolSlug,
+    roundId,
+    round: round.toBase58(),
+    roundClosed: Math.floor(Date.now() / 1000) >= numberFromAnchor(roundAccount.endTs),
+    roundSettled: roundAccount.settled,
+    totalTickets: stringFromAnchor(roundAccount.totalTickets),
+    refundAvailable: refundState.refundAvailable,
+    refundMode: refundState.refundMode,
+    providerRandomness: status,
+  };
+}
+
+async function fetchRoundContext(program, poolSlug, roundId) {
+  const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
+  const config = deriveConfig();
+  const configAccount = await program.account.config.fetch(config);
+  const pool = derivePool(config, poolSpec.id);
+  const poolAccount = await program.account.pool.fetch(pool);
+  const round = deriveRound(pool, roundId);
+  const roundAccount = await program.account.round.fetch(round);
+
+  return {
+    config,
+    configAccount,
+    poolSpec,
+    pool,
+    poolAccount,
+    round,
+    roundAccount,
+  };
+}
+
+async function getRoundRandomnessState(connection, program, pool, round, roundId, totalTickets) {
+  const sidecar = deriveRoundRandomnessAccount(round);
+  const sidecarAccount = await fetchRoundRandomnessSidecar(program, sidecar);
+
+  if (!sidecarAccount) {
+    return {
+      status: "not_requested",
+      provider: "orao_vrf",
+      roundRandomness: sidecar.toBase58(),
+      seedDerivation: "recorded on-chain at request_randomness execution",
+      oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+    };
+  }
+
+  const seed = Buffer.from(sidecarAccount.randomnessSeed);
+  const request = sidecarAccount.request;
+  const expectedRequest = deriveOraoRandomnessAccount(seed, ORAO_PROGRAM_ID);
+  const providerAccount = await connection.getAccountInfo(request, "confirmed");
+  const base = {
+    status: anchorEnumToSnake(sidecarAccount.status),
+    provider: anchorEnumToSnake(sidecarAccount.provider),
+    roundRandomness: sidecar.toBase58(),
+    request: request.toBase58(),
+    expectedRequest: expectedRequest.toBase58(),
+    requestMatchesExpected: request.equals(expectedRequest),
+    seed: seed.toString("hex"),
+    randomnessValue: Buffer.from(sidecarAccount.randomnessValue).toString("hex"),
+    requestedAt: numberFromAnchor(sidecarAccount.randomnessRequestedAt),
+    fulfilledAt: numberFromAnchor(sidecarAccount.randomnessFulfilledAt),
+    oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+  };
+
+  if (!providerAccount) {
+    return {
+      ...base,
+      providerStatus: "missing",
+    };
+  }
+
+  const parsed = parseOraoRandomnessV2(providerAccount.data);
+  const response = {
+    ...base,
+    providerStatus: parsed.status,
+    providerOwner: providerAccount.owner.toBase58(),
+    providerOwnerValid: providerAccount.owner.equals(ORAO_PROGRAM_ID),
+  };
+
+  if (parsed.status === "pending") {
+    return {
+      ...response,
+      providerClient: parsed.client.toBase58(),
+      providerSeed: parsed.seed.toString("hex"),
+      providerSeedMatches: parsed.seed.equals(seed),
+    };
+  }
+
+  if (parsed.status === "fulfilled") {
+    return {
+      ...response,
+      providerClient: parsed.client.toBase58(),
+      providerSeed: parsed.seed.toString("hex"),
+      providerSeedMatches: parsed.seed.equals(seed),
+      providerRandomnessHash: parsed.randomnessHash.toString("hex"),
+      derivedRoundRandomness: deriveProviderRoundRandomness(
+        round,
+        totalTickets,
+        parsed.randomness,
+      ).toString("hex"),
+    };
+  }
+
+  return {
+    ...response,
+    providerError: parsed.error,
+  };
+}
+
+async function fetchRoundRandomnessSidecar(program, sidecar) {
+  try {
+    return await program.account.roundRandomness.fetch(sidecar);
+  } catch {
+    return null;
+  }
+}
+
+function assertRoundReadyForProviderRequest(roundAccount) {
+  if (roundAccount.settled) {
+    throw httpError(409, "round_settled", "Round is already settled");
+  }
+
+  const endTs = numberFromAnchor(roundAccount.endTs);
+  if (Math.floor(Date.now() / 1000) < endTs) {
+    throw httpError(409, "round_still_open", "Round is still open");
+  }
+
+  if (bigintFromAnchor(roundAccount.totalTickets) === 0n) {
+    throw httpError(409, "empty_round", "Round has no tickets");
   }
 }
 
@@ -1077,6 +1563,14 @@ function parsePublicKey(value, field) {
   }
 }
 
+function parsePublicKeyConfig(value, field) {
+  try {
+    return new PublicKey(String(value ?? ""));
+  } catch {
+    throw new Error(`${field} must be a Solana public key`);
+  }
+}
+
 function parseBase64(value, field) {
   if (typeof value !== "string" || value.length === 0 || value.length > 100_000) {
     throw httpError(400, `invalid_${field}`, `${field} must be base64`);
@@ -1164,6 +1658,24 @@ function bpsAmount(totalLamports, bps) {
   return (totalLamports * bps) / 10_000n;
 }
 
+function requireOraoMode() {
+  if (RANDOMNESS_MODE !== "orao_vrf") {
+    throw httpError(
+      409,
+      "orao_randomness_disabled",
+      "Set LUCKYME_RANDOMNESS_MODE=orao_vrf to use provider randomness endpoints",
+    );
+  }
+
+  if (!ORAO_PROGRAM_ID.equals(ORAO_VRF_PROGRAM_ID)) {
+    throw httpError(
+      500,
+      "unsupported_orao_program",
+      "Configured ORAO program id does not match the LuckyMe on-chain verifier",
+    );
+  }
+}
+
 function getRefundState(round) {
   const endTs = numberFromAnchor(round.endTs);
   const refundAfterTs = endTs + REFUND_DELAY_SECONDS;
@@ -1243,6 +1755,16 @@ function validateRuntimeConfig() {
     throw new Error("LUCKYME_RELEASE_MODE must be DEVNET_STORE_DEMO or MAINNET_BETA_CANDIDATE");
   }
 
+  if (!["commit_reveal_demo", "orao_vrf"].includes(RANDOMNESS_MODE)) {
+    throw new Error("LUCKYME_RANDOMNESS_MODE must be commit_reveal_demo or orao_vrf");
+  }
+
+  if (!ORAO_PROGRAM_ID.equals(ORAO_VRF_PROGRAM_ID)) {
+    throw new Error(
+      "LUCKYME_ORAO_PROGRAM_ID must match the ORAO program id compiled into LuckyMe",
+    );
+  }
+
   if (
     RELEASE_MODE === "DEVNET_STORE_DEMO" &&
     isMainnetUrl(ANCHOR_PROVIDER_URL)
@@ -1252,9 +1774,9 @@ function validateRuntimeConfig() {
 
   if (
     RELEASE_MODE === "MAINNET_BETA_CANDIDATE" &&
-    (!PRODUCTION_RANDOMNESS_ENABLED || RANDOMNESS_MODE === "commit_reveal_demo")
+    (!PRODUCTION_RANDOMNESS_ENABLED || RANDOMNESS_MODE !== "orao_vrf")
   ) {
-    throw new Error("MAINNET_BETA_CANDIDATE requires production randomness");
+    throw new Error("MAINNET_BETA_CANDIDATE requires LUCKYME_RANDOMNESS_MODE=orao_vrf and production randomness");
   }
 
   if (isMainnetUrl(ANCHOR_PROVIDER_URL)) {
@@ -1318,6 +1840,15 @@ function randomnessProofStatus(round) {
     return "committed";
   }
   return "missing";
+}
+
+function anchorEnumToSnake(value) {
+  const key = typeof value === "string"
+    ? value
+    : value && typeof value === "object"
+      ? Object.keys(value)[0]
+      : String(value ?? "unknown");
+  return key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`).replace(/^_/, "");
 }
 
 function formatPercentRatio(numerator, denominator) {

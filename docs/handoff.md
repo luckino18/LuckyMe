@@ -1,6 +1,6 @@
 # LuckyMe Handoff
 
-Last updated: 2026-07-04 21:44 CEST
+Last updated: 2026-07-04 22:47 CEST
 
 ## Repository
 
@@ -530,6 +530,85 @@ Remaining blockers before real-money mainnet:
 - Move upgrade, treasury, and pause authorities to multisig/timelock.
 - Stand up production monitoring, incident response, private security contact,
   and bug bounty/disclosure process.
+
+External audit follow-up: ORAO provider randomness integration:
+
+- Added `docs/randomness-provider-investigation.md` before implementation. It
+  selects ORAO Classic VRF as the first provider and rejects direct Rust CPI for
+  this pass because the ORAO crate and LuckyMe Anchor versions are different.
+- Kept the existing `Round` account layout stable and added a
+  `RoundRandomness` sidecar PDA derived from `["round_randomness", round]`.
+- Added on-chain `request_randomness` for post-close provider request metadata:
+  provider, status, ORAO seed, expected ORAO request PDA, and request
+  timestamp. The seed includes final round ticket state and the request slot, so
+  it is not fully knowable before ticket sales end.
+- Added on-chain `settle_round_with_provider_randomness`. It verifies ORAO
+  program owner, request PDA derivation, seed match, and fulfilled
+  `RandomnessV2` data before deriving LuckyMe winner randomness from the 64-byte
+  ORAO value.
+- Added `RandomnessRequested` and `RandomnessFulfilled` events, and extended
+  `RoundSettled` with the randomness provider.
+- Added JS helpers for ORAO seed/request derivation, provider randomness
+  derivation, and ORAO `RandomnessV2` parsing.
+- Added backend guardrails:
+  - `LUCKYME_RANDOMNESS_MODE` must be `commit_reveal_demo` or `orao_vrf`
+  - `MAINNET_BETA_CANDIDATE` requires `LUCKYME_RANDOMNESS_MODE=orao_vrf`
+  - no silent fallback from ORAO mode to commit-reveal settlement
+  - public backend still uses read-only Anchor wallet for builders
+- Added backend endpoints:
+  - `GET /rounds/:round/randomness?pool=mini`
+  - `GET /rounds/:pool/:round/randomness`
+  - `POST /transactions/request-randomness`
+  - `POST /transactions/settle-provider-round`
+- Added keeper scripts:
+  - `npm run randomness:request`
+  - `npm run randomness:status`
+  - `npm run randomness:settle`
+- Added root dependency `@orao-network/solana-vrf` pinned to `0.8.0`.
+- Regenerated public `idl/luckyme.json` and `sdk/luckyme.ts`.
+- Updated README, backend README, manual settlement docs, randomness docs,
+  production keeper docs, security policy, store readiness, mainnet readiness,
+  final readiness audit, and audit closure matrix.
+- Added Anchor localnet coverage for provider request after round close,
+  request-before-close rejection, provider settlement rejection without ORAO
+  fulfillment, wrong provider-account rejection, refund after no fulfillment,
+  and settlement/refund exclusivity.
+- No devnet deploy, ORAO request, or keeper transaction was sent in this pass.
+  This is a source/IDL/test/docs update only.
+
+Local verification for the ORAO integration pass:
+
+```bash
+node --check backend/src/server.mjs
+node --check scripts/anchor-client.mjs
+node --check scripts/randomness-request.mjs
+node --check scripts/randomness-status.mjs
+node --check scripts/randomness-settle.mjs
+node --check tests/anchor-localnet.test.mjs
+node --check tests/backend-config.test.mjs
+node --check tests/docs-scripts.test.mjs
+npm audit --audit-level=high
+npm audit --audit-level=high --prefix app-seeker
+npm test
+cargo check
+cargo test
+NO_DNA=1 anchor build --provider.cluster localnet
+npm run test:anchor
+npm run app:typecheck
+npm --prefix app-seeker run doctor
+git diff --check
+```
+
+Updated remaining blockers before real-money mainnet:
+
+- Archive a funded devnet ORAO request, fulfillment, provider settlement
+  transcript, and monitoring evidence.
+- Complete legal review for gambling/lottery/sweepstakes treatment.
+- Move upgrade, treasury, and pause authorities to multisig/timelock.
+- Stand up production monitoring, incident response, private security contact,
+  and bug bounty/disclosure process.
+- Run an independent audit against the final deployed commit, generated IDL, and
+  deployed program binary.
 
 ## Safety Notes
 

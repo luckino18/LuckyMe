@@ -18,14 +18,14 @@ external launch gates in `docs/mainnet-readiness.md` are complete.
 | --- | --- | --- |
 | Multi-buy/ticket accounting allowed a wallet to extend an entry across multiple purchases | Fixed in repo | `buy_tickets` rejects any initialized entry with `AlreadyEnteredRound`. Backend preflight also returns `409 already_entered_round`. Anchor localnet tests cover duplicate buy rejection. |
 | No-reveal could permanently lock pool-vault funds | Fixed in repo | `refund_entry_after_timeout` opens refund mode after `round.end_ts + 600`. Anchor localnet tests cover first refund, second refund, blocked settlement after refund mode, duplicate refund rejection, and final vault balance returning to the pre-round value. |
-| Commit-reveal randomness can be selectively withheld | External blocker | The refund path prevents permanent lockup but does not make the game fair for real-money mainnet. Mainnet requires a production randomness integration, such as VRF/Entropy with verifiable fulfillment, or bonded multi-party commit-reveal with slashing and fallback. Backend now refuses mainnet RPC unless `LUCKYME_PRODUCTION_RANDOMNESS=true` is explicitly set with the other launch signoffs. |
-| Refund can turn reveal withholding into selective round cancellation | Mitigated for devnet, external blocker for mainnet | Refund mode is intentionally documented as recovery, not fairness. `GET /refunds` and `npm run refund:crank` make abandoned-round refunds discoverable and crankable, but production fairness still requires the randomness launch gate. |
+| Commit-reveal randomness can be selectively withheld | Provider path implemented, mainnet evidence still required | `commit_reveal_demo` remains devnet-only. `MAINNET_BETA_CANDIDATE` requires `LUCKYME_RANDOMNESS_MODE=orao_vrf` and `LUCKYME_PRODUCTION_RANDOMNESS=true`. The program now has `request_randomness` and `settle_round_with_provider_randomness`, which verify ORAO owner, PDA, seed, and fulfilled `RandomnessV2` account data before deriving winners. Mainnet still needs funded devnet ORAO evidence, monitoring, legal, multisig, and final audit signoff. |
+| Refund can turn reveal withholding into selective round cancellation | Fixed for provider mode, mitigated for devnet commit-reveal | In ORAO mode, settlement does not use operator-provided reveal bytes and will not settle from arbitrary random bytes. Refund remains available if provider fulfillment never arrives. In commit-reveal demo, refund is still recovery only, not fairness. |
 
 ## High Findings
 
 | Finding | Status | Closure |
 | --- | --- | --- |
-| Settlement depends on correct `winner_entry`/`jackpot_entry` | Mitigated for devnet | `POST /transactions/settle-round` verifies the reveal, scans on-chain `Entry` accounts, computes winner/jackpot entry accounts, and simulates the unsigned transaction. `docs/manual-settlement.md` documents the independent flow. Program events now expose round, buy, settle, refund, pool, config, and pause state for indexers. |
+| Settlement depends on correct `winner_entry`/`jackpot_entry` | Mitigated for devnet and provider mode | `POST /transactions/settle-round` verifies the demo reveal, scans on-chain `Entry` accounts, computes winner/jackpot entry accounts, and simulates the unsigned transaction. `POST /transactions/settle-provider-round` does the same from fulfilled ORAO randomness. `docs/manual-settlement.md` documents the independent flow. Program events now expose round, buy, settle, refund, provider randomness, pool, config, and pause state for indexers. |
 | Backend exposed as production API can be abused | Mitigated for devnet | Backend defaults to `HOST=127.0.0.1`, `ENABLE_TRANSACTION_SUBMIT=false`, JSON body limit, IP-level and wallet-level in-memory rate limits, and strict production runtime checks. Production mode refuses wildcard CORS, submit relay, and direct `0.0.0.0` bind. Edge WAF/proxy remains required for any public deployment. |
 | Backend/local scripts can read a private wallet | Fixed for backend read/build paths | `createClient({ requireSigner: false })` uses a read-only wallet. Backend read/build/submit-relay code no longer reads `ANCHOR_WALLET` or `~/.config/solana/id.json`. Authority scripts still require an explicit local signer because they send keeper/admin transactions. |
 | Legal/compliance unresolved | External blocker | `README.md`, `SECURITY.md`, and `docs/mainnet-readiness.md` keep legal review as a hard launch gate. Backend refuses mainnet RPC unless `LUCKYME_LEGAL_SIGNOFF=true` is explicitly set. Code cannot substitute for a written legal opinion, age/geofence policy, terms, privacy, tax/payout policy, and responsible gaming controls. |
@@ -35,7 +35,7 @@ external launch gates in `docs/mainnet-readiness.md` are complete.
 | Finding | Status | Closure |
 | --- | --- | --- |
 | CI lacked Anchor localnet coverage | Fixed in repo | GitHub Actions installs Solana CLI and Anchor CLI, runs `NO_DNA=1 anchor build --provider.cluster localnet`, and runs `npm run test:anchor`. |
-| Refund state machine needs aggressive tests | Fixed in repo | `tests/anchor-localnet.test.mjs` covers the money-moving refund and settlement state machine, zero-entry round close, and zero-space vault balance consistency. |
+| Refund state machine needs aggressive tests | Fixed in repo | `tests/anchor-localnet.test.mjs` covers the money-moving refund and settlement state machine, provider sidecar request flow, no-provider-fulfillment settlement rejection, zero-entry round close, and zero-space vault balance consistency. |
 | Refund UX can leave users unaware | Mitigated for devnet | Mobile app exposes `Refund entry` for connected refundable entries. Backend exposes `GET /refunds`. `scripts/refund-cranker.mjs` lets a keeper crank refunds permissionlessly while funds still go to `entry.player`. |
 | PDA vaults with manual lamport transfers need balance tests | Fixed in repo for current flows | Anchor localnet tests assert pool vault balance after buy, after settlement rejection path, after partial refund, and after all refunds. |
 | Security policy incomplete for production | Mitigated for devnet, external blocker for mainnet | `SECURITY.md` now defines scope, reporting, severity, response targets, and incident response. Mainnet still requires a dedicated private contact, formal disclosure process, and funded bug bounty. |
@@ -52,7 +52,8 @@ external launch gates in `docs/mainnet-readiness.md` are complete.
 
 These are intentionally not marked fixed:
 
-1. Production randomness integration selected, implemented, tested, and deployed.
+1. Funded devnet ORAO request, fulfillment, provider settlement transcript, and
+   monitoring evidence.
 2. Written legal/compliance signoff for target jurisdictions.
 3. Upgrade authority, treasury, and pause/admin authority moved to multisig.
 4. Production backend deployment behind proxy/WAF with persistent rate limiting,

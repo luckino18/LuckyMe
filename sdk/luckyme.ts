@@ -487,6 +487,94 @@ export type Luckyme = {
       "args": []
     },
     {
+      "name": "requestRandomness",
+      "discriminator": [
+        213,
+        5,
+        173,
+        166,
+        37,
+        236,
+        31,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round"
+        },
+        {
+          "name": "roundRandomness",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100,
+                  95,
+                  114,
+                  97,
+                  110,
+                  100,
+                  111,
+                  109,
+                  110,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "setPaused",
       "discriminator": [
         91,
@@ -660,6 +748,163 @@ export type Luckyme = {
           }
         }
       ]
+    },
+    {
+      "name": "settleRoundWithProviderRandomness",
+      "discriminator": [
+        130,
+        50,
+        207,
+        102,
+        181,
+        238,
+        233,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "roundRandomness",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100,
+                  95,
+                  114,
+                  97,
+                  110,
+                  100,
+                  111,
+                  109,
+                  110,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "providerRandomness"
+        },
+        {
+          "name": "poolVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "jackpotVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  97,
+                  99,
+                  107,
+                  112,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner",
+          "writable": true
+        },
+        {
+          "name": "winnerEntry"
+        },
+        {
+          "name": "jackpotWinner",
+          "writable": true
+        },
+        {
+          "name": "jackpotEntry"
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -713,6 +958,19 @@ export type Luckyme = {
         78,
         116,
         174
+      ]
+    },
+    {
+      "name": "roundRandomness",
+      "discriminator": [
+        118,
+        25,
+        18,
+        215,
+        142,
+        125,
+        246,
+        13
       ]
     }
   ],
@@ -780,6 +1038,32 @@ export type Luckyme = {
         198,
         254,
         229
+      ]
+    },
+    {
+      "name": "randomnessFulfilled",
+      "discriminator": [
+        61,
+        67,
+        128,
+        142,
+        15,
+        77,
+        223,
+        252
+      ]
+    },
+    {
+      "name": "randomnessRequested",
+      "discriminator": [
+        10,
+        64,
+        183,
+        29,
+        104,
+        63,
+        90,
+        149
       ]
     },
     {
@@ -937,6 +1221,26 @@ export type Luckyme = {
       "code": 6022,
       "name": "roundHasEntries",
       "msg": "Round already has entries"
+    },
+    {
+      "code": 6023,
+      "name": "invalidRandomnessProvider",
+      "msg": "Invalid randomness provider"
+    },
+    {
+      "code": 6024,
+      "name": "invalidRandomnessStatus",
+      "msg": "Invalid randomness status"
+    },
+    {
+      "code": 6025,
+      "name": "invalidRandomnessProviderAccount",
+      "msg": "Invalid randomness provider account"
+    },
+    {
+      "code": 6026,
+      "name": "randomnessNotFulfilled",
+      "msg": "Provider randomness is not fulfilled"
     }
   ],
   "types": [
@@ -1201,6 +1505,149 @@ export type Luckyme = {
       }
     },
     {
+      "name": "randomnessFulfilled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": {
+              "defined": {
+                "name": "randomnessProvider"
+              }
+            }
+          },
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "seed",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "client",
+            "type": "pubkey"
+          },
+          {
+            "name": "randomnessHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "randomnessProvider",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "commitRevealDemo"
+          },
+          {
+            "name": "oraoVrf"
+          },
+          {
+            "name": "futureProvider"
+          }
+        ]
+      }
+    },
+    {
+      "name": "randomnessRequested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": {
+              "defined": {
+                "name": "randomnessProvider"
+              }
+            }
+          },
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "seed",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "randomnessStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "notRequested"
+          },
+          {
+            "name": "requested"
+          },
+          {
+            "name": "fulfilled"
+          },
+          {
+            "name": "settled"
+          },
+          {
+            "name": "refundMode"
+          }
+        ]
+      }
+    },
+    {
       "name": "round",
       "type": {
         "kind": "struct",
@@ -1320,6 +1767,68 @@ export type Luckyme = {
       }
     },
     {
+      "name": "roundRandomness",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "provider",
+            "type": {
+              "defined": {
+                "name": "randomnessProvider"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "randomnessStatus"
+              }
+            }
+          },
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "randomnessSeed",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "randomnessValue",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "randomnessRequestedAt",
+            "type": "i64"
+          },
+          {
+            "name": "randomnessFulfilledAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "roundSettled",
       "type": {
         "kind": "struct",
@@ -1383,6 +1892,14 @@ export type Luckyme = {
                 "u8",
                 32
               ]
+            }
+          },
+          {
+            "name": "randomnessProvider",
+            "type": {
+              "defined": {
+                "name": "randomnessProvider"
+              }
             }
           }
         ]

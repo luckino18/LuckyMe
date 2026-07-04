@@ -17,6 +17,8 @@ const MAX_ROUND_DURATION_SECS: i64 = 86_400;
 const REFUND_DELAY_SECS: i64 = 600;
 #[cfg(feature = "test-short-timers")]
 const REFUND_DELAY_SECS: i64 = 2;
+const ORAO_RANDOMNESS_ACCOUNT_SEED: &[u8] = b"orao-vrf-randomness-request";
+const ORAO_VRF_PROGRAM_ID: Pubkey = pubkey!("VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y");
 
 #[program]
 pub mod luckyme {
@@ -347,6 +349,230 @@ pub mod luckyme {
             jackpot_entry: ctx.accounts.jackpot_entry.key(),
             jackpot_ticket,
             randomness,
+            randomness_provider: RandomnessProvider::CommitRevealDemo,
+        });
+
+        Ok(())
+    }
+
+    pub fn request_randomness(ctx: Context<RequestRandomness>) -> Result<()> {
+        let clock = Clock::get()?;
+        let now = clock.unix_timestamp;
+        require!(
+            now >= ctx.accounts.round.end_ts,
+            LuckyMeError::RoundStillOpen
+        );
+        require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
+        require!(
+            ctx.accounts.round.total_tickets > 0,
+            LuckyMeError::EmptyRound
+        );
+
+        let seed = derive_orao_randomness_seed(
+            &ctx.accounts.round.key(),
+            &ctx.accounts.pool.key(),
+            ctx.accounts.round.round_id,
+            ctx.accounts.round.total_tickets,
+            ctx.accounts.round.entrant_count,
+            clock.slot,
+        );
+        let request = orao_randomness_request_address(&seed);
+        let round_randomness = &mut ctx.accounts.round_randomness;
+        round_randomness.round = ctx.accounts.round.key();
+        round_randomness.provider = RandomnessProvider::OraoVrf;
+        round_randomness.status = RandomnessStatus::Requested;
+        round_randomness.request = request;
+        round_randomness.randomness_seed = seed;
+        round_randomness.randomness_value = [0; 32];
+        round_randomness.randomness_requested_at = now;
+        round_randomness.randomness_fulfilled_at = 0;
+        round_randomness.bump = ctx.bumps.round_randomness;
+
+        emit!(RandomnessRequested {
+            pool: ctx.accounts.pool.key(),
+            round: ctx.accounts.round.key(),
+            round_id: ctx.accounts.round.round_id,
+            provider: RandomnessProvider::OraoVrf,
+            request,
+            seed,
+            timestamp: now,
+        });
+
+        Ok(())
+    }
+
+    pub fn settle_round_with_provider_randomness(
+        ctx: Context<SettleRoundWithProviderRandomness>,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            now >= ctx.accounts.round.end_ts,
+            LuckyMeError::RoundStillOpen
+        );
+        require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
+        require!(
+            ctx.accounts.round.total_tickets > 0,
+            LuckyMeError::EmptyRound
+        );
+        require!(
+            ctx.accounts.round_randomness.provider == RandomnessProvider::OraoVrf,
+            LuckyMeError::InvalidRandomnessProvider
+        );
+        require!(
+            matches!(
+                ctx.accounts.round_randomness.status,
+                RandomnessStatus::Requested | RandomnessStatus::Fulfilled
+            ),
+            LuckyMeError::InvalidRandomnessStatus
+        );
+        require!(
+            ctx.accounts.provider_randomness.owner == &ORAO_VRF_PROGRAM_ID,
+            LuckyMeError::InvalidRandomnessProviderAccount
+        );
+        require!(
+            ctx.accounts.provider_randomness.key() == ctx.accounts.round_randomness.request,
+            LuckyMeError::InvalidRandomnessProviderAccount
+        );
+
+        let expected_request =
+            orao_randomness_request_address(&ctx.accounts.round_randomness.randomness_seed);
+        require!(
+            expected_request == ctx.accounts.provider_randomness.key(),
+            LuckyMeError::InvalidRandomnessProviderAccount
+        );
+
+        let provider_data = ctx.accounts.provider_randomness.data.borrow();
+        let fulfilled = parse_orao_v2_fulfilled_randomness(&provider_data)?;
+        require!(
+            fulfilled.seed == ctx.accounts.round_randomness.randomness_seed,
+            LuckyMeError::InvalidRandomnessProviderAccount
+        );
+
+        let randomness = derive_provider_round_randomness(
+            &ctx.accounts.round.key(),
+            ctx.accounts.round.total_tickets,
+            &fulfilled.randomness,
+        );
+        let randomness_hash = hashv(&[
+            b"luckyme-provider-randomness-hash",
+            fulfilled.randomness.as_ref(),
+        ])
+        .to_bytes();
+
+        let total = ctx.accounts.round.total_lamports;
+        let house_fee = bps_amount(total, ctx.accounts.config.house_fee_bps)?;
+        let jackpot_add = bps_amount(total, ctx.accounts.config.jackpot_bps)?;
+        let main_prize = total
+            .checked_sub(house_fee)
+            .and_then(|v| v.checked_sub(jackpot_add))
+            .ok_or(LuckyMeError::MathOverflow)?;
+
+        let winning_ticket = random_mod(&randomness, 0, ctx.accounts.round.total_tickets);
+        require!(
+            entry_contains_ticket(&ctx.accounts.winner_entry, winning_ticket),
+            LuckyMeError::WrongWinnerEntry
+        );
+        require!(
+            ctx.accounts.winner_entry.player == ctx.accounts.winner.key(),
+            LuckyMeError::WinnerMismatch
+        );
+
+        let jackpot_roll = random_mod(
+            &randomness,
+            8,
+            u64::from(ctx.accounts.config.jackpot_odds_denominator),
+        );
+        let jackpot_triggered = jackpot_roll == 0;
+
+        let jackpot_ticket = random_mod(&randomness, 16, ctx.accounts.round.total_tickets);
+        if jackpot_triggered {
+            require!(
+                entry_contains_ticket(&ctx.accounts.jackpot_entry, jackpot_ticket),
+                LuckyMeError::WrongJackpotEntry
+            );
+            require!(
+                ctx.accounts.jackpot_entry.player == ctx.accounts.jackpot_winner.key(),
+                LuckyMeError::WinnerMismatch
+            );
+        }
+
+        emit!(RandomnessFulfilled {
+            pool: ctx.accounts.pool.key(),
+            round: ctx.accounts.round.key(),
+            round_id: ctx.accounts.round.round_id,
+            provider: RandomnessProvider::OraoVrf,
+            request: ctx.accounts.provider_randomness.key(),
+            seed: fulfilled.seed,
+            client: fulfilled.client,
+            randomness_hash,
+            timestamp: now,
+        });
+
+        transfer_lamports(
+            &ctx.accounts.pool_vault.to_account_info(),
+            &ctx.accounts.winner.to_account_info(),
+            main_prize,
+        )?;
+        transfer_lamports(
+            &ctx.accounts.pool_vault.to_account_info(),
+            &ctx.accounts.treasury.to_account_info(),
+            house_fee,
+        )?;
+        transfer_lamports(
+            &ctx.accounts.pool_vault.to_account_info(),
+            &ctx.accounts.jackpot_vault.to_account_info(),
+            jackpot_add,
+        )?;
+
+        ctx.accounts.pool.jackpot_lamports = ctx
+            .accounts
+            .pool
+            .jackpot_lamports
+            .checked_add(jackpot_add)
+            .ok_or(LuckyMeError::MathOverflow)?;
+
+        if jackpot_triggered {
+            let jackpot_payout = ctx.accounts.pool.jackpot_lamports;
+            transfer_lamports(
+                &ctx.accounts.jackpot_vault.to_account_info(),
+                &ctx.accounts.jackpot_winner.to_account_info(),
+                jackpot_payout,
+            )?;
+            ctx.accounts.pool.jackpot_lamports = 0;
+        }
+
+        let round = &mut ctx.accounts.round;
+        round.settled = true;
+        round.jackpot_triggered = jackpot_triggered;
+        round.winner = ctx.accounts.winner.key();
+        round.jackpot_winner = if jackpot_triggered {
+            ctx.accounts.jackpot_winner.key()
+        } else {
+            Pubkey::default()
+        };
+        round.randomness = randomness;
+
+        let round_randomness = &mut ctx.accounts.round_randomness;
+        round_randomness.status = RandomnessStatus::Settled;
+        round_randomness.randomness_value = randomness;
+        round_randomness.randomness_fulfilled_at = now;
+
+        emit!(RoundSettled {
+            pool: ctx.accounts.pool.key(),
+            round: round.key(),
+            round_id: round.round_id,
+            winner: round.winner,
+            winner_entry: ctx.accounts.winner_entry.key(),
+            winning_ticket,
+            main_prize_lamports: main_prize,
+            house_fee_lamports: house_fee,
+            jackpot_add_lamports: jackpot_add,
+            jackpot_triggered,
+            jackpot_winner: round.jackpot_winner,
+            jackpot_entry: ctx.accounts.jackpot_entry.key(),
+            jackpot_ticket,
+            randomness,
+            randomness_provider: RandomnessProvider::OraoVrf,
         });
 
         Ok(())
@@ -514,6 +740,31 @@ pub struct RoundSettled {
     pub jackpot_entry: Pubkey,
     pub jackpot_ticket: u64,
     pub randomness: [u8; 32],
+    pub randomness_provider: RandomnessProvider,
+}
+
+#[event]
+pub struct RandomnessRequested {
+    pub pool: Pubkey,
+    pub round: Pubkey,
+    pub round_id: u64,
+    pub provider: RandomnessProvider,
+    pub request: Pubkey,
+    pub seed: [u8; 32],
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct RandomnessFulfilled {
+    pub pool: Pubkey,
+    pub round: Pubkey,
+    pub round_id: u64,
+    pub provider: RandomnessProvider,
+    pub request: Pubkey,
+    pub seed: [u8; 32],
+    pub client: Pubkey,
+    pub randomness_hash: [u8; 32],
+    pub timestamp: i64,
 }
 
 #[event]
@@ -679,6 +930,73 @@ pub struct SettleRound<'info> {
 }
 
 #[derive(Accounts)]
+pub struct RequestRandomness<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(has_one = config)]
+    pub pool: Account<'info, Pool>,
+    #[account(has_one = pool)]
+    pub round: Account<'info, Round>,
+    #[account(
+        init,
+        payer = keeper,
+        space = 8 + RoundRandomness::LEN,
+        seeds = [b"round_randomness", round.key().as_ref()],
+        bump
+    )]
+    pub round_randomness: Account<'info, RoundRandomness>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SettleRoundWithProviderRandomness<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, has_one = config)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, has_one = pool)]
+    pub round: Account<'info, Round>,
+    #[account(
+        mut,
+        seeds = [b"round_randomness", round.key().as_ref()],
+        bump = round_randomness.bump,
+        constraint = round_randomness.round == round.key()
+    )]
+    pub round_randomness: Account<'info, RoundRandomness>,
+    /// CHECK: ORAO VRF request account. Owner, PDA, seed, and fulfilled data are verified in the handler.
+    pub provider_randomness: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [b"vault", pool.key().as_ref()],
+        bump = pool.vault_bump
+    )]
+    /// CHECK: PDA vault owned by this program; it only stores lamports.
+    pub pool_vault: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [b"jackpot", pool.key().as_ref()],
+        bump = pool.jackpot_bump
+    )]
+    /// CHECK: PDA vault owned by this program; it only stores lamports.
+    pub jackpot_vault: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub winner: SystemAccount<'info>,
+    #[account(constraint = winner_entry.round == round.key())]
+    pub winner_entry: Account<'info, Entry>,
+    #[account(mut)]
+    pub jackpot_winner: SystemAccount<'info>,
+    #[account(constraint = jackpot_entry.round == round.key())]
+    pub jackpot_entry: Account<'info, Entry>,
+    #[account(mut, address = config.treasury)]
+    pub treasury: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct RefundEntryAfterTimeout<'info> {
     #[account(mut)]
     pub player: SystemAccount<'info>,
@@ -780,6 +1098,39 @@ impl Round {
 }
 
 #[account]
+pub struct RoundRandomness {
+    pub round: Pubkey,
+    pub provider: RandomnessProvider,
+    pub status: RandomnessStatus,
+    pub request: Pubkey,
+    pub randomness_seed: [u8; 32],
+    pub randomness_value: [u8; 32],
+    pub randomness_requested_at: i64,
+    pub randomness_fulfilled_at: i64,
+    pub bump: u8,
+}
+
+impl RoundRandomness {
+    pub const LEN: usize = 32 + 1 + 1 + 32 + 32 + 32 + 8 + 8 + 1;
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+pub enum RandomnessProvider {
+    CommitRevealDemo,
+    OraoVrf,
+    FutureProvider,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+pub enum RandomnessStatus {
+    NotRequested,
+    Requested,
+    Fulfilled,
+    Settled,
+    RefundMode,
+}
+
+#[account]
 pub struct Entry {
     pub round: Pubkey,
     pub player: Pubkey,
@@ -839,6 +1190,106 @@ fn derive_round_randomness(round_key: &Pubkey, total_tickets: u64, reveal: &[u8;
         reveal,
     ])
     .to_bytes()
+}
+
+fn derive_orao_randomness_seed(
+    round_key: &Pubkey,
+    pool_key: &Pubkey,
+    round_id: u64,
+    total_tickets: u64,
+    entrant_count: u32,
+    request_slot: u64,
+) -> [u8; 32] {
+    hashv(&[
+        b"luckyme-orao-vrf-seed",
+        round_key.as_ref(),
+        pool_key.as_ref(),
+        &round_id.to_le_bytes(),
+        &total_tickets.to_le_bytes(),
+        &entrant_count.to_le_bytes(),
+        &request_slot.to_le_bytes(),
+    ])
+    .to_bytes()
+}
+
+fn orao_randomness_request_address(seed: &[u8; 32]) -> Pubkey {
+    Pubkey::find_program_address(&[ORAO_RANDOMNESS_ACCOUNT_SEED, seed], &ORAO_VRF_PROGRAM_ID).0
+}
+
+fn derive_provider_round_randomness(
+    round_key: &Pubkey,
+    total_tickets: u64,
+    provider_randomness: &[u8; 64],
+) -> [u8; 32] {
+    hashv(&[
+        b"luckyme-provider-round-randomness",
+        round_key.as_ref(),
+        &total_tickets.to_le_bytes(),
+        provider_randomness.as_ref(),
+    ])
+    .to_bytes()
+}
+
+struct OraoFulfilledRandomness {
+    client: Pubkey,
+    seed: [u8; 32],
+    randomness: [u8; 64],
+}
+
+fn parse_orao_v2_fulfilled_randomness(data: &[u8]) -> Result<OraoFulfilledRandomness> {
+    const DISCRIMINATOR_LEN: usize = 8;
+    const VARIANT_LEN: usize = 1;
+    const PUBKEY_LEN: usize = 32;
+    const SEED_LEN: usize = 32;
+    const RANDOMNESS_LEN: usize = 64;
+    const FULFILLED_VARIANT: u8 = 1;
+    const FULFILLED_LEN: usize =
+        DISCRIMINATOR_LEN + VARIANT_LEN + PUBKEY_LEN + SEED_LEN + RANDOMNESS_LEN;
+
+    require!(
+        data.len() >= FULFILLED_LEN,
+        LuckyMeError::InvalidRandomnessProviderAccount
+    );
+
+    let expected_discriminator = account_discriminator(b"account:RandomnessV2");
+    require!(
+        data[..DISCRIMINATOR_LEN] == expected_discriminator,
+        LuckyMeError::InvalidRandomnessProviderAccount
+    );
+    require!(
+        data[DISCRIMINATOR_LEN] == FULFILLED_VARIANT,
+        LuckyMeError::RandomnessNotFulfilled
+    );
+
+    let mut cursor = DISCRIMINATOR_LEN + VARIANT_LEN;
+
+    let mut client = [0_u8; PUBKEY_LEN];
+    client.copy_from_slice(&data[cursor..cursor + PUBKEY_LEN]);
+    cursor += PUBKEY_LEN;
+
+    let mut seed = [0_u8; SEED_LEN];
+    seed.copy_from_slice(&data[cursor..cursor + SEED_LEN]);
+    cursor += SEED_LEN;
+
+    let mut randomness = [0_u8; RANDOMNESS_LEN];
+    randomness.copy_from_slice(&data[cursor..cursor + RANDOMNESS_LEN]);
+    require!(
+        randomness.iter().any(|byte| *byte != 0),
+        LuckyMeError::RandomnessNotFulfilled
+    );
+
+    Ok(OraoFulfilledRandomness {
+        client: Pubkey::new_from_array(client),
+        seed,
+        randomness,
+    })
+}
+
+fn account_discriminator(seed: &[u8]) -> [u8; 8] {
+    let hash = hashv(&[seed]).to_bytes();
+    let mut discriminator = [0_u8; 8];
+    discriminator.copy_from_slice(&hash[..8]);
+    discriminator
 }
 
 fn transfer_lamports<'info>(
@@ -915,6 +1366,14 @@ pub enum LuckyMeError {
     NothingToRefund,
     #[msg("Round already has entries")]
     RoundHasEntries,
+    #[msg("Invalid randomness provider")]
+    InvalidRandomnessProvider,
+    #[msg("Invalid randomness status")]
+    InvalidRandomnessStatus,
+    #[msg("Invalid randomness provider account")]
+    InvalidRandomnessProviderAccount,
+    #[msg("Provider randomness is not fulfilled")]
+    RandomnessNotFulfilled,
 }
 
 #[cfg(test)]
@@ -952,5 +1411,63 @@ mod tests {
         };
 
         assert!(round_is_refund_mode(&round));
+    }
+
+    #[test]
+    fn derives_orao_request_pda_from_seed() {
+        let round = Pubkey::new_unique();
+        let pool = Pubkey::new_unique();
+        let seed = derive_orao_randomness_seed(&round, &pool, 9, 123, 4, 456);
+        let expected = Pubkey::find_program_address(
+            &[ORAO_RANDOMNESS_ACCOUNT_SEED, &seed],
+            &ORAO_VRF_PROGRAM_ID,
+        )
+        .0;
+
+        assert_eq!(orao_randomness_request_address(&seed), expected);
+    }
+
+    #[test]
+    fn parses_fulfilled_orao_v2_randomness() {
+        let client = Pubkey::new_unique();
+        let seed = [7_u8; 32];
+        let mut randomness = [0_u8; 64];
+        randomness[0] = 11;
+        randomness[63] = 99;
+
+        let data = fulfilled_orao_v2_account_data(client, seed, randomness);
+        let parsed = parse_orao_v2_fulfilled_randomness(&data).unwrap();
+
+        assert_eq!(parsed.client, client);
+        assert_eq!(parsed.seed, seed);
+        assert_eq!(parsed.randomness, randomness);
+    }
+
+    #[test]
+    fn rejects_pending_orao_v2_randomness() {
+        let client = Pubkey::new_unique();
+        let seed = [9_u8; 32];
+        let mut data = Vec::new();
+        data.extend_from_slice(&account_discriminator(b"account:RandomnessV2"));
+        data.push(0);
+        data.extend_from_slice(client.as_ref());
+        data.extend_from_slice(&seed);
+        data.extend_from_slice(&0_u32.to_le_bytes());
+
+        assert!(parse_orao_v2_fulfilled_randomness(&data).is_err());
+    }
+
+    fn fulfilled_orao_v2_account_data(
+        client: Pubkey,
+        seed: [u8; 32],
+        randomness: [u8; 64],
+    ) -> Vec<u8> {
+        let mut data = Vec::new();
+        data.extend_from_slice(&account_discriminator(b"account:RandomnessV2"));
+        data.push(1);
+        data.extend_from_slice(client.as_ref());
+        data.extend_from_slice(&seed);
+        data.extend_from_slice(&randomness);
+        data
     }
 }

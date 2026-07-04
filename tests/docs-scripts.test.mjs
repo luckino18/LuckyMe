@@ -16,6 +16,8 @@ const docs = [
   "app-seeker/README.md",
   "docs/devnet-checklist.md",
   "docs/manual-settlement.md",
+  "docs/randomness-provider-investigation.md",
+  "docs/randomness.md",
   "docs/mainnet-readiness.md",
   "docs/audit-closure.md",
   "docs/store-readiness.md",

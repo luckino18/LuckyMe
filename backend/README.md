@@ -18,6 +18,7 @@ funds, generate production randomness, or hold private keys.
 ANCHOR_PROVIDER_URL=https://api.devnet.solana.com
 LUCKYME_RELEASE_MODE=DEVNET_STORE_DEMO
 LUCKYME_RANDOMNESS_MODE=commit_reveal_demo
+LUCKYME_ORAO_PROGRAM_ID=VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y
 HOST=127.0.0.1
 CORS_ORIGIN=*
 RATE_LIMIT_WINDOW_MS=60000
@@ -33,8 +34,10 @@ Read/build/submit-relay paths use a read-only Anchor wallet and do not read
 ## Production/Mainnet Guards
 
 - `DEVNET_STORE_DEMO` refuses mainnet RPC.
-- `MAINNET_BETA_CANDIDATE` refuses to start unless production randomness is
-  enabled.
+- `MAINNET_BETA_CANDIDATE` refuses to start unless
+  `LUCKYME_RANDOMNESS_MODE=orao_vrf` and production randomness are enabled.
+- `LUCKYME_ORAO_PROGRAM_ID` must match the ORAO program id compiled into the
+  on-chain verifier; no runtime provider swap is allowed.
 - Mainnet RPC requires all gates:
   `LUCKYME_ENABLE_MAINNET=true`, `LUCKYME_LEGAL_SIGNOFF=true`,
   `LUCKYME_PRODUCTION_RANDOMNESS=true`, and
@@ -70,10 +73,17 @@ Useful endpoints:
 - `GET /pools?player=<wallet-public-key>` - includes wallet entry/chance
 - `GET /refunds` - recent refundable abandoned entries
 - `GET /refunds?pool=mini&roundId=9` - specific refund scan
+- `GET /rounds/:round/randomness?pool=mini` - LuckyMe sidecar and ORAO request
+  status
+- `GET /rounds/:pool/:round/randomness` - same status with pool in the path
 - `GET /simulate?pool=normal&seed=demo` - deterministic economics simulation
 - `POST /transactions/buy-tickets` - unsigned simulated `buy_tickets`
 - `POST /transactions/settle-round` - reveal verification and unsigned
-  simulated `settle_round`
+  simulated `settle_round`; available only in `commit_reveal_demo`
+- `POST /transactions/request-randomness` - unsigned simulated
+  `request_randomness` sidecar transaction for `orao_vrf`
+- `POST /transactions/settle-provider-round` - unsigned simulated
+  `settle_round_with_provider_randomness` after ORAO fulfillment
 - `POST /transactions/refund-entry` - unsigned simulated
   `refund_entry_after_timeout`; optional `feePayer` can pay cranking fees
 - `POST /transactions/submit` - disabled by default, devnet relay only
@@ -102,6 +112,39 @@ Build settlement transaction:
 curl -s -X POST http://localhost:8788/transactions/settle-round \
   -H 'content-type: application/json' \
   -d '{"settler":"<wallet-paying-fees>","pool":"normal","roundId":1,"randomnessReveal":"<32-byte-hex-reveal>"}'
+```
+
+Build ORAO sidecar request transaction:
+
+```bash
+LUCKYME_RANDOMNESS_MODE=orao_vrf npm run backend:start
+
+curl -s -X POST http://localhost:8788/transactions/request-randomness \
+  -H 'content-type: application/json' \
+  -d '{"keeper":"<wallet-paying-fees>","pool":"normal","roundId":1}'
+```
+
+Read provider randomness status:
+
+```bash
+curl -s http://localhost:8788/rounds/normal/1/randomness
+```
+
+Build provider settlement transaction after ORAO fulfillment:
+
+```bash
+curl -s -X POST http://localhost:8788/transactions/settle-provider-round \
+  -H 'content-type: application/json' \
+  -d '{"settler":"<wallet-paying-fees>","pool":"normal","roundId":1}'
+```
+
+The public API does not request ORAO with a private key. ORAO request,
+fulfillment polling, and provider settlement execution are keeper operations:
+
+```bash
+LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=normal ROUND_ID=1 npm run randomness:request
+LUCKYME_RANDOMNESS_MODE=orao_vrf POOL=normal ROUND_ID=1 npm run randomness:status
+LUCKYME_RANDOMNESS_MODE=orao_vrf DRY_RUN=true POOL=normal ROUND_ID=1 npm run randomness:settle
 ```
 
 ## Refund Cranking

@@ -21,7 +21,42 @@ test("backend refuses mainnet beta candidate without production randomness", asy
   });
 
   assert.notEqual(result.code, 0);
-  assert.match(result.output, /MAINNET_BETA_CANDIDATE requires production randomness/);
+  assert.match(result.output, /MAINNET_BETA_CANDIDATE requires LUCKYME_RANDOMNESS_MODE=orao_vrf/);
+});
+
+test("backend refuses mainnet beta candidate on commit reveal", async () => {
+  const result = await runServerExpectingExit({
+    ANCHOR_PROVIDER_URL: "https://api.devnet.solana.com",
+    LUCKYME_RELEASE_MODE: "MAINNET_BETA_CANDIDATE",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    LUCKYME_RANDOMNESS_MODE: "commit_reveal_demo",
+  });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.output, /LUCKYME_RANDOMNESS_MODE=orao_vrf/);
+});
+
+test("backend accepts ORAO randomness mode for public config", async () => {
+  const port = await getFreePort();
+  const child = startServer({
+    PORT: String(port),
+    ANCHOR_PROVIDER_URL: "http://127.0.0.1:1",
+    LUCKYME_RANDOMNESS_MODE: "orao_vrf",
+  });
+
+  try {
+    await waitForOutput(child, /LuckyMe dev API listening/);
+    const response = await fetch(`http://127.0.0.1:${port}/config`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.randomnessMode, "orao_vrf");
+    assert.equal(payload.randomnessProvider.provider, "orao_vrf");
+    assert.equal(payload.randomnessProvider.failover, "none");
+  } finally {
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  }
 });
 
 test("backend production mode requires strict CORS", async () => {
@@ -72,7 +107,9 @@ test("backend exposes safe public config", async () => {
 
     assert.equal(response.status, 200);
     assert.equal(payload.mode, "DEVNET_STORE_DEMO");
+    assert.equal(payload.releaseMode, "DEVNET_STORE_DEMO");
     assert.equal(payload.randomnessMode, "commit_reveal_demo");
+    assert.deepEqual(payload.supportedRandomnessModes, ["commit_reveal_demo", "orao_vrf"]);
     assert.equal(payload.economics.houseFeeBps, 100);
     assert.equal(payload.economics.jackpotBps, 100);
     assert.equal(payload.economics.mainPrizeBps, 9800);
