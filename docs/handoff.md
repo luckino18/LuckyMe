@@ -8,8 +8,7 @@ Last updated: 2026-07-04 21:44 CEST
 - Branch: `main`
 - Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
 - Latest code/test commit: `0ed0bbc Prepare devnet store demo readiness`
-- CI: pending after push for the latest handoff; local verification is listed
-  below.
+- CI: https://github.com/luckino18/LuckyMe/actions/runs/28717634248
 - Devnet pre-release:
   https://github.com/luckino18/LuckyMe/releases/tag/v0.1.3-devnet
 
