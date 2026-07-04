@@ -272,6 +272,65 @@ Devnet Mini Round 8 settlement result:
 - local screenshot:
   `/Users/victor/Documents/Codex/2026-07-04/hai-2/work/luckyme-screens/round8-after-settle-refresh-top.png`
 
+Devnet duplicate-entry fix deployment and Mini Round 9 result:
+
+- Code commit deployed/tested: `7881964 Reject duplicate round entries`.
+- Program: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`.
+- Upgrade authority / keeper:
+  `9DvCoJTwdf8CcQUPiLBWEu5Zx4GiYCg8G7LwKaZtZbFc`.
+- First deploy attempt did not modify the program. Preflight rejected automatic
+  extension because the new binary was 656 bytes larger, while the upgradeable
+  loader required a minimum extension of 10240 bytes.
+- ProgramData was extended by 10240 bytes.
+- extend tx:
+  `3vKKVupDodAXWmH7CybyJ6ttVybpLhza7isQHnHUHPCE8ZZ7CxdxcbSUMb4FiaoAJwmNB8281PyZx6DyexFPaMMp`
+- deploy tx:
+  `2MjwdMKSxNq9W1thVtk1e4cLMwBqAr6SFHmc8fzixmNbeyDw2ikw8UrBPAHYm7vGRCmDDRTR3haUSsFRRJgznaKP`
+- program deployed slot: `473957836`.
+- ProgramData length after deploy: `287704` bytes.
+
+Mini Round 9 open:
+
+- open tx:
+  `3pPxvKmXLD1FTLDSZzXhdMgYsvjAMgwAbbw2xiNKa6eEKy38wkTeThpi4xCkENvU3AtqGaQyBpYDN462cS5TudTM`
+- round:
+  `FgUizGeaU1pCxHWwnbhfRHK6amUYx3BC2atzG8yZ1ADu`
+- commitment:
+  `14ffecd821bf8adc235161851486d1f0cb533727578dbb9222514707710adbff`
+- reveal:
+  `1c9edf44b8f05a194f6235c3acf3bddd7315fdda15cb00ca7a9e831b50aa999e`
+- pre-send simulation: `ok`, `11549` compute units.
+
+Mini Round 9 buy and duplicate-entry test:
+
+- The user manually confirmed the 1-ticket buy in Phantom.
+- buy tx:
+  `1Ghas7CkvpgLcVhDvzQdoKYKUPup6ee3sHKyAdpKMFUuPWNQgDE33Z1HsWwJfmmBkkWAR7Btzgkw4sjen7zh3sb`
+- entry:
+  `2PFw1E8knQ7Kxk8cDTXLYvFkhSR8ToQGgNBguAVBuJ8f`
+- `totalTickets: 1`, `totalLamports: 5000000`.
+- Backend duplicate build test returned:
+  `409 already_entered_round`.
+- Direct on-chain duplicate-buy simulation returned Anchor custom error:
+  `6019 AlreadyEnteredRound`.
+
+Mini Round 9 settlement:
+
+- settlement tx:
+  `2X8t7cMBpwTofb4GxGbsKF8GPwBpDwvWbzkBiPwer6mXtgJQiJjmKsmnw2uYKuMG1e45QNwpdVCvKoQqwGzHyZsL`
+- pre-send simulation: `ok`, `14371` compute units.
+- round is now `settled: true`.
+- winner:
+  `EdWNHnbG1iQtaZ5BzZkzjsHopjfaQiB8Dzw1sRevrLHW`.
+- jackpot did not trigger.
+- Mini jackpot is now `0.0003 SOL`.
+- Final checked balances:
+  - player wallet: `0.494312 SOL`
+  - keeper wallet: `2.94513418 SOL`
+- Operational note: aggressive polling against the public devnet RPC caused
+  temporary `429 Too Many Requests` responses and one backend restart during the
+  test. Use slower polling or a dedicated RPC for repeated phone/backend tests.
+
 ## Safety Notes
 
 LuckyMe has lottery/gambling mechanics. Do not launch with real funds without:
