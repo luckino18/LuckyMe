@@ -54,7 +54,7 @@ backend/            Local dev API for pool metadata and simulations
 app-seeker/         Solana Seeker app screen prototype
 idl/                Public client-facing Anchor IDL
 sdk/                Public generated TypeScript types
-docs/               Deployment and launch checklists
+docs/               Deployment, settlement, and launch checklists
 ```
 
 ## Local Verification
@@ -129,6 +129,18 @@ The current MVP uses commit-reveal:
 This is better than backend RNG, but it is not production-complete. The reveal provider can withhold an unfavorable reveal. If the reveal is withheld, the MVP allows each entrant to claim a refund after a 10 minute timeout, preventing permanent pool-vault lockup for that round. This refund path does not make the randomness fair for mainnet because the reveal provider can still selectively abandon unfavorable rounds.
 
 Before any mainnet launch, the randomness design must use a verifiable source such as Switchboard, ORAO, Pyth Entropy, or a hardened multi-party commit-reveal design with slashing and fallback paths.
+
+## Settlement Tooling
+
+For devnet operations, the backend exposes unsigned transaction builders for:
+
+- `buy_tickets`
+- `settle_round`
+- `refund_entry_after_timeout`
+
+`POST /transactions/settle-round` accepts a reveal, scans the on-chain `Entry`
+accounts for the round, computes the winner and jackpot entry, and returns a
+simulated unsigned transaction. See `docs/manual-settlement.md`.
 
 ## Launch Gates
 

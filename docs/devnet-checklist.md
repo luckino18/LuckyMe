@@ -44,6 +44,8 @@ The current commit-reveal MVP prevents arbitrary settlement randomness, but the 
   - open round
   - settle round
 - Show exact transaction effects before wallet approval.
+- For manual settlement, use `docs/manual-settlement.md` to verify the reveal,
+  derive `winner_entry`/`jackpot_entry`, and simulate the unsigned transaction.
 
 ## Launch gates
 

@@ -27,6 +27,7 @@ Useful endpoints:
 - `GET /pools?player=<wallet-public-key>` - also includes that wallet's per-round entry and chance when an entry exists
 - `GET /simulate?pool=normal&seed=demo` - deterministic economics simulation
 - `POST /transactions/buy-tickets` - builds an unsigned `buy_tickets` transaction for a player wallet and simulates it with `sigVerify=false`; returns `409 already_entered_round` if that wallet already has tickets in the current round
+- `POST /transactions/settle-round` - verifies a reveal, scans round entries, computes the winner/jackpot accounts, and builds an unsigned simulated `settle_round` transaction for the fee-paying settler wallet
 - `POST /transactions/refund-entry` - builds an unsigned `refund_entry_after_timeout` transaction for a wallet entry after the no-reveal timeout
 - `POST /transactions/submit` - submits a wallet-signed transaction to the configured Anchor provider
 
@@ -58,6 +59,14 @@ Example refund transaction build request:
 curl -s -X POST http://localhost:8788/transactions/refund-entry \
   -H 'content-type: application/json' \
   -d '{"player":"<wallet-public-key>","pool":"normal","roundId":1}'
+```
+
+Example settlement transaction build request:
+
+```bash
+curl -s -X POST http://localhost:8788/transactions/settle-round \
+  -H 'content-type: application/json' \
+  -d '{"settler":"<wallet-paying-fees>","pool":"normal","roundId":1,"randomnessReveal":"<32-byte-hex-reveal>"}'
 ```
 
 The backend must not sign player transactions. The mobile wallet signs the

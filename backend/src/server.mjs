@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import http from "node:http";
 import { URL } from "node:url";
 import { FIXED_POOLS, lamportsToSol, settleRound } from "../../sim/luckyme.mjs";
@@ -15,6 +16,7 @@ import {
   derivePool,
   derivePoolVault,
   deriveRound,
+  u64Le,
 } from "../../scripts/anchor-client.mjs";
 
 const PORT = Number(process.env.PORT ?? 8788);
@@ -121,6 +123,18 @@ const server = http.createServer(async (req, res) => {
     try {
       const payload = await readJson(req);
       return json(res, 200, await buildRefundEntryTransaction(payload));
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "transaction_build_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/transactions/settle-round") {
+    try {
+      const payload = await readJson(req);
+      return json(res, 200, await buildSettleRoundTransaction(payload));
     } catch (error) {
       return json(res, error.status ?? 500, {
         error: error.code ?? "transaction_build_failed",
@@ -453,6 +467,142 @@ async function buildRefundEntryTransaction(payload) {
   };
 }
 
+async function buildSettleRoundTransaction(payload) {
+  const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
+  const roundId = parseRoundId(payload.roundId);
+  const settler = parsePublicKey(payload.settler ?? payload.keeper, "settler");
+  const reveal = parseRevealHex(payload.randomnessReveal ?? payload.reveal);
+  const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
+  const { connection, program, url } = createClient();
+  const configAddress = deriveConfig();
+  const config = await program.account.config.fetch(configAddress);
+  const pool = derivePool(configAddress, poolSpec.id);
+  const poolVault = derivePoolVault(pool);
+  const jackpotVault = deriveJackpotVault(pool);
+  const poolAccount = await program.account.pool.fetch(pool);
+  const round = deriveRound(pool, roundId);
+  const roundAccount = await program.account.round.fetch(round);
+
+  if (roundAccount.settled) {
+    throw httpError(409, "round_settled", "Round is already settled");
+  }
+
+  const endTs = numberFromAnchor(roundAccount.endTs);
+  if (Math.floor(Date.now() / 1000) < endTs) {
+    throw httpError(409, "round_still_open", "Round is still open");
+  }
+
+  const totalTickets = bigintFromAnchor(roundAccount.totalTickets);
+  if (totalTickets === 0n) {
+    throw httpError(409, "empty_round", "Round has no tickets");
+  }
+
+  const expectedCommitment = commitmentForReveal(reveal);
+  const onchainCommitment = Buffer.from(roundAccount.randomnessCommitment);
+  if (!onchainCommitment.equals(expectedCommitment)) {
+    throw httpError(
+      400,
+      "invalid_randomness_reveal",
+      "Reveal does not match the round commitment",
+    );
+  }
+
+  const entries = await fetchEntriesForRound(program, round);
+  const randomness = deriveRoundRandomness(round, totalTickets, reveal);
+  const winningTicket = randomMod(randomness, 0, totalTickets);
+  const winnerEntry = findEntryByTicket(entries, winningTicket, "winner");
+  const jackpotRoll = randomMod(
+    randomness,
+    8,
+    bigintFromAnchor(config.jackpotOddsDenominator),
+  );
+  const jackpotTriggered = jackpotRoll === 0n;
+  const jackpotTicket = randomMod(randomness, 16, totalTickets);
+  const jackpotEntry = findEntryByTicket(entries, jackpotTicket, "jackpot");
+
+  const totalLamports = bigintFromAnchor(roundAccount.totalLamports);
+  const houseFee = bpsAmount(totalLamports, bigintFromAnchor(config.houseFeeBps));
+  const jackpotAdd = bpsAmount(totalLamports, bigintFromAnchor(config.jackpotBps));
+  const mainPrize = totalLamports - houseFee - jackpotAdd;
+  const jackpotPayout = jackpotTriggered
+    ? bigintFromAnchor(poolAccount.jackpotLamports) + jackpotAdd
+    : 0n;
+
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  const transaction = await program.methods
+    .settleRound([...reveal])
+    .accounts({
+      keeper: settler,
+      config: configAddress,
+      pool,
+      round,
+      poolVault,
+      jackpotVault,
+      winner: winnerEntry.player,
+      winnerEntry: winnerEntry.address,
+      jackpotWinner: jackpotEntry.player,
+      jackpotEntry: jackpotEntry.address,
+      treasury: config.treasury,
+      systemProgram: SystemProgram.programId,
+    })
+    .transaction();
+
+  transaction.feePayer = settler;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+
+  const transactionBase64 = transaction
+    .serialize({ requireAllSignatures: false, verifySignatures: false })
+    .toString("base64");
+  const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
+
+  return {
+    clusterUrl: url,
+    programId: PROGRAM_ID.toBase58(),
+    transactionBase64,
+    summary: {
+      action: "settle_round",
+      pool: poolSlug,
+      roundId,
+      settler: settler.toBase58(),
+      reveal: reveal.toString("hex"),
+      randomness: randomness.toString("hex"),
+      totalTickets: totalTickets.toString(),
+      totalLamports: totalLamports.toString(),
+      totalSol: lamportsToSol(totalLamports),
+      winnerTicket: winningTicket.toString(),
+      winner: winnerEntry.player.toBase58(),
+      jackpotRoll: jackpotRoll.toString(),
+      jackpotTriggered,
+      jackpotTicket: jackpotTicket.toString(),
+      jackpotWinner: jackpotTriggered ? jackpotEntry.player.toBase58() : null,
+      mainPrizeLamports: mainPrize.toString(),
+      mainPrizeSol: lamportsToSol(mainPrize),
+      houseFeeLamports: houseFee.toString(),
+      houseFeeSol: lamportsToSol(houseFee),
+      jackpotAddLamports: jackpotAdd.toString(),
+      jackpotAddSol: lamportsToSol(jackpotAdd),
+      jackpotPayoutLamports: jackpotPayout.toString(),
+      jackpotPayoutSol: lamportsToSol(jackpotPayout),
+      accounts: {
+        config: configAddress.toBase58(),
+        pool: pool.toBase58(),
+        round: round.toBase58(),
+        poolVault: poolVault.toBase58(),
+        jackpotVault: jackpotVault.toBase58(),
+        winner: winnerEntry.player.toBase58(),
+        winnerEntry: winnerEntry.address.toBase58(),
+        jackpotWinner: jackpotEntry.player.toBase58(),
+        jackpotEntry: jackpotEntry.address.toBase58(),
+        treasury: config.treasury.toBase58(),
+      },
+      entriesScanned: entries.length,
+    },
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    simulation,
+  };
+}
+
 async function simulateUnsignedTransaction(connection, transactionBase64) {
   try {
     const result = await connection._rpcRequest("simulateTransaction", [
@@ -589,6 +739,35 @@ async function fetchUserEntry(program, roundAddress, player, totalTickets) {
   }
 }
 
+async function fetchEntriesForRound(program, roundAddress) {
+  const accounts = await program.account.entry.all([
+    {
+      memcmp: {
+        offset: 8,
+        bytes: roundAddress.toBase58(),
+      },
+    },
+  ]);
+
+  return accounts
+    .map(({ publicKey, account }) => {
+      const ticketStart = bigintFromAnchor(account.ticketStart);
+      const ticketCount = bigintFromAnchor(account.ticketCount);
+      return {
+        address: publicKey,
+        player: account.player,
+        ticketStart,
+        ticketCount,
+        ticketEndExclusive: ticketStart + ticketCount,
+        lamports: bigintFromAnchor(account.lamports),
+      };
+    })
+    .filter((entry) => entry.ticketCount > 0n)
+    .sort((left, right) =>
+      left.ticketStart < right.ticketStart ? -1 : left.ticketStart > right.ticketStart ? 1 : 0,
+    );
+}
+
 function buildStaticPools() {
   return ONCHAIN_POOLS.map((poolSpec) => {
     const slug = poolSpec.label.toLowerCase();
@@ -657,6 +836,9 @@ function parseTicketCount(value) {
 
 function parseRoundId(value, fallback) {
   if (value === undefined || value === null || value === "") {
+    if (fallback === undefined) {
+      throw httpError(400, "invalid_round_id", "roundId must be a positive integer");
+    }
     return fallback;
   }
 
@@ -666,6 +848,18 @@ function parseRoundId(value, fallback) {
   }
 
   return roundId;
+}
+
+function parseRevealHex(value) {
+  const normalized = String(value ?? "").trim().replace(/^0x/i, "");
+  if (!/^[0-9a-fA-F]{64}$/.test(normalized)) {
+    throw httpError(
+      400,
+      "invalid_randomness_reveal",
+      "randomnessReveal must be a 32-byte hex string",
+    );
+  }
+  return Buffer.from(normalized, "hex");
 }
 
 function parsePublicKey(value, field) {
@@ -721,6 +915,46 @@ function serializeBigInts(value) {
       typeof inner === "bigint" ? inner.toString() : inner,
     ),
   );
+}
+
+function commitmentForReveal(reveal) {
+  return createHash("sha256")
+    .update(Buffer.from("luckyme-commit"))
+    .update(reveal)
+    .digest();
+}
+
+function deriveRoundRandomness(roundAddress, totalTickets, reveal) {
+  return createHash("sha256")
+    .update(Buffer.from("luckyme-round-randomness"))
+    .update(roundAddress.toBuffer())
+    .update(u64Le(totalTickets))
+    .update(reveal)
+    .digest();
+}
+
+function randomMod(randomness, offset, modulo) {
+  return randomness.readBigUInt64LE(offset) % modulo;
+}
+
+function findEntryByTicket(entries, ticket, label) {
+  const entry = entries.find((item) =>
+    ticket >= item.ticketStart && ticket < item.ticketEndExclusive,
+  );
+
+  if (!entry) {
+    throw httpError(
+      409,
+      `${label}_entry_not_found`,
+      `No ${label} entry contains ticket ${ticket.toString()}`,
+    );
+  }
+
+  return entry;
+}
+
+function bpsAmount(totalLamports, bps) {
+  return (totalLamports * bps) / 10_000n;
 }
 
 function getRefundState(round) {

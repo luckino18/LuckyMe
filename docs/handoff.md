@@ -1,6 +1,6 @@
 # LuckyMe Handoff
 
-Last updated: 2026-07-04 17:02 CEST
+Last updated: 2026-07-04 19:14 CEST
 
 ## Repository
 
@@ -20,6 +20,7 @@ LuckyMe has:
 - Expo/React Native Seeker app
 - Mobile Wallet Adapter join flow
 - in-app transaction review before wallet signing
+- devnet manual settlement/refund tooling
 
 The Seeker app now asks the backend to build and simulate an unsigned
 `buy_tickets` transaction, then shows a review panel with pool, round, tickets,
@@ -374,6 +375,24 @@ External audit follow-up: no-reveal recovery and backend hardening:
   randomness. The refund path prevents funds from being permanently stuck, but
   it does not stop selective reveal withholding. Mainnet still requires
   VRF/Entropy or a bonded multi-party reveal design.
+
+External audit follow-up: settlement tooling and security policy:
+
+- Public GitHub `main` was verified at `8ea0192`; the auditor's latest text
+  still described the old no-recovery/backend-hardening state.
+- Added backend builder `POST /transactions/settle-round`.
+- The settlement builder accepts a fee-paying `settler`, pool slug, round id,
+  and 32-byte reveal; verifies the commitment; scans on-chain `Entry` accounts;
+  derives the winner/jackpot ticket using the same byte offsets as the program;
+  and returns the correct `winner_entry`, `jackpot_entry`, payouts, simulation,
+  and unsigned transaction.
+- Added `docs/manual-settlement.md` with reproducible settlement and refund
+  commands.
+- Expanded `SECURITY.md` with supported scope, sensitive reporting guidance,
+  severity definitions, response targets, and incident-response steps.
+- Remaining mainnet blockers are unchanged: production VRF/Entropy or bonded
+  multi-party randomness, legal review, multisig authorities, production
+  indexer/monitoring, and CI that runs full Anchor local-validator tests.
 
 ## Safety Notes
 
