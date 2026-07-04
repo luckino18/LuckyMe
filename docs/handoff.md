@@ -1,13 +1,13 @@
 # LuckyMe Handoff
 
-Last updated: 2026-07-04 20:04 CEST
+Last updated: 2026-07-04 20:24 CEST
 
 ## Repository
 
 - Public repo: https://github.com/luckino18/LuckyMe
 - Branch: `main`
 - Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
-- Latest code/test commit: `9fa1f13 Add Anchor localnet refund tests`
+- Latest code/test commit: `2cbf191 Close audit hardening gaps`
 - CI: https://github.com/luckino18/LuckyMe/actions/runs/28714850371
 - Devnet pre-release:
   https://github.com/luckino18/LuckyMe/releases/tag/v0.1.1-devnet
@@ -18,7 +18,8 @@ LuckyMe has:
 
 - Anchor/Solana program for fixed Mini, Normal, and High pools
 - deterministic local simulator tests
-- backend dev API for pool state and wallet transaction build/submit
+- backend dev API for pool state, wallet transaction builders, optional submit
+  relay, settlement tooling, and refund discovery
 - Expo/React Native Seeker app
 - Mobile Wallet Adapter join flow
 - in-app transaction review before wallet signing
@@ -409,6 +410,59 @@ External audit follow-up: Anchor localnet tests:
   refund mode starts, duplicate refund rejection, and final vault balance.
 - CI installs Solana CLI and Anchor CLI, runs `anchor build`, and runs the
   Anchor localnet integration test.
+
+External audit follow-up: hardening closure matrix:
+
+- Code/test commit: `2cbf191 Close audit hardening gaps`.
+- Added `docs/audit-closure.md` so every auditor finding has an explicit status:
+  fixed in repo, mitigated for devnet, or external blocker.
+- Added `docs/mainnet-readiness.md` with non-negotiable evidence gates for
+  production randomness, legal/compliance, multisig authorities, production
+  backend, security program, indexer/cranking, and independent audit.
+- Added Anchor events for config initialization, pool initialization, round
+  opening, ticket purchase, settlement, refund, and pause changes.
+- Regenerated public `idl/luckyme.json` and `sdk/luckyme.ts` with the event
+  definitions.
+- Backend no longer reads the local wallet for read/build/submit-relay paths;
+  it uses `createClient({ requireSigner: false })`.
+- Backend defaults are now safer:
+  - `HOST=127.0.0.1`
+  - `ENABLE_TRANSACTION_SUBMIT=false`
+  - mainnet RPC refused unless mainnet, legal, production randomness, and
+    multisig signoff env vars are all set
+  - production mode refuses wildcard CORS, submit relay, and direct
+    `HOST=0.0.0.0`
+- Added wallet/subject rate limiting around transaction builders in addition to
+  IP-level rate limiting.
+- Added `GET /refunds` for abandoned-round refund discovery.
+- Added optional refund `feePayer`, so a cranker can pay transaction fees while
+  the program still refunds only `entry.player`.
+- Added `scripts/refund-cranker.mjs` and `npm run refund:crank` for keeper-run
+  refund cranking. `DRY_RUN=true` prints refundable entries without sending.
+- Added backend runtime guard tests:
+  - mainnet RPC refused without signoffs
+  - production wildcard CORS refused
+  - transaction submit relay disabled by default
+- Updated README, backend README, Seeker README, devnet checklist, manual
+  settlement/refund docs, and security policy to match the new behavior.
+- Important: this does not solve production randomness, legal, or multisig by
+  declaration. Those remain explicit external mainnet blockers.
+
+Local verification for `2cbf191`:
+
+```bash
+node --check backend/src/server.mjs
+node --check scripts/refund-cranker.mjs
+node --check tests/backend-config.test.mjs
+npm test
+cargo check
+cargo test
+npm run app:typecheck
+npm --prefix app-seeker run doctor
+NO_DNA=1 anchor build --provider.cluster localnet
+npm run test:anchor
+git diff --check
+```
 
 ## Safety Notes
 
