@@ -23,7 +23,7 @@ Useful endpoints:
 
 - `GET /health` - process health
 - `GET /program` - current program/config/pool state from the configured Anchor provider
-- `GET /pools` - pool list, using on-chain data when available and static metadata as fallback
+- `GET /pools` - pool list, config, vault addresses, and recent rounds, using on-chain data when available and static metadata as fallback
 - `GET /simulate?pool=normal&seed=demo` - deterministic economics simulation
 - `POST /transactions/buy-tickets` - builds an unsigned `buy_tickets` transaction for a player wallet and simulates it with `sigVerify=false`
 - `POST /transactions/submit` - submits a wallet-signed transaction to the configured Anchor provider

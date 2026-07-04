@@ -10,6 +10,7 @@ import {
   FlatList,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -26,14 +27,22 @@ declare const process:
 type RoundState = {
   address?: string;
   roundId: number;
-  startTs: number;
-  endTs: number;
-  totalTickets: string;
+  startTs?: number;
+  endTs?: number;
+  totalTickets?: string;
   totalSol?: string;
-  entrantCount: number;
-  settled: boolean;
-  jackpotTriggered: boolean;
+  entrantCount?: number;
+  settled?: boolean;
+  jackpotTriggered?: boolean;
   winner?: string;
+  jackpotWinner?: string;
+  missing?: boolean;
+};
+
+type PoolAddresses = {
+  pool?: string;
+  poolVault?: string;
+  jackpotVault?: string;
 };
 
 type Pool = {
@@ -46,7 +55,14 @@ type Pool = {
   mainPrizeBps?: number;
   houseFeeBps?: number;
   jackpotBps?: number;
+  addresses?: PoolAddresses;
   activeRound?: RoundState | null;
+  recentRounds?: RoundState[];
+};
+
+type ConfigState = {
+  treasury?: string;
+  jackpotOddsDenominator?: number;
 };
 
 type PoolsResponse = {
@@ -56,6 +72,7 @@ type PoolsResponse = {
     clusterUrl?: string;
     programId?: string;
   };
+  config?: ConfigState | null;
   pools?: Pool[];
 };
 
@@ -150,6 +167,20 @@ function formatBps(value: number | undefined) {
   return `${(value / 100).toFixed(value % 100 === 0 ? 0 : 2)}%`;
 }
 
+function formatBpsShare(totalSol: string | undefined, bps: number | undefined) {
+  if (totalSol === undefined || bps === undefined) {
+    return "--";
+  }
+
+  const amount = Number(totalSol);
+
+  if (!Number.isFinite(amount)) {
+    return "--";
+  }
+
+  return `${formatSol((amount * bps) / 10_000)} SOL`;
+}
+
 function formatRemaining(endTs: number | undefined, now: number) {
   if (!endTs) {
     return "--";
@@ -189,6 +220,22 @@ function shortAddress(address: string | undefined) {
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
+function roundOutcome(round: RoundState, now: number) {
+  if (round.missing) {
+    return "Missing";
+  }
+
+  if (round.settled) {
+    return "Settled";
+  }
+
+  if (typeof round.endTs === "number" && round.endTs * 1000 <= now) {
+    return "Ready";
+  }
+
+  return "Open";
+}
+
 export function LuckyMeScreen() {
   const { account, connect, disconnect, signTransaction } = useMobileWallet();
   const [pools, setPools] = useState<Pool[]>(FALLBACK_POOLS);
@@ -196,6 +243,7 @@ export function LuckyMeScreen() {
   const [ticketCount, setTicketCount] = useState(1);
   const [source, setSource] = useState("fallback");
   const [clusterUrl, setClusterUrl] = useState<string | undefined>();
+  const [config, setConfig] = useState<ConfigState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,6 +275,7 @@ export function LuckyMeScreen() {
       setPools(payload.pools);
       setSource(payload.source ?? "backend");
       setClusterUrl(payload.onchain?.clusterUrl);
+      setConfig(payload.config ?? null);
       setError(null);
       setSelectedPoolId((current: string) =>
         payload.pools?.some((pool: Pool) => pool.id === current)
@@ -237,6 +286,7 @@ export function LuckyMeScreen() {
       setPools(FALLBACK_POOLS);
       setSource("fallback");
       setClusterUrl(undefined);
+      setConfig(null);
       setError(caught instanceof Error ? caught.message : "Backend unavailable");
       setSelectedPoolId((current: string) =>
         FALLBACK_POOLS.some((pool: Pool) => pool.id === current)
@@ -266,6 +316,10 @@ export function LuckyMeScreen() {
   );
 
   const activeRound = selectedPool.activeRound;
+  const recentRounds = (selectedPool.recentRounds ?? []).filter(
+    (round) => !round.missing,
+  );
+  const transparencyTotalSol = activeRound?.totalSol;
 
   const estimatedChance = useMemo(() => {
     if (!activeRound || activeRound.settled) {
@@ -290,7 +344,7 @@ export function LuckyMeScreen() {
       return "Settled";
     }
 
-    return activeRound.endTs * 1000 <= now ? "Ready" : "Open";
+    return roundOutcome(activeRound, now);
   }, [activeRound, now]);
 
   const roundEnds = activeRound?.settled
@@ -395,7 +449,7 @@ export function LuckyMeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.screen}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.screen}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <View style={styles.headerCopy}>
@@ -512,6 +566,99 @@ export function LuckyMeScreen() {
           </View>
         </View>
 
+        <View style={styles.roundPanel}>
+          <Text style={styles.sectionTitle}>Recent rounds</Text>
+          {recentRounds.length > 0 ? (
+            recentRounds.map((round) => {
+              const outcome = roundOutcome(round, now);
+
+              return (
+                <View key={round.address ?? round.roundId} style={styles.historyItem}>
+                  <View style={styles.historyHeader}>
+                    <Text style={styles.historyRound}>Round {round.roundId}</Text>
+                    <Text
+                      style={[
+                        styles.statusPill,
+                        outcome === "Settled" && styles.statusPillSettled,
+                        outcome === "Ready" && styles.statusPillReady,
+                      ]}
+                    >
+                      {outcome}
+                    </Text>
+                  </View>
+                  <Text style={styles.historyMeta}>
+                    Tickets {round.totalTickets ?? "0"} | Pool{" "}
+                    {formatSol(round.totalSol)} SOL
+                  </Text>
+                  {round.settled ? (
+                    <Text style={styles.historyMeta}>
+                      Winner {shortAddress(round.winner)}
+                    </Text>
+                  ) : (
+                    <Text style={styles.historyMeta}>
+                      Ends {formatRemaining(round.endTs, now)}
+                    </Text>
+                  )}
+                  {round.jackpotTriggered ? (
+                    <Text style={styles.historyMeta}>
+                      Jackpot {shortAddress(round.jackpotWinner)}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.emptyText}>No on-chain rounds yet</Text>
+          )}
+        </View>
+
+        <View style={styles.roundPanel}>
+          <Text style={styles.sectionTitle}>Transparency</Text>
+          <View style={styles.row}>
+            <Text style={styles.label}>Main prize</Text>
+            <Text style={styles.value}>
+              {formatBps(selectedPool.mainPrizeBps)} /{" "}
+              {formatBpsShare(transparencyTotalSol, selectedPool.mainPrizeBps)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>House fee</Text>
+            <Text style={styles.value}>
+              {formatBps(selectedPool.houseFeeBps)} /{" "}
+              {formatBpsShare(transparencyTotalSol, selectedPool.houseFeeBps)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Jackpot add</Text>
+            <Text style={styles.value}>
+              {formatBps(selectedPool.jackpotBps)} /{" "}
+              {formatBpsShare(transparencyTotalSol, selectedPool.jackpotBps)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Treasury</Text>
+            <Text style={styles.value}>{shortAddress(config?.treasury)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Pool vault</Text>
+            <Text style={styles.value}>
+              {shortAddress(selectedPool.addresses?.poolVault)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Jackpot vault</Text>
+            <Text style={styles.value}>
+              {shortAddress(selectedPool.addresses?.jackpotVault)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Jackpot odds</Text>
+            <Text style={styles.value}>
+              1 / {config?.jackpotOddsDenominator ?? "--"}
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.stepper}>
           <Pressable
             style={styles.stepperButton}
@@ -549,7 +696,7 @@ export function LuckyMeScreen() {
             Sent {shortAddress(txSignature)}
           </Text>
         ) : null}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -559,10 +706,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#101316",
   },
-  screen: {
+  scroll: {
     flex: 1,
+  },
+  screen: {
     gap: 18,
     padding: 20,
+    paddingBottom: 28,
   },
   header: {
     gap: 4,
@@ -638,6 +788,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#171b20",
     padding: 16,
   },
+  sectionTitle: {
+    color: "#f7f3ea",
+    fontSize: 17,
+    fontWeight: "800",
+  },
   row: {
     alignItems: "flex-start",
     flexDirection: "row",
@@ -673,6 +828,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
+  historyItem: {
+    borderTopColor: "#2d343b",
+    borderTopWidth: 1,
+    gap: 6,
+    paddingTop: 12,
+  },
+  historyHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  historyRound: {
+    color: "#f7f3ea",
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  historyMeta: {
+    color: "#98a2ad",
+    fontSize: 13,
+  },
+  statusPill: {
+    backgroundColor: "#24404d",
+    borderRadius: 8,
+    color: "#9ee8ff",
+    fontSize: 12,
+    fontWeight: "800",
+    minWidth: 68,
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    textAlign: "center",
+  },
+  statusPillReady: {
+    backgroundColor: "#473c22",
+    color: "#ffd982",
+  },
+  statusPillSettled: {
+    backgroundColor: "#1e4332",
+    color: "#89e5b6",
+  },
+  emptyText: {
+    color: "#98a2ad",
+    fontSize: 13,
+  },
   stepper: {
     alignItems: "center",
     flexDirection: "row",
@@ -703,7 +904,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f2b84b",
     borderRadius: 8,
-    marginTop: "auto",
     paddingVertical: 16,
   },
   joinButtonDisabled: {

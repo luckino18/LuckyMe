@@ -168,6 +168,7 @@ async function getProgramState() {
       const activeRound = currentRound > 0
         ? await fetchRound(program, poolAddress, currentRound)
         : null;
+      const recentRounds = await fetchRecentRounds(program, poolAddress, currentRound);
 
       pools.push({
         id: slug,
@@ -190,6 +191,7 @@ async function getProgramState() {
           jackpotVault: jackpotVault.toBase58(),
         },
         activeRound,
+        recentRounds,
       });
     }
 
@@ -397,6 +399,22 @@ async function fetchRound(program, poolAddress, roundId) {
   }
 }
 
+async function fetchRecentRounds(program, poolAddress, currentRound) {
+  if (currentRound <= 0) {
+    return [];
+  }
+
+  const roundIds = [];
+  const firstRound = Math.max(1, currentRound - 4);
+  for (let roundId = currentRound; roundId >= firstRound; roundId -= 1) {
+    roundIds.push(roundId);
+  }
+
+  return Promise.all(
+    roundIds.map((roundId) => fetchRound(program, poolAddress, roundId)),
+  );
+}
+
 function buildStaticPools() {
   return ONCHAIN_POOLS.map((poolSpec) => {
     const slug = poolSpec.label.toLowerCase();
@@ -416,6 +434,7 @@ function poolPayloadFromStatic(staticPool, poolSpec) {
     mainPrizeBps: 9500,
     houseFeeBps: 300,
     jackpotBps: 200,
+    recentRounds: [],
   };
 }
 

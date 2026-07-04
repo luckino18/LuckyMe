@@ -2,8 +2,9 @@
 
 Mobile-first Android client for Solana Seeker.
 
-The current screen reads pool state from the backend `GET /pools` endpoint and
-falls back to local static values when the backend or RPC is unavailable.
+The current screen reads pool state, recent rounds, vault addresses, and
+treasury metadata from the backend `GET /pools` endpoint. It falls back to local
+static pool values when the backend or RPC is unavailable.
 
 Set `EXPO_PUBLIC_LUCKYME_API_URL` before running the app:
 
