@@ -672,6 +672,11 @@
       "code": 6018,
       "name": "MathOverflow",
       "msg": "Math overflow"
+    },
+    {
+      "code": 6019,
+      "name": "AlreadyEnteredRound",
+      "msg": "Wallet already entered this round"
     }
   ],
   "types": [

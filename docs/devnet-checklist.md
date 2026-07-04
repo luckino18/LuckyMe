@@ -12,6 +12,7 @@
 
 - Build with `anchor build`.
 - Run local validator tests.
+- Confirm duplicate wallet entries in the same round are rejected.
 - Deploy to devnet.
 - Publish and verify the devnet program id.
 - Initialize config with:

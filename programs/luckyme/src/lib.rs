@@ -112,6 +112,10 @@ pub mod luckyme {
         let now = Clock::get()?.unix_timestamp;
         require!(now < ctx.accounts.round.end_ts, LuckyMeError::RoundClosed);
         require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
+        require!(
+            ctx.accounts.entry.ticket_count == 0,
+            LuckyMeError::AlreadyEnteredRound
+        );
 
         let amount = ctx
             .accounts
@@ -177,9 +181,15 @@ pub mod luckyme {
 
     pub fn settle_round(ctx: Context<SettleRound>, randomness_reveal: [u8; 32]) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        require!(now >= ctx.accounts.round.end_ts, LuckyMeError::RoundStillOpen);
+        require!(
+            now >= ctx.accounts.round.end_ts,
+            LuckyMeError::RoundStillOpen
+        );
         require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
-        require!(ctx.accounts.round.total_tickets > 0, LuckyMeError::EmptyRound);
+        require!(
+            ctx.accounts.round.total_tickets > 0,
+            LuckyMeError::EmptyRound
+        );
         require!(
             commitment_for(&randomness_reveal) == ctx.accounts.round.randomness_commitment,
             LuckyMeError::InvalidRandomnessReveal
@@ -517,11 +527,7 @@ fn commitment_for(reveal: &[u8; 32]) -> [u8; 32] {
     hashv(&[b"luckyme-commit".as_ref(), reveal.as_ref()]).to_bytes()
 }
 
-fn derive_round_randomness(
-    round_key: &Pubkey,
-    total_tickets: u64,
-    reveal: &[u8; 32],
-) -> [u8; 32] {
+fn derive_round_randomness(round_key: &Pubkey, total_tickets: u64, reveal: &[u8; 32]) -> [u8; 32] {
     hashv(&[
         b"luckyme-round-randomness",
         round_key.as_ref(),
@@ -597,4 +603,6 @@ pub enum LuckyMeError {
     InsufficientVaultFunds,
     #[msg("Math overflow")]
     MathOverflow,
+    #[msg("Wallet already entered this round")]
+    AlreadyEnteredRound,
 }

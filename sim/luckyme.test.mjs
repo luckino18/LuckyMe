@@ -51,6 +51,22 @@ test("winning chance is proportional to ticket count", () => {
   assert.equal(chanceForPlayer(entries, "large"), 70);
 });
 
+test("a player can only enter a round once", () => {
+  assert.throws(
+    () =>
+      settleRound({
+        ticketPriceLamports: solToLamports("0.01"),
+        entries: [
+          { player: "alice", tickets: 1n },
+          { player: "bob", tickets: 1n },
+          { player: "alice", tickets: 1n },
+        ],
+        randomSeed: "duplicate-entry",
+      }),
+    /player already entered round/,
+  );
+});
+
 test("commit-reveal verification accepts only the committed reveal", () => {
   const commitment = commitmentForReveal("secret-round-42");
 

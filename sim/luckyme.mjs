@@ -30,11 +30,18 @@ export function lamportsToSol(lamports) {
 
 export function buildEntries(rawEntries, ticketPriceLamports) {
   let nextTicket = 0n;
+  const enteredPlayers = new Set();
+
   return rawEntries.map((entry) => {
     const tickets = BigInt(entry.tickets);
     if (tickets <= 0n) {
       throw new Error("tickets must be positive");
     }
+    if (enteredPlayers.has(entry.player)) {
+      throw new Error("player already entered round");
+    }
+    enteredPlayers.add(entry.player);
+
     const built = {
       player: entry.player,
       tickets,

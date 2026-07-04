@@ -189,6 +189,18 @@ User chance fix:
 - local screenshot:
   `/Users/victor/Documents/Codex/2026-07-04/hai-2/work/luckyme-screens/round7-chance-mini.png`
 
+External audit follow-up:
+
+- Fixed duplicate-entry ticket accounting risk by allowing only one buy
+  transaction per wallet per round. A wallet can still buy multiple tickets, but
+  it must choose the count in that first purchase.
+- On-chain `buy_tickets` now rejects duplicate round entries with
+  `AlreadyEnteredRound`.
+- Backend `/transactions/buy-tickets` now rejects duplicate round entries with
+  `409 already_entered_round` before building a transaction.
+- Seeker disables the join controls for the connected wallet after that wallet
+  already has a `userEntry` in the active round.
+
 Devnet Mini Round 8 open result:
 
 - Mini Round 8 was opened on devnet after explicit approval.

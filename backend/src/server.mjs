@@ -271,6 +271,20 @@ async function buildBuyTicketsTransaction(payload) {
   }
 
   const entry = deriveEntry(round, player);
+  const existingEntry = await fetchUserEntry(
+    program,
+    round,
+    player,
+    bigintFromAnchor(roundAccount.totalTickets),
+  );
+  if (existingEntry && BigInt(existingEntry.ticketCount) > 0n) {
+    throw httpError(
+      409,
+      "already_entered_round",
+      "Wallet already entered this round",
+    );
+  }
+
   const ticketPriceLamports = bigintFromAnchor(roundAccount.ticketPriceLamports);
   const amountLamports = ticketPriceLamports * BigInt(ticketCount);
   const latestBlockhash = await connection.getLatestBlockhash("confirmed");

@@ -418,8 +418,12 @@ export function LuckyMeScreen() {
     Boolean(activeRound && !activeRound.settled) &&
     typeof roundEndTs === "number" &&
     roundEndTs * 1000 > now;
+  const userAlreadyEnteredRound =
+    Boolean(walletAddress && activeRound?.userEntry) &&
+    Number(activeRound?.userEntry?.ticketCount ?? 0) > 0;
   const joinDisabled =
     !roundIsOpen ||
+    userAlreadyEnteredRound ||
     source !== "onchain" ||
     loading ||
     refreshing ||
@@ -434,6 +438,8 @@ export function LuckyMeScreen() {
         ? "Review transaction"
         : !roundIsOpen
           ? "No open round"
+          : userAlreadyEnteredRound
+            ? "Already joined"
           : "Join round";
 
   const handlePrimaryAction = useCallback(async () => {
@@ -737,16 +743,24 @@ export function LuckyMeScreen() {
 
         <View style={styles.stepper}>
           <Pressable
-            style={styles.stepperButton}
+            style={[
+              styles.stepperButton,
+              (ticketCount <= 1 || userAlreadyEnteredRound) &&
+                styles.stepperButtonDisabled,
+            ]}
             onPress={() => setTicketCount(Math.max(1, ticketCount - 1))}
-            disabled={ticketCount <= 1}
+            disabled={ticketCount <= 1 || userAlreadyEnteredRound}
           >
             <Text style={styles.stepperText}>-</Text>
           </Pressable>
           <Text style={styles.ticketCount}>{ticketCount}</Text>
           <Pressable
-            style={styles.stepperButton}
+            style={[
+              styles.stepperButton,
+              userAlreadyEnteredRound && styles.stepperButtonDisabled,
+            ]}
             onPress={() => setTicketCount(ticketCount + 1)}
+            disabled={userAlreadyEnteredRound}
           >
             <Text style={styles.stepperText}>+</Text>
           </Pressable>
@@ -1090,6 +1104,10 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: "center",
     width: 48,
+  },
+  stepperButtonDisabled: {
+    backgroundColor: "#3a424b",
+    opacity: 0.7,
   },
   stepperText: {
     color: "#f7f3ea",

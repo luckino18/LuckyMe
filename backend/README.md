@@ -26,7 +26,7 @@ Useful endpoints:
 - `GET /pools` - pool list, config, vault addresses, and recent rounds, using on-chain data when available and static metadata as fallback
 - `GET /pools?player=<wallet-public-key>` - also includes that wallet's per-round entry and chance when an entry exists
 - `GET /simulate?pool=normal&seed=demo` - deterministic economics simulation
-- `POST /transactions/buy-tickets` - builds an unsigned `buy_tickets` transaction for a player wallet and simulates it with `sigVerify=false`
+- `POST /transactions/buy-tickets` - builds an unsigned `buy_tickets` transaction for a player wallet and simulates it with `sigVerify=false`; returns `409 already_entered_round` if that wallet already has tickets in the current round
 - `POST /transactions/submit` - submits a wallet-signed transaction to the configured Anchor provider
 
 The backend reads `ANCHOR_PROVIDER_URL` and `ANCHOR_WALLET`. Defaults:

@@ -678,6 +678,11 @@ export type Luckyme = {
       "code": 6018,
       "name": "mathOverflow",
       "msg": "Math overflow"
+    },
+    {
+      "code": 6019,
+      "name": "alreadyEnteredRound",
+      "msg": "Wallet already entered this round"
     }
   ],
   "types": [

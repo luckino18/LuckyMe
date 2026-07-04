@@ -27,7 +27,7 @@ The first protocol target is deliberately small:
 - jackpot contribution: 2% of the round pool
 - settlement is permissionless once a round has ended and the reveal is available
 
-Each pool has a fixed ticket price. Users buy one or more tickets. The round winner is selected by ticket number, so probability is proportional to tickets bought:
+Each pool has a fixed ticket price. Users buy one or more tickets in a single purchase per wallet per round. The round winner is selected by ticket number, so probability is proportional to tickets bought:
 
 ```text
 player_chance = player_tickets / total_round_tickets
