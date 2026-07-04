@@ -1,4 +1,4 @@
-import { Transaction } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import {
   fromUint8Array,
   toUint8Array,
@@ -77,16 +77,22 @@ type PoolsResponse = {
 };
 
 type BuildBuyTicketsResponse = {
+  clusterUrl?: string;
+  programId?: string;
   transactionBase64: string;
   summary: {
+    amountLamports?: string;
     amountSol: string;
+    player?: string;
     pool: string;
     roundId: number;
+    ticketPriceLamports?: string;
     ticketCount: number;
   };
   simulation?: {
     ok: boolean;
     err: unknown;
+    unitsConsumed?: number | null;
   };
 };
 
@@ -220,6 +226,34 @@ function shortAddress(address: string | undefined) {
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
+function walletAddressFromAccount(
+  account: { address?: unknown } | null | undefined,
+) {
+  const address = account?.address;
+
+  if (!address) {
+    return undefined;
+  }
+
+  if (typeof address === "string") {
+    return address;
+  }
+
+  if (address instanceof Uint8Array) {
+    return new PublicKey(address).toBase58();
+  }
+
+  if (typeof address === "object") {
+    const toBase58 = (address as { toBase58?: unknown }).toBase58;
+
+    if (typeof toBase58 === "function") {
+      return toBase58.call(address) as string;
+    }
+  }
+
+  return undefined;
+}
+
 function roundOutcome(round: RoundState, now: number) {
   if (round.missing) {
     return "Missing";
@@ -251,6 +285,9 @@ export function LuckyMeScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [txSignature, setTxSignature] = useState<string | null>(null);
+  const [pendingJoin, setPendingJoin] = useState<BuildBuyTicketsResponse | null>(
+    null,
+  );
 
   const loadPools = useCallback(async (silent = false) => {
     if (silent) {
@@ -361,7 +398,12 @@ export function LuckyMeScreen() {
   const splitLabel = `${formatBps(selectedPool.mainPrizeBps)} / ${formatBps(
     selectedPool.houseFeeBps,
   )} / ${formatBps(selectedPool.jackpotBps)}`;
-  const walletAddress = account?.address.toBase58();
+  const walletAddress = walletAddressFromAccount(account);
+
+  useEffect(() => {
+    setPendingJoin(null);
+  }, [selectedPoolId, ticketCount, walletAddress]);
+
   const roundEndTs = activeRound?.endTs;
   const roundIsOpen =
     Boolean(activeRound && !activeRound.settled) &&
@@ -372,15 +414,18 @@ export function LuckyMeScreen() {
     source !== "onchain" ||
     loading ||
     refreshing ||
-    submitting;
+    submitting ||
+    Boolean(pendingJoin);
   const primaryDisabled = account ? joinDisabled : submitting;
   const primaryButtonLabel = !account
     ? "Connect wallet"
     : submitting
-      ? "Joining..."
-      : !roundIsOpen
-        ? "No open round"
-        : "Join round";
+      ? "Preparing..."
+      : pendingJoin
+        ? "Review transaction"
+        : !roundIsOpen
+          ? "No open round"
+          : "Join round";
 
   const handlePrimaryAction = useCallback(async () => {
     setWalletError(null);
@@ -402,6 +447,7 @@ export function LuckyMeScreen() {
     }
 
     setSubmitting(true);
+    setPendingJoin(null);
 
     try {
       const built = await postJson<BuildBuyTicketsResponse>(
@@ -417,7 +463,36 @@ export function LuckyMeScreen() {
         throw new Error(`Simulation failed: ${JSON.stringify(built.simulation.err)}`);
       }
 
-      const transaction = Transaction.from(toUint8Array(built.transactionBase64));
+      setPendingJoin(built);
+    } catch (caught) {
+      setWalletError(
+        caught instanceof Error ? caught.message : "Transaction build failed",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }, [
+    account,
+    connect,
+    joinDisabled,
+    selectedPool.id,
+    ticketCount,
+    walletAddress,
+  ]);
+
+  const handleConfirmPendingJoin = useCallback(async () => {
+    if (!pendingJoin) {
+      return;
+    }
+
+    setWalletError(null);
+    setTxSignature(null);
+    setSubmitting(true);
+
+    try {
+      const transaction = Transaction.from(
+        toUint8Array(pendingJoin.transactionBase64),
+      );
       const signedTransaction = await signTransaction(transaction);
       const signedTransactionBase64 = fromUint8Array(
         Uint8Array.from(signedTransaction.serialize()),
@@ -430,22 +505,14 @@ export function LuckyMeScreen() {
       );
 
       setTxSignature(submitted.signature);
+      setPendingJoin(null);
       await loadPools(true);
     } catch (caught) {
       setWalletError(caught instanceof Error ? caught.message : "Join failed");
     } finally {
       setSubmitting(false);
     }
-  }, [
-    account,
-    connect,
-    joinDisabled,
-    loadPools,
-    selectedPool.id,
-    signTransaction,
-    ticketCount,
-    walletAddress,
-  ]);
+  }, [loadPools, pendingJoin, signTransaction]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -676,20 +743,106 @@ export function LuckyMeScreen() {
           </Pressable>
         </View>
 
-        <Pressable
-          disabled={primaryDisabled}
-          onPress={() => void handlePrimaryAction()}
-          style={[
-            styles.joinButton,
-            primaryDisabled && styles.joinButtonDisabled,
-          ]}
-        >
-          <Text
-            style={[styles.joinText, primaryDisabled && styles.joinTextDisabled]}
+        {pendingJoin ? (
+          <View style={styles.reviewPanel}>
+            <Text style={styles.sectionTitle}>Review transaction</Text>
+            <View style={styles.row}>
+              <Text style={styles.label}>Action</Text>
+              <Text style={styles.value}>Buy tickets</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Pool</Text>
+              <Text style={styles.value}>{selectedPool.label}</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Round</Text>
+              <Text style={styles.value}>{pendingJoin.summary.roundId}</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Tickets</Text>
+              <Text style={styles.value}>{pendingJoin.summary.ticketCount}</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Amount</Text>
+              <Text style={styles.value}>
+                {formatSol(pendingJoin.summary.amountSol)} SOL
+              </Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Cluster</Text>
+              <Text style={styles.value}>
+                {pendingJoin.clusterUrl ?? clusterUrl ?? "--"}
+              </Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Program</Text>
+              <Text style={styles.value}>{shortAddress(pendingJoin.programId)}</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Wallet</Text>
+              <Text style={styles.value}>
+                {shortAddress(pendingJoin.summary.player ?? walletAddress)}
+              </Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Simulation</Text>
+              <Text style={styles.value}>
+                {pendingJoin.simulation?.ok ? "Passed" : "Not available"}
+              </Text>
+            </View>
+            <Text style={styles.reviewNote}>
+              Wallet warnings are expected on localnet/devnet because the program
+              is not a known mainnet app. Check the amount and cluster before
+              signing.
+            </Text>
+            <View style={styles.reviewActions}>
+              <Pressable
+                disabled={submitting}
+                onPress={() => setPendingJoin(null)}
+                style={styles.secondaryButton}
+              >
+                <Text style={styles.secondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                disabled={submitting}
+                onPress={() => void handleConfirmPendingJoin()}
+                style={[
+                  styles.signButton,
+                  submitting && styles.joinButtonDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.joinText,
+                    submitting && styles.joinTextDisabled,
+                  ]}
+                >
+                  {submitting ? "Submitting..." : "Sign in wallet"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {!pendingJoin ? (
+          <Pressable
+            disabled={primaryDisabled}
+            onPress={() => void handlePrimaryAction()}
+            style={[
+              styles.joinButton,
+              primaryDisabled && styles.joinButtonDisabled,
+            ]}
           >
-            {primaryButtonLabel}
-          </Text>
-        </Pressable>
+            <Text
+              style={[
+                styles.joinText,
+                primaryDisabled && styles.joinTextDisabled,
+              ]}
+            >
+              {primaryButtonLabel}
+            </Text>
+          </Pressable>
+        ) : null}
         {walletError ? <Text style={styles.errorText}>{walletError}</Text> : null}
         {txSignature ? (
           <Text style={styles.successText}>
@@ -788,6 +941,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#171b20",
     padding: 16,
   },
+  reviewPanel: {
+    gap: 12,
+    borderColor: "#f2b84b",
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: "#1f211f",
+    padding: 16,
+  },
   sectionTitle: {
     color: "#f7f3ea",
     fontSize: 17,
@@ -873,6 +1034,39 @@ const styles = StyleSheet.create({
   emptyText: {
     color: "#98a2ad",
     fontSize: 13,
+  },
+  reviewNote: {
+    color: "#ffd982",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  reviewActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  secondaryButton: {
+    alignItems: "center",
+    borderColor: "#3a424b",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 12,
+  },
+  secondaryText: {
+    color: "#d7dde4",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  signButton: {
+    alignItems: "center",
+    backgroundColor: "#f2b84b",
+    borderRadius: 8,
+    flex: 1.4,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 12,
   },
   stepper: {
     alignItems: "center",

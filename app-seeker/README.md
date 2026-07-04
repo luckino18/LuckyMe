@@ -32,7 +32,9 @@ transaction; the backend submits the signed transaction to the configured local
 RPC.
 
 The join flow asks the backend to build and simulate an unsigned transaction,
-then asks the wallet to sign it. The backend never signs player transactions.
+then shows an in-app review with amount, cluster, program, wallet, and
+simulation status before asking the wallet to sign it. The backend never signs
+player transactions.
 
 MVP screens:
 
