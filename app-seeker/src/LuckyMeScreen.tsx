@@ -470,6 +470,7 @@ export function LuckyMeScreen() {
   const [txSignature, setTxSignature] = useState<string | null>(null);
   const [pendingTransaction, setPendingTransaction] =
     useState<BuildTransactionResponse | null>(null);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
 
   const loadPools = useCallback(async (silent = false) => {
     if (silent) {
@@ -599,11 +600,21 @@ export function LuckyMeScreen() {
   const splitLabel = `${formatBps(selectedPool.mainPrizeBps)} / ${formatBps(
     selectedPool.houseFeeBps,
   )} / ${formatBps(selectedPool.jackpotBps)}`;
+  const ticketPriceNumber = Number(selectedPool.ticketPriceSol);
+  const entryTotalSol = Number.isFinite(ticketPriceNumber)
+    ? formatSol(ticketPriceNumber * ticketCount)
+    : "--";
   const mode = publicConfig?.mode ?? RELEASE_MODE;
   const randomnessMode = publicConfig?.randomnessMode ?? "orao_vrf";
-  const modeBanner = mode === "MAINNET_RELEASE"
+  const networkLabel = mode === "MAINNET_RELEASE"
     ? "Solana mainnet"
     : "Local development";
+  const modeBanner = mode === "MAINNET_RELEASE"
+    ? "Mainnet pools, wallet-signed"
+    : "Developer testing mode";
+  const modeDescription = mode === "MAINNET_RELEASE"
+    ? "Pick a pool, review your chance, and sign only after the transaction preview matches what you expect."
+    : "Local development mode is for testing config and program flows.";
   const apiConfigError = runtimeConfigError();
 
   useEffect(() => {
@@ -800,12 +811,12 @@ export function LuckyMeScreen() {
               <Text style={styles.title}>LuckyMe</Text>
               <Text style={styles.subtitle}>
                 {source === "onchain"
-                  ? "Live Solana pools"
+                  ? "Fixed-entry Solana luck pools"
                   : source === "static"
-                    ? "Static pool metadata"
+                    ? "Pool metadata"
                     : source === "fallback"
-                      ? "Local fallback pools"
-                      : "Pool data unavailable"}
+                      ? "Local testing pools"
+                      : "Pools are temporarily unavailable"}
               </Text>
             </View>
             <Pressable
@@ -835,10 +846,7 @@ export function LuckyMeScreen() {
 
         <View style={styles.modeBanner}>
           <Text style={styles.modeTitle}>{modeBanner}</Text>
-          <Text style={styles.modeText}>
-            Mode {mode} | Randomness {randomnessMode} | Cluster{" "}
-            {publicConfig?.cluster ?? SOLANA_CLUSTER}
-          </Text>
+          <Text style={styles.modeText}>{modeDescription}</Text>
         </View>
 
         <FlatList
@@ -862,8 +870,13 @@ export function LuckyMeScreen() {
         />
 
         <View style={styles.roundPanel}>
+          <Text style={styles.sectionTitle}>Current round</Text>
+          <Text style={styles.infoText}>
+            One wallet entry per round. Choose your tickets, review the
+            transaction, then sign in your wallet.
+          </Text>
           <View style={styles.row}>
-            <Text style={styles.label}>Active pool</Text>
+            <Text style={styles.label}>Pool</Text>
             <Text style={styles.value}>{selectedPool.label}</Text>
           </View>
           <View style={styles.row}>
@@ -887,14 +900,8 @@ export function LuckyMeScreen() {
             <Text style={styles.value}>{roundStatus}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Round ends</Text>
+            <Text style={styles.label}>Closes in</Text>
             <Text style={styles.value}>{roundEnds}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Round length</Text>
-            <Text style={styles.value}>
-              {formatDuration(selectedPool.roundDurationSeconds)}
-            </Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Tickets</Text>
@@ -908,16 +915,6 @@ export function LuckyMeScreen() {
             <Text style={styles.label}>Your chance</Text>
             <Text style={styles.value}>
               {walletChance === "--" ? walletChance : `${walletChance}%`}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Split</Text>
-            <Text style={styles.value}>{splitLabel}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Source</Text>
-            <Text style={styles.value}>
-              {clusterUrl ? `${sourceLabel} RPC` : sourceLabel}
             </Text>
           </View>
           <View style={styles.row}>
@@ -935,6 +932,167 @@ export function LuckyMeScreen() {
               ) : null}
             </View>
           </View>
+        </View>
+
+        <View style={styles.entryPanel}>
+          <Text style={styles.sectionTitle}>Your entry</Text>
+          <View style={styles.stepper}>
+            <Pressable
+              style={[
+                styles.stepperButton,
+                (ticketCount <= 1 || userAlreadyEnteredRound) &&
+                  styles.stepperButtonDisabled,
+              ]}
+              onPress={() => setTicketCount(Math.max(1, ticketCount - 1))}
+              disabled={ticketCount <= 1 || userAlreadyEnteredRound}
+            >
+              <Text style={styles.stepperText}>-</Text>
+            </Pressable>
+            <Text style={styles.ticketCount}>{ticketCount}</Text>
+            <Pressable
+              style={[
+                styles.stepperButton,
+                userAlreadyEnteredRound && styles.stepperButtonDisabled,
+              ]}
+              onPress={() => setTicketCount(ticketCount + 1)}
+              disabled={userAlreadyEnteredRound}
+            >
+              <Text style={styles.stepperText}>+</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.infoText}>
+            Total: {entryTotalSol} SOL
+          </Text>
+          {!pendingTransaction ? (
+            <>
+              <Pressable
+                disabled={primaryDisabled}
+                onPress={() => void handlePrimaryAction()}
+                style={[
+                  styles.joinButton,
+                  primaryDisabled && styles.joinButtonDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.joinText,
+                    primaryDisabled && styles.joinTextDisabled,
+                  ]}
+                >
+                  {primaryButtonLabel}
+                </Text>
+              </Pressable>
+              {refundAvailable ? (
+                <Pressable
+                  disabled={refundDisabled}
+                  onPress={() => void handleRefundAction()}
+                  style={[
+                    styles.refundButton,
+                    refundDisabled && styles.joinButtonDisabled,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.refundText,
+                      refundDisabled && styles.joinTextDisabled,
+                    ]}
+                  >
+                    Refund entry
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
+          ) : null}
+          {pendingTransaction ? (
+            <View style={styles.reviewPanel}>
+              <Text style={styles.sectionTitle}>Review before signing</Text>
+              <View style={styles.row}>
+                <Text style={styles.label}>Action</Text>
+                <Text style={styles.value}>
+                  {pendingTransaction.summary.action ===
+                  "refund_entry_after_timeout"
+                    ? "Refund entry"
+                    : "Buy tickets"}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Pool</Text>
+                <Text style={styles.value}>{selectedPool.label}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Round</Text>
+                <Text style={styles.value}>
+                  {pendingTransaction.summary.roundId}
+                </Text>
+              </View>
+              {pendingTransaction.summary.ticketCount ? (
+                <View style={styles.row}>
+                  <Text style={styles.label}>Tickets</Text>
+                  <Text style={styles.value}>
+                    {pendingTransaction.summary.ticketCount}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={styles.row}>
+                <Text style={styles.label}>Amount</Text>
+                <Text style={styles.value}>
+                  {formatSol(pendingTransaction.summary.amountSol)} SOL
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Network</Text>
+                <Text style={styles.value}>{networkLabel}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Program</Text>
+                <Text style={styles.value}>
+                  {shortAddress(pendingTransaction.programId)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Wallet</Text>
+                <Text style={styles.value}>
+                  {shortAddress(pendingTransaction.summary.player ?? walletAddress)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Simulation</Text>
+                <Text style={styles.value}>
+                  {pendingTransaction.simulation?.ok ? "Passed" : "Not available"}
+                </Text>
+              </View>
+              <Text style={styles.reviewNote}>
+                One entry is created for this wallet and round. Settlement uses
+                the program's fixed pool split and provider randomness.
+              </Text>
+              <View style={styles.reviewActions}>
+                <Pressable
+                  disabled={submitting}
+                  onPress={() => setPendingTransaction(null)}
+                  style={styles.secondaryButton}
+                >
+                  <Text style={styles.secondaryText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  disabled={submitting}
+                  onPress={() => void handleConfirmPendingJoin()}
+                  style={[
+                    styles.signButton,
+                    submitting && styles.joinButtonDisabled,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.joinText,
+                      submitting && styles.joinTextDisabled,
+                    ]}
+                  >
+                    {submitting ? "Submitting..." : "Sign in wallet"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.roundPanel}>
@@ -997,260 +1155,123 @@ export function LuckyMeScreen() {
         </View>
 
         <View style={styles.roundPanel}>
-          <Text style={styles.sectionTitle}>Transparency</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>Main prize</Text>
-            <Text style={styles.value}>
-              {formatBps(selectedPool.mainPrizeBps)} /{" "}
-              {formatBpsShare(transparencyTotalSol, selectedPool.mainPrizeBps)}
+          <Pressable
+            onPress={() => setDetailsExpanded((current) => !current)}
+            style={styles.detailToggle}
+          >
+            <View>
+              <Text style={styles.sectionTitle}>Details / Transparency</Text>
+              <Text style={styles.infoText}>
+                Prize split, program accounts, network, and randomness proof.
+              </Text>
+            </View>
+            <Text style={styles.detailToggleText}>
+              {detailsExpanded ? "Hide" : "Show"}
             </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>House fee</Text>
-            <Text style={styles.value}>
-              {formatBps(selectedPool.houseFeeBps)} /{" "}
-              {formatBpsShare(transparencyTotalSol, selectedPool.houseFeeBps)}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Jackpot add</Text>
-            <Text style={styles.value}>
-              {formatBps(selectedPool.jackpotBps)} /{" "}
-              {formatBpsShare(transparencyTotalSol, selectedPool.jackpotBps)}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Treasury</Text>
-            <Text style={styles.value}>{shortAddress(config?.treasury)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Pool vault</Text>
-            <Text style={styles.value}>
-              {shortAddress(selectedPool.addresses?.poolVault)}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Jackpot vault</Text>
-            <Text style={styles.value}>
-              {shortAddress(selectedPool.addresses?.jackpotVault)}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Jackpot odds</Text>
-            <Text style={styles.value}>
-              1 / {config?.jackpotOddsDenominator ?? "--"}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Randomness</Text>
-            <Text style={styles.value}>{randomnessMode}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Program</Text>
-            <Text style={styles.value}>
-              {shortAddress(publicConfig?.programId ?? PROGRAM_ID)}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Network</Text>
-            <Text style={styles.value}>
-              {mode === "MAINNET_RELEASE" ? "Solana mainnet" : sourceLabel}
-            </Text>
-          </View>
+          </Pressable>
+          {detailsExpanded ? (
+            <View style={styles.detailBody}>
+              <View style={styles.row}>
+                <Text style={styles.label}>Prize split</Text>
+                <Text style={styles.value}>{splitLabel}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Main prize</Text>
+                <Text style={styles.value}>
+                  {formatBps(selectedPool.mainPrizeBps)} /{" "}
+                  {formatBpsShare(transparencyTotalSol, selectedPool.mainPrizeBps)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>House fee</Text>
+                <Text style={styles.value}>
+                  {formatBps(selectedPool.houseFeeBps)} /{" "}
+                  {formatBpsShare(transparencyTotalSol, selectedPool.houseFeeBps)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Jackpot add</Text>
+                <Text style={styles.value}>
+                  {formatBps(selectedPool.jackpotBps)} /{" "}
+                  {formatBpsShare(transparencyTotalSol, selectedPool.jackpotBps)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Round length</Text>
+                <Text style={styles.value}>
+                  {formatDuration(selectedPool.roundDurationSeconds)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Network</Text>
+                <Text style={styles.value}>{networkLabel}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Source</Text>
+                <Text style={styles.value}>
+                  {clusterUrl ? `${sourceLabel} RPC` : sourceLabel}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Randomness</Text>
+                <Text style={styles.value}>{randomnessMode}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Program</Text>
+                <Text style={styles.value}>
+                  {shortAddress(publicConfig?.programId ?? PROGRAM_ID)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Treasury</Text>
+                <Text style={styles.value}>{shortAddress(config?.treasury)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Pool vault</Text>
+                <Text style={styles.value}>
+                  {shortAddress(selectedPool.addresses?.poolVault)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Jackpot vault</Text>
+                <Text style={styles.value}>
+                  {shortAddress(selectedPool.addresses?.jackpotVault)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Jackpot odds</Text>
+                <Text style={styles.value}>
+                  1 / {config?.jackpotOddsDenominator ?? "--"}
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.roundPanel}>
-          <Text style={styles.sectionTitle}>How it works</Text>
+          <Text style={styles.sectionTitle}>How LuckyMe works</Text>
           <Text style={styles.infoText}>
-            Buy tickets into the selected fixed pool. The round closes after the
-            countdown, then settlement pays the winner according to the public
-            split shown above.
+            Every pool has a fixed ticket price and one entry per wallet. When
+            the round closes, the Solana program settles the winner and applies
+            the published prize split.
           </Text>
           <Text style={styles.infoText}>
-            Mainnet settlement uses provider randomness. If provider fulfillment
-            is unavailable after the timeout, refundable entries are shown and
-            funds can be returned to entry owners.
+            If a round enters refund state, the app shows the refund action for
+            the connected entry owner.
           </Text>
         </View>
 
         <View style={styles.roundPanel}>
-          <Text style={styles.sectionTitle}>Safety & Transparency</Text>
+          <Text style={styles.sectionTitle}>Wallet-first play</Text>
           <Text style={styles.infoText}>
-            The app never handles private keys. Your wallet signs the reviewed
-            transaction. Program, vault, treasury, fee, randomness, and refund
-            status are displayed before signing.
+            LuckyMe never asks for private keys. Review the amount, pool,
+            wallet, network, Program ID, and simulation result before you sign.
           </Text>
           <Text style={styles.linkText}>Terms: {TERMS_URL}</Text>
           <Text style={styles.linkText}>Privacy: {PRIVACY_URL}</Text>
           <Text style={styles.linkText}>Support: {SUPPORT_URL}</Text>
         </View>
 
-        <View style={styles.stepper}>
-          <Pressable
-            style={[
-              styles.stepperButton,
-              (ticketCount <= 1 || userAlreadyEnteredRound) &&
-                styles.stepperButtonDisabled,
-            ]}
-            onPress={() => setTicketCount(Math.max(1, ticketCount - 1))}
-            disabled={ticketCount <= 1 || userAlreadyEnteredRound}
-          >
-            <Text style={styles.stepperText}>-</Text>
-          </Pressable>
-          <Text style={styles.ticketCount}>{ticketCount}</Text>
-          <Pressable
-            style={[
-              styles.stepperButton,
-              userAlreadyEnteredRound && styles.stepperButtonDisabled,
-            ]}
-            onPress={() => setTicketCount(ticketCount + 1)}
-            disabled={userAlreadyEnteredRound}
-          >
-            <Text style={styles.stepperText}>+</Text>
-          </Pressable>
-        </View>
-
-        {pendingTransaction ? (
-          <View style={styles.reviewPanel}>
-            <Text style={styles.sectionTitle}>Review transaction</Text>
-            <View style={styles.row}>
-              <Text style={styles.label}>Action</Text>
-              <Text style={styles.value}>
-                {pendingTransaction.summary.action ===
-                "refund_entry_after_timeout"
-                  ? "Refund entry"
-                  : "Buy tickets"}
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Pool</Text>
-              <Text style={styles.value}>{selectedPool.label}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Round</Text>
-              <Text style={styles.value}>
-                {pendingTransaction.summary.roundId}
-              </Text>
-            </View>
-            {pendingTransaction.summary.ticketCount ? (
-              <View style={styles.row}>
-                <Text style={styles.label}>Tickets</Text>
-                <Text style={styles.value}>
-                  {pendingTransaction.summary.ticketCount}
-                </Text>
-              </View>
-            ) : null}
-            <View style={styles.row}>
-              <Text style={styles.label}>Amount</Text>
-              <Text style={styles.value}>
-                {formatSol(pendingTransaction.summary.amountSol)} SOL
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Network</Text>
-              <Text style={styles.value}>
-                {mode === "MAINNET_RELEASE" ? "Solana mainnet" : SOLANA_CLUSTER}
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>RPC</Text>
-              <Text style={styles.value}>
-                {pendingTransaction.clusterUrl ?? clusterUrl ?? "--"}
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Program</Text>
-              <Text style={styles.value}>
-                {shortAddress(pendingTransaction.programId)}
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Wallet</Text>
-              <Text style={styles.value}>
-                {shortAddress(pendingTransaction.summary.player ?? walletAddress)}
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Simulation</Text>
-              <Text style={styles.value}>
-                {pendingTransaction.simulation?.ok ? "Passed" : "Not available"}
-              </Text>
-            </View>
-            <Text style={styles.reviewNote}>
-              Buying creates one wallet entry for this round. Settlement uses
-              the program rules shown above: fixed ticket price, transparent
-              pool split, provider randomness, and refund state if settlement
-              cannot complete after timeout.
-            </Text>
-            <View style={styles.reviewActions}>
-              <Pressable
-                disabled={submitting}
-                onPress={() => setPendingTransaction(null)}
-                style={styles.secondaryButton}
-              >
-                <Text style={styles.secondaryText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                disabled={submitting}
-                onPress={() => void handleConfirmPendingJoin()}
-                style={[
-                  styles.signButton,
-                  submitting && styles.joinButtonDisabled,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.joinText,
-                    submitting && styles.joinTextDisabled,
-                  ]}
-                >
-                  {submitting ? "Submitting..." : "Sign in wallet"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
-        {!pendingTransaction ? (
-          <>
-            <Pressable
-              disabled={primaryDisabled}
-              onPress={() => void handlePrimaryAction()}
-              style={[
-                styles.joinButton,
-                primaryDisabled && styles.joinButtonDisabled,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.joinText,
-                  primaryDisabled && styles.joinTextDisabled,
-                ]}
-              >
-                {primaryButtonLabel}
-              </Text>
-            </Pressable>
-            {refundAvailable ? (
-              <Pressable
-                disabled={refundDisabled}
-                onPress={() => void handleRefundAction()}
-                style={[
-                  styles.refundButton,
-                  refundDisabled && styles.joinButtonDisabled,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.refundText,
-                    refundDisabled && styles.joinTextDisabled,
-                  ]}
-                >
-                  Refund entry
-                </Text>
-              </Pressable>
-            ) : null}
-          </>
-        ) : null}
         {walletError ? <Text style={styles.errorText}>{walletError}</Text> : null}
         {txSignature ? (
           <Text style={styles.successText}>
@@ -1375,18 +1396,41 @@ const styles = StyleSheet.create({
     backgroundColor: "#171b20",
     padding: 16,
   },
-  reviewPanel: {
-    gap: 12,
+  entryPanel: {
+    gap: 14,
     borderColor: "#f2b84b",
     borderRadius: 8,
     borderWidth: 1,
-    backgroundColor: "#1f211f",
+    backgroundColor: "#1d211f",
     padding: 16,
+  },
+  reviewPanel: {
+    gap: 12,
+    borderTopColor: "#3a424b",
+    borderTopWidth: 1,
+    paddingTop: 14,
   },
   sectionTitle: {
     color: "#f7f3ea",
     fontSize: 17,
     fontWeight: "800",
+  },
+  detailToggle: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 14,
+    justifyContent: "space-between",
+  },
+  detailToggleText: {
+    color: "#f2b84b",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  detailBody: {
+    gap: 12,
+    borderTopColor: "#2d343b",
+    borderTopWidth: 1,
+    paddingTop: 12,
   },
   row: {
     alignItems: "flex-start",

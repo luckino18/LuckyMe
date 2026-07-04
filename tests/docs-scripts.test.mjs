@@ -21,6 +21,7 @@ const docs = [
   "docs/randomness.md",
   "docs/mainnet-readiness.md",
   "docs/solana-mobile-publishing.md",
+  "docs/store-readiness.md",
   "docs/production-keeper.md",
   "docs/handoff.md",
 ].filter((file) => fs.existsSync(path.join(ROOT, file)));

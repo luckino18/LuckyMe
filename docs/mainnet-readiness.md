@@ -15,6 +15,8 @@ LuckyMe release mode is `MAINNET_RELEASE` for Solana mainnet-beta.
   on-chain state cannot be read.
 - App release env requires a production HTTPS backend URL.
 - Mobile Wallet Adapter defaults to `solana:mainnet`.
+- Solana Mobile release builds use the `dapp-store` EAS profile and produce a
+  signed APK.
 - The app review screen shows amount, pool, connected wallet, network, Program
   ID, simulation result, and expected ticket/refund behavior before signing.
 - Backend submit relay stays disabled for production.
@@ -38,6 +40,7 @@ Files synchronized to that ID:
 - `app-seeker/app.json`
 - `app-seeker/eas.json`
 - `app-seeker/src/LuckyMeScreen.tsx`
+- `docs/store-readiness.md`
 
 If the production deployment uses a new Program ID, update all of the above in
 the same commit and rebuild the IDL/SDK artifacts.
@@ -65,4 +68,4 @@ Not specified by the cited Solana Mobile docs as universal submission artifacts:
 - uploaded gambling license.
 
 Publisher Policy compliance and accurate user-data disclosure remain publisher
-responsibilities.
+responsibilities, not invented repo-side release blockers.

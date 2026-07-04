@@ -187,6 +187,10 @@ Store listing material is in `docs/store-listing/`:
 The privacy placeholder is included because the backend may receive wallet
 addresses and request metadata while serving state and transaction builders.
 
+Store readiness is tracked in `docs/store-readiness.md`; it uses the same
+`MAINNET_RELEASE`, `solana:mainnet`, `mainnet-beta`, and signed APK release
+positioning as this README.
+
 ## Solana Mobile Docs Scope
 
 The official Solana Mobile docs specify APK signing, metadata, Publisher Portal
