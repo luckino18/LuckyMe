@@ -8,19 +8,22 @@ payouts are executed by the Solana program.
 
 ## Product Overview
 
-- Network target: Solana mainnet-beta
-- Program ID: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
-- Mobile app: Expo React Native with Mobile Wallet Adapter
-- Backend: transaction builder and public state API
-- Randomness mode: ORAO VRF provider path for `MAINNET_RELEASE`
-- Player custody: the backend never signs player transactions and never
-  custodies user funds
-- Release mode: `MAINNET_RELEASE`
+- **Release mode:** `MAINNET_RELEASE`
+- **Network target:** Solana `mainnet-beta`
+- **Wallet chain:** `solana:mainnet`
+- **Program ID:** `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
+- **Mobile app:** Expo React Native with Mobile Wallet Adapter
+- **Backend:** transaction builder and public state API
+- **Randomness:** ORAO VRF provider path for `MAINNET_RELEASE`
+- **Player custody:** the backend never signs player transactions and never
+  custodies user funds.
 
 The app builds and reviews an unsigned transaction, the connected wallet signs
 it, and the backend submit relay is disabled by default. Users see the amount,
-pool, connected wallet, Solana mainnet network, Program ID, simulation result,
-and expected ticket behavior before signing.
+pool, connected wallet, Solana mainnet network, simulation result, and expected
+ticket behavior before signing. Program, vault, randomness, commitment, cluster,
+RPC/source, treasury, and jackpot-odds details sit behind the expandable
+`Details / Transparency` panel.
 
 ## Repository Layout
 
@@ -38,7 +41,7 @@ sim/                     Economic simulator and unit tests
 
 ## Mainnet Environment
 
-Required backend variables for `MAINNET_RELEASE`:
+Set these backend variables for `MAINNET_RELEASE`:
 
 ```bash
 export LUCKYME_RELEASE_MODE=MAINNET_RELEASE
@@ -50,7 +53,7 @@ export CORS_ORIGIN=https://your-production-app.example
 export ENABLE_TRANSACTION_SUBMIT=false
 ```
 
-Required app variables for the dApp Store APK build:
+Set these app variables for the Solana Mobile dApp Store APK build:
 
 ```bash
 export EXPO_PUBLIC_LUCKYME_RELEASE_MODE=MAINNET_RELEASE
@@ -62,9 +65,13 @@ export EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER=mainnet-beta
 export EXPO_PUBLIC_LUCKYME_PROGRAM_ID=4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3
 ```
 
-Release validation rejects missing env, localhost/LAN backend URLs, non-HTTPS
-mainnet RPC URLs, non-mainnet wallet chain values, and production commit-reveal
-randomness.
+Release validation rejects:
+
+- missing production environment variables;
+- localhost or LAN backend URLs;
+- non-HTTPS mainnet RPC URLs;
+- non-mainnet wallet chain values;
+- production commit-reveal randomness.
 
 ## Backend Setup
 
@@ -89,7 +96,7 @@ Important backend behavior:
 - `POST /transactions/submit` is disabled unless explicitly enabled; keep it
   disabled for production.
 
-## App Build
+## Solana Mobile APK Build
 
 ```bash
 cd app-seeker
@@ -100,9 +107,11 @@ npm run doctor
 ```
 
 The app defaults wallet authorization to `solana:mainnet` and uses
-`https://api.mainnet-beta.solana.com` as the fallback wallet RPC. The dApp Store
-profile still requires explicit production env through
-`app-seeker/scripts/validate-production-env.mjs` and `app-seeker/app.config.js`.
+`https://api.mainnet-beta.solana.com` as the fallback wallet RPC. The
+`dapp-store` profile still requires explicit production env through:
+
+- `app-seeker/scripts/validate-production-env.mjs`
+- `app-seeker/app.config.js`
 
 Build the Solana dApp Store APK with EAS:
 
@@ -139,12 +148,17 @@ Verify the signed APK:
 apksigner verify --print-certs app-release.apk
 ```
 
-Do not commit keystores, key passwords, Expo credentials, Solana keypairs, or
-Publisher Portal API keys.
+Do not commit:
+
+- keystores;
+- key passwords;
+- Expo credentials;
+- Solana keypairs;
+- Publisher Portal API keys.
 
 ## Solana Mobile Publishing Checklist
 
-Based on the official Solana Mobile dApp Store docs:
+Based on the official Solana Mobile dApp Store docs, prepare:
 
 - Prepare a release-ready APK signed with the release key.
 - Prepare app metadata: name, description, screenshots, and icon.
@@ -157,7 +171,7 @@ Based on the official Solana Mobile dApp Store docs:
 - Add LuckyMe app details and submit the first release version.
 - After submission, monitor the publisher email for review results.
 
-Optional CLI path:
+Optional CLI publish path:
 
 ```bash
 npm install -g @solana-mobile/dapp-store-cli
@@ -197,7 +211,8 @@ The official Solana Mobile docs specify APK signing, metadata, Publisher Portal
 account/KYC, wallet funding for submission/storage costs, Publisher Policy,
 Developer Agreement, and optional publishing CLI requirements.
 
-Not specified by the cited Solana Mobile docs as universal submission artifacts:
+These are not specified by the cited Solana Mobile docs as universal submission
+artifacts:
 
 - a third-party smart-contract audit report;
 - a written legal opinion;
@@ -208,6 +223,8 @@ user-data practices to comply with the policy and applicable law. That is a
 publisher responsibility, not a repo-side build blocker encoded in LuckyMe.
 
 ## Validation Commands
+
+Run the repository checks:
 
 ```bash
 npm install

@@ -46,10 +46,12 @@ Based on the official Solana Mobile publishing docs, prepare:
 
 - The main screen presents pool choice, ticket price, jackpot, round status,
   user chance, wallet status, and entry action first.
-- Technical data such as prize split, RPC/source, Program ID, treasury, vaults,
-  randomness mode, and jackpot odds sits behind `Details / Transparency`.
+- Technical data such as mode, cluster, RPC/source details, Program ID,
+  treasury, vaults, randomness mode, randomness commitment, and jackpot odds
+  sits behind `Details / Transparency`.
 - The transaction review shows amount, pool, round, tickets, wallet, Solana
-  mainnet, Program ID, and simulation result before wallet signing.
+  mainnet, and simulation result before wallet signing. Program ID and other
+  account-level details sit behind `Details / Transparency`.
 - The backend never signs player transactions and never custodies user funds.
 
 ## Not Solana Mobile Blockers

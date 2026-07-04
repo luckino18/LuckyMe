@@ -609,11 +609,11 @@ export function LuckyMeScreen() {
   const networkLabel = mode === "MAINNET_RELEASE"
     ? "Solana mainnet"
     : "Local development";
-  const modeBanner = mode === "MAINNET_RELEASE"
-    ? "Mainnet pools, wallet-signed"
+  const heroTitle = mode === "MAINNET_RELEASE"
+    ? "Choose a pool. Own the moment."
     : "Developer testing mode";
-  const modeDescription = mode === "MAINNET_RELEASE"
-    ? "Pick a pool, review your chance, and sign only after the transaction preview matches what you expect."
+  const heroDescription = mode === "MAINNET_RELEASE"
+    ? "Live fixed-entry pools on Solana. Pick your stake, review the ticket total, and approve only in your wallet."
     : "Local development mode is for testing config and program flows.";
   const apiConfigError = runtimeConfigError();
 
@@ -811,11 +811,11 @@ export function LuckyMeScreen() {
               <Text style={styles.title}>LuckyMe</Text>
               <Text style={styles.subtitle}>
                 {source === "onchain"
-                  ? "Fixed-entry Solana luck pools"
+                  ? "Mobile-first luck pools on Solana"
                   : source === "static"
-                    ? "Pool metadata"
+                    ? "Pool preview"
                     : source === "fallback"
-                      ? "Local testing pools"
+                      ? "Developer testing pools"
                       : "Pools are temporarily unavailable"}
               </Text>
             </View>
@@ -845,8 +845,8 @@ export function LuckyMeScreen() {
         ) : null}
 
         <View style={styles.modeBanner}>
-          <Text style={styles.modeTitle}>{modeBanner}</Text>
-          <Text style={styles.modeText}>{modeDescription}</Text>
+          <Text style={styles.modeTitle}>{heroTitle}</Text>
+          <Text style={styles.modeText}>{heroDescription}</Text>
         </View>
 
         <FlatList
@@ -870,10 +870,10 @@ export function LuckyMeScreen() {
         />
 
         <View style={styles.roundPanel}>
-          <Text style={styles.sectionTitle}>Current round</Text>
+          <Text style={styles.sectionTitle}>Live pool</Text>
           <Text style={styles.infoText}>
-            One wallet entry per round. Choose your tickets, review the
-            transaction, then sign in your wallet.
+            See the current pool before choosing your entry. One wallet can
+            join each round once.
           </Text>
           <View style={styles.row}>
             <Text style={styles.label}>Pool</Text>
@@ -890,12 +890,6 @@ export function LuckyMeScreen() {
             </Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Round</Text>
-            <Text style={styles.value}>
-              {activeRound?.roundId ?? selectedPool.currentRound ?? 0}
-            </Text>
-          </View>
-          <View style={styles.row}>
             <Text style={styles.label}>Status</Text>
             <Text style={styles.value}>{roundStatus}</Text>
           </View>
@@ -904,7 +898,7 @@ export function LuckyMeScreen() {
             <Text style={styles.value}>{roundEnds}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Tickets</Text>
+            <Text style={styles.label}>Entries in pool</Text>
             <Text style={styles.value}>{activeRound?.totalTickets ?? "0"}</Text>
           </View>
           <View style={styles.row}>
@@ -1044,12 +1038,6 @@ export function LuckyMeScreen() {
                 <Text style={styles.value}>{networkLabel}</Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.label}>Program</Text>
-                <Text style={styles.value}>
-                  {shortAddress(pendingTransaction.programId)}
-                </Text>
-              </View>
-              <View style={styles.row}>
                 <Text style={styles.label}>Wallet</Text>
                 <Text style={styles.value}>
                   {shortAddress(pendingTransaction.summary.player ?? walletAddress)}
@@ -1063,7 +1051,8 @@ export function LuckyMeScreen() {
               </View>
               <Text style={styles.reviewNote}>
                 One entry is created for this wallet and round. Settlement uses
-                the program's fixed pool split and provider randomness.
+                the published pool split; program and account details are in
+                Details / Transparency.
               </Text>
               <View style={styles.reviewActions}>
                 <Pressable
@@ -1128,18 +1117,8 @@ export function LuckyMeScreen() {
                       Ends {formatRemaining(round.endTs, now)}
                     </Text>
                   )}
-                  <Text style={styles.historyMeta}>
-                    Randomness {round.randomnessProofStatus ?? "pending"} | Refund{" "}
-                    {round.refundMode
-                      ? "mode"
-                      : round.refundAvailable
-                        ? "available"
-                        : "not available"}
-                  </Text>
-                  {round.randomnessCommitment ? (
-                    <Text style={styles.historyMeta}>
-                      Commitment {shortAddress(round.randomnessCommitment)}
-                    </Text>
+                  {round.refundAvailable ? (
+                    <Text style={styles.historyMeta}>Refund available</Text>
                   ) : null}
                   {round.jackpotTriggered ? (
                     <Text style={styles.historyMeta}>
@@ -1162,7 +1141,8 @@ export function LuckyMeScreen() {
             <View>
               <Text style={styles.sectionTitle}>Details / Transparency</Text>
               <Text style={styles.infoText}>
-                Prize split, program accounts, network, and randomness proof.
+                Network, program accounts, randomness proof, vaults, and source
+                details.
               </Text>
             </View>
             <Text style={styles.detailToggleText}>
@@ -1171,6 +1151,14 @@ export function LuckyMeScreen() {
           </Pressable>
           {detailsExpanded ? (
             <View style={styles.detailBody}>
+              <View style={styles.row}>
+                <Text style={styles.label}>Mode</Text>
+                <Text style={styles.value}>{mode}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Cluster</Text>
+                <Text style={styles.value}>{SOLANA_CLUSTER}</Text>
+              </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Prize split</Text>
                 <Text style={styles.value}>{splitLabel}</Text>
@@ -1207,19 +1195,33 @@ export function LuckyMeScreen() {
                 <Text style={styles.value}>{networkLabel}</Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.label}>Source</Text>
-                <Text style={styles.value}>
-                  {clusterUrl ? `${sourceLabel} RPC` : sourceLabel}
-                </Text>
+                <Text style={styles.label}>Data source</Text>
+                <Text style={styles.value}>{sourceLabel}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>RPC / source</Text>
+                <Text style={styles.value}>{clusterUrl ?? "Backend default"}</Text>
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Randomness</Text>
                 <Text style={styles.value}>{randomnessMode}</Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.label}>Program</Text>
+                <Text style={styles.label}>Commitment</Text>
+                <Text style={styles.value}>
+                  {shortAddress(activeRound?.randomnessCommitment)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Program ID</Text>
                 <Text style={styles.value}>
                   {shortAddress(publicConfig?.programId ?? PROGRAM_ID)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Round ID</Text>
+                <Text style={styles.value}>
+                  {activeRound?.roundId ?? selectedPool.currentRound ?? "--"}
                 </Text>
               </View>
               <View style={styles.row}>
@@ -1265,7 +1267,8 @@ export function LuckyMeScreen() {
           <Text style={styles.sectionTitle}>Wallet-first play</Text>
           <Text style={styles.infoText}>
             LuckyMe never asks for private keys. Review the amount, pool,
-            wallet, network, Program ID, and simulation result before you sign.
+            wallet, network, and simulation result before you sign. Technical
+            account details stay available in Details / Transparency.
           </Text>
           <Text style={styles.linkText}>Terms: {TERMS_URL}</Text>
           <Text style={styles.linkText}>Privacy: {PRIVACY_URL}</Text>
