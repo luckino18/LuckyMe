@@ -1,16 +1,16 @@
 # LuckyMe Handoff
 
-Last updated: 2026-07-04 20:00 CEST
+Last updated: 2026-07-04 20:04 CEST
 
 ## Repository
 
 - Public repo: https://github.com/luckino18/LuckyMe
 - Branch: `main`
 - Program id: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
-- Latest pushed commit: `137a8e4 Add manual settlement tooling`
-- CI: https://github.com/luckino18/LuckyMe/actions/runs/28713697395
+- Latest pushed commit: `9fa1f13 Add Anchor localnet refund tests`
+- CI: https://github.com/luckino18/LuckyMe/actions/runs/28714850371
 - Devnet pre-release:
-  https://github.com/luckino18/LuckyMe/releases/tag/v0.1.0-devnet
+  https://github.com/luckino18/LuckyMe/releases/tag/v0.1.1-devnet
 
 ## Current State
 
