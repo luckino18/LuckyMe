@@ -56,6 +56,7 @@ for (const file of productionFacingFiles) {
 }
 
 auditBackendReleaseGates();
+auditAppReleaseLinks();
 auditProgramIdConsistency();
 auditStoreListing();
 
@@ -187,6 +188,53 @@ function auditProgramIdConsistency() {
   }
 }
 
+function auditAppReleaseLinks() {
+  const appConfig = read("app-seeker/app.config.js");
+  const appValidator = read("app-seeker/scripts/validate-production-env.mjs");
+  const appScreen = read("app-seeker/src/LuckyMeScreen.tsx");
+  const appReadme = read("app-seeker/README.md");
+  const requiredLinks = read("docs/store-listing/required-links.md");
+  const requiredEnv = [
+    "EXPO_PUBLIC_LUCKYME_TERMS_URL",
+    "EXPO_PUBLIC_LUCKYME_PRIVACY_URL",
+    "EXPO_PUBLIC_LUCKYME_SUPPORT_URL",
+  ];
+
+  for (const envName of requiredEnv) {
+    mustMatch(
+      "app-seeker/app.config.js",
+      `${envName} required by store build config`,
+      appConfig,
+      new RegExp(`requireEnv\\("${envName}"\\)`),
+    );
+    mustMatch(
+      "app-seeker/scripts/validate-production-env.mjs",
+      `${envName} required by production validator`,
+      appValidator,
+      new RegExp(`"${envName}"`),
+    );
+    mustMatch(
+      "docs/store-listing/required-links.md",
+      `${envName} listed as pre-submit asset`,
+      requiredLinks,
+      new RegExp(envName),
+    );
+  }
+
+  mustNotMatch(
+    "app-seeker/src/LuckyMeScreen.tsx",
+    "example.com policy/support link fallback",
+    appScreen,
+    /https:\/\/example\.com\/(?:terms|privacy|support)/,
+  );
+  mustMatch(
+    "app-seeker/README.md",
+    "EAS build documents production API/link env injection",
+    appReadme,
+    /EAS project environment or as EAS secrets/,
+  );
+}
+
 function auditStoreListing() {
   const requiredFiles = [
     "docs/store-listing/short-description.txt",
@@ -195,6 +243,7 @@ function auditStoreListing() {
     "docs/store-listing/screenshot-checklist.md",
     "docs/store-listing/icon-adaptive-icon-checklist.md",
     "docs/store-listing/privacy-policy.md",
+    "docs/store-listing/required-links.md",
     "docs/store-listing/support-contact.md",
     "docs/store-listing/category.txt",
   ];
@@ -216,6 +265,7 @@ function auditStoreListing() {
 function stripAllowedSections(content) {
   const allowedHeadings = [
     "Local Development",
+    "Local Development Only",
     "Solana Mobile Docs Scope",
     "Not Specified By Solana Mobile Docs",
     "Solana Mobile Requirements Note",

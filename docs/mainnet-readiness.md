@@ -14,6 +14,7 @@ LuckyMe release mode is `MAINNET_RELEASE` for Solana mainnet-beta.
 - Backend returns unavailable/error state rather than fake pool data when
   on-chain state cannot be read.
 - App release env requires a production HTTPS backend URL.
+- App release env requires final HTTPS terms, privacy, and support URLs.
 - Mobile Wallet Adapter defaults to `solana:mainnet`.
 - Solana Mobile release builds use the `dapp-store` EAS profile and produce a
   signed APK.

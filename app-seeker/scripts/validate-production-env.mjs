@@ -4,6 +4,9 @@ const REQUIRED = [
   "EXPO_PUBLIC_LUCKYME_WALLET_CHAIN",
   "EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL",
   "EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER",
+  "EXPO_PUBLIC_LUCKYME_TERMS_URL",
+  "EXPO_PUBLIC_LUCKYME_PRIVACY_URL",
+  "EXPO_PUBLIC_LUCKYME_SUPPORT_URL",
 ];
 
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -15,6 +18,9 @@ const apiUrl = process.env.EXPO_PUBLIC_LUCKYME_API_URL;
 const walletChain = process.env.EXPO_PUBLIC_LUCKYME_WALLET_CHAIN;
 const walletRpcUrl = process.env.EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL;
 const solanaCluster = process.env.EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER;
+const termsUrl = process.env.EXPO_PUBLIC_LUCKYME_TERMS_URL;
+const privacyUrl = process.env.EXPO_PUBLIC_LUCKYME_PRIVACY_URL;
+const supportUrl = process.env.EXPO_PUBLIC_LUCKYME_SUPPORT_URL;
 const programId = process.env.EXPO_PUBLIC_LUCKYME_PROGRAM_ID ?? MAINNET_PROGRAM_ID;
 
 if (!isHttpsUrl(apiUrl)) {
@@ -41,6 +47,20 @@ if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(programId)) {
   fail("EXPO_PUBLIC_LUCKYME_PROGRAM_ID must be a valid Solana public key");
 }
 
+for (const [name, value] of [
+  ["EXPO_PUBLIC_LUCKYME_TERMS_URL", termsUrl],
+  ["EXPO_PUBLIC_LUCKYME_PRIVACY_URL", privacyUrl],
+  ["EXPO_PUBLIC_LUCKYME_SUPPORT_URL", supportUrl],
+]) {
+  if (!isHttpsUrl(value)) {
+    fail(`${name} must be an HTTPS URL`);
+  }
+
+  if (isPlaceholderUrl(value)) {
+    fail(`${name} must be a final production URL`);
+  }
+}
+
 console.log("LuckyMe production app env is valid");
 
 function isHttpsUrl(value) {
@@ -61,6 +81,17 @@ function isLoopbackOrLanUrl(value) {
       hostname.startsWith("10.");
   } catch {
     return false;
+  }
+}
+
+function isPlaceholderUrl(value) {
+  try {
+    const { hostname } = new URL(value);
+    return hostname === "example.com" ||
+      hostname.endsWith(".example") ||
+      hostname.includes("your-domain");
+  } catch {
+    return true;
   }
 }
 

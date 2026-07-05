@@ -1,7 +1,10 @@
-# Privacy Policy Placeholder
+# Privacy Policy Pre-Submit Asset
 
-LuckyMe needs a production privacy statement if the deployed backend collects,
-stores, shares, or otherwise processes user data.
+Required before submission:
+
+- final privacy policy URL for `EXPO_PUBLIC_LUCKYME_PRIVACY_URL`;
+- production privacy statement matching the deployed backend, hosting, logging,
+  analytics, and support tooling.
 
 Expected backend data categories to disclose if retained:
 
@@ -14,3 +17,6 @@ Expected backend data categories to disclose if retained:
 
 Do not state that no user data is processed unless production logging,
 analytics, hosting, and support tooling are configured that way.
+
+The app production validator requires `EXPO_PUBLIC_LUCKYME_PRIVACY_URL` to be a
+final HTTPS URL.

@@ -26,7 +26,7 @@ There is no silent fallback from ORAO provider randomness to commit-reveal in
 Refund state remains available if settlement cannot complete after the configured
 timeout. Each entry owner can sign a refund transaction for their own entry.
 
-## Validation
+## Local Development Validation
 
 ```bash
 npm test

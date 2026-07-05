@@ -54,6 +54,18 @@ Based on the official Solana Mobile publishing docs, prepare:
   account-level details sit behind `Details / Transparency`.
 - The backend never signs player transactions and never custodies user funds.
 
+## Final Release Checklist
+
+- APK built with `eas build --platform android --profile dapp-store`.
+- APK signed with the release key or EAS-managed release credentials.
+- `apksigner verify --print-certs` passes for the final APK.
+- Backend production HTTPS URL configured in the EAS environment or secret set.
+- App opens without loopback, LAN, or non-mainnet references.
+- Terms, privacy, and support links are final HTTPS URLs.
+- Screenshots and icon/adaptive icon assets are ready.
+- Publisher Portal account, KYC/KYB, publisher wallet, SOL balance, and storage
+  provider are ready.
+
 ## Not Solana Mobile Blockers
 
 The cited Solana Mobile docs do not list these as universal submission
@@ -71,6 +83,7 @@ blockers.
 
 - Real production HTTPS backend URL.
 - Real production mainnet RPC URL.
+- Final terms, privacy, and support URLs.
 - Publisher Portal account and KYC/KYB.
 - Publisher wallet with SOL.
 - Release signing key or EAS-managed credentials.

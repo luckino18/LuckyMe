@@ -8,7 +8,7 @@ player funds and does not sign player ticket purchases.
 ```bash
 export LUCKYME_RELEASE_MODE=MAINNET_RELEASE
 export LUCKYME_SOLANA_CLUSTER=mainnet-beta
-export ANCHOR_PROVIDER_URL=https://your-mainnet-rpc.example
+export ANCHOR_PROVIDER_URL=https://rpc.your-domain.com
 export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
 export ANCHOR_WALLET=/secure/path/keeper.json

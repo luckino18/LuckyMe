@@ -28,6 +28,9 @@ function validateReleaseEnv() {
   const walletChain = requireEnv("EXPO_PUBLIC_LUCKYME_WALLET_CHAIN");
   const walletRpcUrl = requireEnv("EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL");
   const solanaCluster = requireEnv("EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER");
+  const termsUrl = requireEnv("EXPO_PUBLIC_LUCKYME_TERMS_URL");
+  const privacyUrl = requireEnv("EXPO_PUBLIC_LUCKYME_PRIVACY_URL");
+  const supportUrl = requireEnv("EXPO_PUBLIC_LUCKYME_SUPPORT_URL");
   const programId = process.env.EXPO_PUBLIC_LUCKYME_PROGRAM_ID ?? MAINNET_PROGRAM_ID;
 
   if (!MAINNET_RPC_RE.test(apiUrl)) {
@@ -53,6 +56,20 @@ function validateReleaseEnv() {
   if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(programId)) {
     throw new Error("EXPO_PUBLIC_LUCKYME_PROGRAM_ID must be a valid Solana public key");
   }
+
+  for (const [name, value] of [
+    ["EXPO_PUBLIC_LUCKYME_TERMS_URL", termsUrl],
+    ["EXPO_PUBLIC_LUCKYME_PRIVACY_URL", privacyUrl],
+    ["EXPO_PUBLIC_LUCKYME_SUPPORT_URL", supportUrl],
+  ]) {
+    if (!MAINNET_RPC_RE.test(value)) {
+      throw new Error(`${name} must be an HTTPS URL`);
+    }
+
+    if (isPlaceholderUrl(value)) {
+      throw new Error(`${name} must be a final production URL`);
+    }
+  }
 }
 
 function isLoopbackOrLanUrl(value) {
@@ -65,6 +82,17 @@ function isLoopbackOrLanUrl(value) {
       hostname.startsWith("10.");
   } catch {
     return false;
+  }
+}
+
+function isPlaceholderUrl(value) {
+  try {
+    const { hostname } = new URL(value);
+    return hostname === "example.com" ||
+      hostname.endsWith(".example") ||
+      hostname.includes("your-domain");
+  } catch {
+    return true;
   }
 }
 

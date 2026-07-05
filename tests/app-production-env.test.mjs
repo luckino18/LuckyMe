@@ -17,19 +17,40 @@ test("Seeker production env validation rejects localhost backend", () => {
     EXPO_PUBLIC_LUCKYME_WALLET_CHAIN: "solana:mainnet",
     EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL: "https://api.mainnet-beta.solana.com",
     EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
+    EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://luckyme.app/terms",
+    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://luckyme.app/privacy",
+    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://luckyme.app/support",
   });
 
   assert.notEqual(result.status, 0);
   assert.match(result.output, /production HTTPS backend URL/);
 });
 
+test("Seeker production env validation rejects placeholder policy links", () => {
+  const result = runValidation({
+    EXPO_PUBLIC_LUCKYME_API_URL: "https://api.luckyme.app",
+    EXPO_PUBLIC_LUCKYME_WALLET_CHAIN: "solana:mainnet",
+    EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL: "https://api.mainnet-beta.solana.com",
+    EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
+    EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://example.com/terms",
+    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://luckyme.app/privacy",
+    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://luckyme.app/support",
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /EXPO_PUBLIC_LUCKYME_TERMS_URL must be a final production URL/);
+});
+
 test("Seeker production env validation accepts mainnet release config", () => {
   const result = runValidation({
-    EXPO_PUBLIC_LUCKYME_API_URL: "https://api.luckyme.example",
+    EXPO_PUBLIC_LUCKYME_API_URL: "https://api.luckyme.app",
     EXPO_PUBLIC_LUCKYME_WALLET_CHAIN: "solana:mainnet",
     EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL: "https://api.mainnet-beta.solana.com",
     EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
     EXPO_PUBLIC_LUCKYME_PROGRAM_ID: "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3",
+    EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://luckyme.app/terms",
+    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://luckyme.app/privacy",
+    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://luckyme.app/support",
   });
 
   assert.equal(result.status, 0);

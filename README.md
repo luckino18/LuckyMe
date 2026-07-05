@@ -46,10 +46,10 @@ Set these backend variables for `MAINNET_RELEASE`:
 ```bash
 export LUCKYME_RELEASE_MODE=MAINNET_RELEASE
 export LUCKYME_SOLANA_CLUSTER=mainnet-beta
-export ANCHOR_PROVIDER_URL=https://your-mainnet-rpc.example
+export ANCHOR_PROVIDER_URL=https://rpc.your-domain.com
 export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
-export CORS_ORIGIN=https://your-production-app.example
+export CORS_ORIGIN=https://app.your-domain.com
 export ENABLE_TRANSACTION_SUBMIT=false
 ```
 
@@ -58,11 +58,14 @@ Set these app variables for the Solana Mobile dApp Store APK build:
 ```bash
 export EXPO_PUBLIC_LUCKYME_RELEASE_MODE=MAINNET_RELEASE
 export EXPO_PUBLIC_LUCKYME_STORE_BUILD=true
-export EXPO_PUBLIC_LUCKYME_API_URL=https://your-production-api.example
+export EXPO_PUBLIC_LUCKYME_API_URL=https://api.your-domain.com
 export EXPO_PUBLIC_LUCKYME_WALLET_CHAIN=solana:mainnet
-export EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL=https://your-mainnet-rpc.example
+export EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL=https://rpc.your-domain.com
 export EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER=mainnet-beta
 export EXPO_PUBLIC_LUCKYME_PROGRAM_ID=4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3
+export EXPO_PUBLIC_LUCKYME_TERMS_URL=https://your-domain.com/terms
+export EXPO_PUBLIC_LUCKYME_PRIVACY_URL=https://your-domain.com/privacy
+export EXPO_PUBLIC_LUCKYME_SUPPORT_URL=https://your-domain.com/support
 ```
 
 Release validation rejects:
@@ -71,6 +74,7 @@ Release validation rejects:
 - loopback or LAN backend URLs;
 - non-HTTPS mainnet RPC URLs;
 - non-mainnet wallet chain values;
+- placeholder terms, privacy, or support URLs;
 - production commit-reveal randomness.
 
 ## Backend Setup
@@ -112,6 +116,12 @@ The app defaults wallet authorization to `solana:mainnet` and uses
 
 - `app-seeker/scripts/validate-production-env.mjs`
 - `app-seeker/app.config.js`
+
+For EAS cloud builds, set `EXPO_PUBLIC_LUCKYME_API_URL`,
+`EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL`, `EXPO_PUBLIC_LUCKYME_TERMS_URL`,
+`EXPO_PUBLIC_LUCKYME_PRIVACY_URL`, and `EXPO_PUBLIC_LUCKYME_SUPPORT_URL` in the
+EAS project environment or as EAS secrets before the `dapp-store` build. The
+build must use HTTPS production URLs, not loopback or LAN addresses.
 
 Build the Solana dApp Store APK with EAS:
 
@@ -196,10 +206,11 @@ Store listing material is in `docs/store-listing/`:
 - `icon-adaptive-icon-checklist.md`
 - `privacy-policy.md`
 - `support-contact.md`
+- `required-links.md`
 - `category.txt`
 
-The privacy placeholder is included because the backend may receive wallet
-addresses and request metadata while serving state and transaction builders.
+`required-links.md` tracks the final terms, privacy, and support URLs that must
+be configured before submitting the APK.
 
 Store readiness is tracked in `docs/store-readiness.md`; it uses the same
 `MAINNET_RELEASE`, `solana:mainnet`, `mainnet-beta`, and signed APK release
@@ -242,10 +253,10 @@ For production backend smoke testing:
 ```bash
 LUCKYME_RELEASE_MODE=MAINNET_RELEASE \
 LUCKYME_SOLANA_CLUSTER=mainnet-beta \
-ANCHOR_PROVIDER_URL=https://your-mainnet-rpc.example \
+ANCHOR_PROVIDER_URL=https://rpc.your-domain.com \
 LUCKYME_RANDOMNESS_MODE=orao_vrf \
 LUCKYME_PRODUCTION_RANDOMNESS=true \
-CORS_ORIGIN=https://your-production-app.example \
+CORS_ORIGIN=https://app.your-domain.com \
 ENABLE_TRANSACTION_SUBMIT=false \
 node backend/src/server.mjs
 ```
