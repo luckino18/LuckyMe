@@ -164,7 +164,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/simulate") {
-    if (!IS_LOCAL_DEVELOPMENT || process.env.NODE_ENV === "production" || process.env.LUCKYME_STORE_BUILD === "true" || RELEASE_MODE === "MAINNET_RELEASE") {
+    if (!IS_LOCAL_DEVELOPMENT || IS_NODE_PRODUCTION || IS_STORE_BUILD || RELEASE_MODE === "MAINNET_RELEASE") {
       return json(res, 404, { error: "not_found" });
     }
 
@@ -428,10 +428,10 @@ async function getPublicConfig() {
   const roundDurationSeconds = Number(
     config.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS,
   );
-  const supportedRandomnessModes = !IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT
-    ? ["commit_reveal_demo", "orao_vrf"]
-    : ["orao_vrf"];
-  const randomnessProviderName = IS_RELEASE_SURFACE
+  const supportedRandomnessModes = RELEASE_MODE === "MAINNET_RELEASE"
+    ? ["orao_vrf"]
+    : ["commit_reveal_demo", "orao_vrf"];
+  const randomnessProviderName = RELEASE_MODE === "MAINNET_RELEASE"
     ? "orao_vrf"
     : RANDOMNESS_MODE === "orao_vrf"
       ? "orao_vrf"
@@ -455,7 +455,7 @@ async function getPublicConfig() {
       provider: randomnessProviderName,
       oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
       failover: "none",
-      commitRevealAllowed: !IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT,
+      commitRevealAllowed: RELEASE_MODE !== "MAINNET_RELEASE" && RANDOMNESS_MODE === "commit_reveal_demo",
     },
     mainnet: RELEASE_MODE === "MAINNET_RELEASE",
     realFundsEnabled: RELEASE_MODE === "MAINNET_RELEASE",

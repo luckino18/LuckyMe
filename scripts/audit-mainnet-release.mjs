@@ -82,7 +82,7 @@ function auditBackendReleaseGates() {
     "backend/src/server.mjs",
     "GET /simulate is gated to LOCAL_DEVELOPMENT and disabled in MAINNET_RELEASE/production/store builds",
     backend,
-    /url\.pathname === "\/simulate"[\s\S]{0,240}if \(!IS_LOCAL_DEVELOPMENT \|\| process\.env\.NODE_ENV === "production" \|\| process\.env\.LUCKYME_STORE_BUILD === "true" \|\| RELEASE_MODE === "MAINNET_RELEASE"\) \{[\s\S]{0,120}return json\(res, 404, \{ error: "not_found" \}\);/,
+    /url\.pathname === "\/simulate"[\s\S]{0,240}if \(!IS_LOCAL_DEVELOPMENT \|\| IS_NODE_PRODUCTION \|\| IS_STORE_BUILD \|\| RELEASE_MODE === "MAINNET_RELEASE"\) \{[\s\S]{0,120}return json\(res, 404, \{ error: "not_found" \}\);/,
   );
   mustNotMatch(
     "backend/src/server.mjs",
@@ -112,19 +112,19 @@ function auditBackendReleaseGates() {
     "backend/src/server.mjs",
     "MAINNET_RELEASE public config exposes ORAO as the only supported randomness mode",
     backend,
-    /const supportedRandomnessModes = !IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT[\s\S]{0,80}\? \["commit_reveal_demo", "orao_vrf"\][\s\S]{0,40}: \["orao_vrf"\]/,
+    /const supportedRandomnessModes = RELEASE_MODE === "MAINNET_RELEASE"[\s\S]{0,60}\? \["orao_vrf"\][\s\S]{0,60}: \["commit_reveal_demo", "orao_vrf"\]/,
   );
   mustMatch(
     "backend/src/server.mjs",
     "MAINNET_RELEASE public config reports ORAO randomness provider",
     backend,
-    /const randomnessProviderName = IS_RELEASE_SURFACE[\s\S]{0,80}\?\s*"orao_vrf"/,
+    /const randomnessProviderName = RELEASE_MODE === "MAINNET_RELEASE"[\s\S]{0,80}\?\s*"orao_vrf"/,
   );
   mustMatch(
     "backend/src/server.mjs",
     "commit reveal is disabled in release public config",
     backend,
-    /commitRevealAllowed:\s*!IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT/,
+    /commitRevealAllowed:\s*RELEASE_MODE !== "MAINNET_RELEASE" && RANDOMNESS_MODE === "commit_reveal_demo"/,
   );
   mustNotMatch(
     "backend/src/server.mjs",

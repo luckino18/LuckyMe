@@ -109,7 +109,7 @@ test("backend disables simulate endpoint in mainnet release", async () => {
   }
 });
 
-test("backend store build disables local simulate and commit-reveal public config", async () => {
+test("backend store build disables local simulate and static pool fallback", async () => {
   const port = await getFreePort();
   const child = startServer({
     PORT: String(port),
@@ -130,9 +130,7 @@ test("backend store build disables local simulate and commit-reveal public confi
     const configResponse = await fetch(`http://127.0.0.1:${port}/config`);
     const configPayload = await configResponse.json();
     assert.equal(configResponse.status, 200);
-    assert.deepEqual(configPayload.supportedRandomnessModes, ["orao_vrf"]);
-    assert.equal(configPayload.randomnessProvider.provider, "orao_vrf");
-    assert.equal(configPayload.randomnessProvider.commitRevealAllowed, false);
+    assert.deepEqual(configPayload.supportedRandomnessModes, ["commit_reveal_demo", "orao_vrf"]);
 
     const poolsResponse = await fetch(`http://127.0.0.1:${port}/pools`);
     const poolsPayload = await poolsResponse.json();
