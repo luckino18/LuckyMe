@@ -393,8 +393,12 @@ function isLoopbackOrLanUrl(value: string) {
   }
 }
 
+function isRequiredReleaseUrl(value: string) {
+  return value !== REQUIRED_PRE_SUBMIT_LINK && value.startsWith("https://");
+}
+
 function runtimeConfigError() {
-  if (RELEASE_MODE === "MAINNET_RELEASE") {
+  if (RELEASE_MODE === "MAINNET_RELEASE" || STORE_BUILD) {
     if (!API_BASE_URL) {
       return "EXPO_PUBLIC_LUCKYME_API_URL is required for MAINNET_RELEASE";
     }
@@ -409,6 +413,18 @@ function runtimeConfigError() {
 
     if (SOLANA_CLUSTER !== "mainnet-beta") {
       return "EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER must be mainnet-beta";
+    }
+
+    if (!isRequiredReleaseUrl(TERMS_URL)) {
+      return "EXPO_PUBLIC_LUCKYME_TERMS_URL is required for MAINNET_RELEASE";
+    }
+
+    if (!isRequiredReleaseUrl(PRIVACY_URL)) {
+      return "EXPO_PUBLIC_LUCKYME_PRIVACY_URL is required for MAINNET_RELEASE";
+    }
+
+    if (!isRequiredReleaseUrl(SUPPORT_URL)) {
+      return "EXPO_PUBLIC_LUCKYME_SUPPORT_URL is required for MAINNET_RELEASE";
     }
 
     try {

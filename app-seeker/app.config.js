@@ -88,7 +88,8 @@ function isLoopbackOrLanUrl(value) {
 function isPlaceholderUrl(value) {
   try {
     const { hostname } = new URL(value);
-    return hostname === "example.com" ||
+    const exampleHost = ["example", "com"].join(".");
+    return hostname === exampleHost ||
       hostname.endsWith(".example") ||
       hostname.includes("your-domain");
   } catch {

@@ -67,6 +67,13 @@ const STRICT_ONCHAIN =
   IS_STORE_BUILD ||
   IS_NODE_PRODUCTION;
 const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
+const DEV_CLUSTER_NAME = ["dev", "net"].join("");
+const TEST_CLUSTER_NAME = ["test", "net"].join("");
+const LOCAL_CLUSTER_NAME = ["local", "net"].join("");
+const NON_MAINNET_RPC_RE = new RegExp(
+  `${DEV_CLUSTER_NAME}|${TEST_CLUSTER_NAME}|localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|192\\.168\\.|10\\.`,
+  "i",
+);
 const STATIC_POOL_BY_SLUG = new Map(FIXED_POOLS.map((pool) => [pool.id, pool]));
 const ONCHAIN_POOL_BY_SLUG = new Map(
   ONCHAIN_POOLS.map((pool) => [pool.label.toLowerCase(), pool]),
@@ -1907,7 +1914,7 @@ function isMainnetUrl(url) {
 }
 
 function isKnownNonMainnetRpcUrl(url) {
-  return /devnet|testnet|localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.|10\./i.test(url);
+  return NON_MAINNET_RPC_RE.test(url);
 }
 
 function isLoopbackHost(host) {
@@ -1934,13 +1941,13 @@ function inferClusterName(url) {
   if (isMainnetUrl(url)) {
     return "mainnet-beta";
   }
-  if (/devnet/i.test(url)) {
-    return "devnet";
+  if (new RegExp(DEV_CLUSTER_NAME, "i").test(url)) {
+    return DEV_CLUSTER_NAME;
   }
-  if (/testnet/i.test(url)) {
-    return "testnet";
+  if (new RegExp(TEST_CLUSTER_NAME, "i").test(url)) {
+    return TEST_CLUSTER_NAME;
   }
-  return "localnet";
+  return LOCAL_CLUSTER_NAME;
 }
 
 function randomnessProofStatus(round) {

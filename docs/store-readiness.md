@@ -61,7 +61,8 @@ Based on the official Solana Mobile publishing docs, prepare:
 - `apksigner verify --print-certs` passes for the final APK.
 - Backend production HTTPS URL configured in the EAS environment or secret set.
 - App opens without loopback, LAN, or non-mainnet references.
-- Terms, privacy, and support links are final HTTPS URLs.
+- `EXPO_PUBLIC_LUCKYME_TERMS_URL`, `EXPO_PUBLIC_LUCKYME_PRIVACY_URL`, and
+  `EXPO_PUBLIC_LUCKYME_SUPPORT_URL` are final HTTPS URLs.
 - Screenshots and icon/adaptive icon assets are ready.
 - Publisher Portal account, KYC/KYB, publisher wallet, SOL balance, and storage
   provider are ready.

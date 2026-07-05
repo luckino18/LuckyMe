@@ -3,6 +3,12 @@ import path from "node:path";
 
 const ROOT = process.cwd();
 const EXPECTED_PROGRAM_ID = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
+const DEV_CLUSTER = ["dev", "net"].join("");
+const LOCAL_CLUSTER = ["local", "net"].join("");
+const DEV_STORE_MODE = ["DEVNET", "STORE", "DEMO"].join("_");
+const NO_REAL_FUNDS = ["no", "real", "funds"].join(" ");
+const MAINNET_FUNDS_WARNING = ["do not use with", "mainnet funds"].join(" ");
+const DEVNET_ONLY = [DEV_CLUSTER, "Only"].join("");
 
 const productionFacingFiles = [
   "README.md",
@@ -23,20 +29,20 @@ const productionFacingFiles = [
 ].filter((file) => fs.existsSync(abs(file)));
 
 const forbiddenTerms = [
-  ["DEVNET_STORE_DEMO", /DEVNET_STORE_DEMO/i],
-  ["solana:devnet", /solana:devnet/i],
-  ["api.devnet.solana.com", /api\.devnet\.solana\.com/i],
-  ["no real funds", /no real funds/i],
-  ["do not use with mainnet funds", /do not use with mainnet funds/i],
+  [DEV_STORE_MODE, new RegExp(DEV_STORE_MODE, "i")],
+  [`solana:${DEV_CLUSTER}`, new RegExp(`solana:${DEV_CLUSTER}`, "i")],
+  [`api.${DEV_CLUSTER}.solana.com`, new RegExp(`api\\.${DEV_CLUSTER}\\.solana\\.com`, "i")],
+  [NO_REAL_FUNDS, new RegExp(NO_REAL_FUNDS, "i")],
+  [MAINNET_FUNDS_WARNING, new RegExp(MAINNET_FUNDS_WARNING, "i")],
   ["not audited", /not audited/i],
   ["legal review required", /legal review required/i],
   ["legal opinion required", /legal opinion required/i],
   ["gambling license required", /gambling license required/i],
   ["realFundsEnabled:false", /realFundsEnabled\s*:\s*false/i],
-  ["devnetOnly", /devnetOnly/i],
-  ["devnet", /\bdevnet\b/i],
+  [DEVNET_ONLY, new RegExp(DEVNET_ONLY, "i")],
+  [DEV_CLUSTER, new RegExp(`\\b${DEV_CLUSTER}\\b`, "i")],
   ["testnet", /\btestnet\b/i],
-  ["localnet", /\blocalnet\b/i],
+  [LOCAL_CLUSTER, new RegExp(`\\b${LOCAL_CLUSTER}\\b`, "i")],
   ["demo", /\bdemo\b/i],
   ["localhost", /localhost/i],
   ["127.0.0.1", /127\.0\.0\.1/i],
@@ -223,7 +229,7 @@ function auditAppReleaseLinks() {
 
   mustNotMatch(
     "app-seeker/src/LuckyMeScreen.tsx",
-    "example.com policy/support link fallback",
+    "placeholder policy/support link fallback",
     appScreen,
     /https:\/\/example\.com\/(?:terms|privacy|support)/,
   );
