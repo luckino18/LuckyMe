@@ -10,10 +10,14 @@
       "env": {
         "EXPO_PUBLIC_LUCKYME_RELEASE_MODE": "MAINNET_RELEASE",
         "EXPO_PUBLIC_LUCKYME_STORE_BUILD": "true",
+        "EXPO_PUBLIC_LUCKYME_API_URL": "https://api.luckyme.app",
         "EXPO_PUBLIC_LUCKYME_WALLET_CHAIN": "solana:mainnet",
         "EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL": "https://api.mainnet-beta.solana.com",
         "EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER": "mainnet-beta",
-        "EXPO_PUBLIC_LUCKYME_PROGRAM_ID": "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3"
+        "EXPO_PUBLIC_LUCKYME_PROGRAM_ID": "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3",
+        "EXPO_PUBLIC_LUCKYME_TERMS_URL": "https://luckyme.app/terms",
+        "EXPO_PUBLIC_LUCKYME_PRIVACY_URL": "https://luckyme.app/privacy",
+        "EXPO_PUBLIC_LUCKYME_SUPPORT_URL": "https://luckyme.app/support"
       }
     }
   }

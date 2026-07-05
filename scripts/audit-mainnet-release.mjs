@@ -63,6 +63,7 @@ for (const file of productionFacingFiles) {
 
 auditBackendReleaseGates();
 auditAppReleaseLinks();
+auditDeployEvidence();
 auditProgramIdConsistency();
 auditStoreListing();
 
@@ -199,12 +200,26 @@ function auditAppReleaseLinks() {
   const appValidator = read("app-seeker/scripts/validate-production-env.mjs");
   const appScreen = read("app-seeker/src/LuckyMeScreen.tsx");
   const appReadme = read("app-seeker/README.md");
+  const easEnv = JSON.parse(read("app-seeker/eas.json")).build["dapp-store"].env ?? {};
   const requiredLinks = read("docs/store-listing/required-links.md");
+  const requiredEasEnv = [
+    "EXPO_PUBLIC_LUCKYME_API_URL",
+    "EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL",
+    "EXPO_PUBLIC_LUCKYME_TERMS_URL",
+    "EXPO_PUBLIC_LUCKYME_PRIVACY_URL",
+    "EXPO_PUBLIC_LUCKYME_SUPPORT_URL",
+  ];
   const requiredEnv = [
     "EXPO_PUBLIC_LUCKYME_TERMS_URL",
     "EXPO_PUBLIC_LUCKYME_PRIVACY_URL",
     "EXPO_PUBLIC_LUCKYME_SUPPORT_URL",
   ];
+
+  for (const envName of requiredEasEnv) {
+    if (!isProductionHttpsUrl(easEnv[envName])) {
+      failures.push(`app-seeker/eas.json: ${envName} must be a production HTTPS URL`);
+    }
+  }
 
   for (const envName of requiredEnv) {
     mustMatch(
@@ -239,6 +254,29 @@ function auditAppReleaseLinks() {
     appReadme,
     /EAS project environment or as EAS secrets/,
   );
+}
+
+function auditDeployEvidence() {
+  const evidenceFile = "docs/final-release-evidence.md";
+  if (!fs.existsSync(abs(evidenceFile))) {
+    failures.push(`${evidenceFile}: missing final release evidence file`);
+    return;
+  }
+
+  const evidence = read(evidenceFile);
+  for (const field of [
+    "Mainnet program deploy tx",
+    "Initialized config tx",
+    "Initialized pools txs",
+    "Backend production HTTPS URL",
+    "EAS APK build URL",
+    "apksigner verify --print-certs",
+    "Android / Seeker wallet test result",
+  ]) {
+    if (!evidence.includes(field)) {
+      failures.push(`${evidenceFile}: missing evidence field "${field}"`);
+    }
+  }
 }
 
 function auditStoreListing() {
@@ -308,6 +346,28 @@ function stripAllowedSections(content) {
 function mustNotMatch(file, description, content, pattern) {
   if (pattern.test(content)) {
     failures.push(`${file}: unsafe release pattern present: ${description}`);
+  }
+}
+
+function isProductionHttpsUrl(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname;
+    return parsed.protocol === "https:" &&
+      host !== ["local", "host"].join("") &&
+      !host.startsWith("127.") &&
+      host !== "::1" &&
+      !host.startsWith("192.168.") &&
+      !host.startsWith("10.") &&
+      host !== ["example", "com"].join(".") &&
+      !host.endsWith(".example") &&
+      !host.includes("your-domain");
+  } catch {
+    return false;
   }
 }
 

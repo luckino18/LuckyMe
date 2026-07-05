@@ -61,9 +61,13 @@ EXPO_PUBLIC_LUCKYME_PRIVACY_URL=https://your-domain.com/privacy
 EXPO_PUBLIC_LUCKYME_SUPPORT_URL=https://your-domain.com/support
 ```
 
-Use the Expo dashboard project environment variables or the installed EAS CLI
-environment/secret command supported by that CLI version. Do not put production
-secrets, keystores, or private keys in the repository.
+`app-seeker/eas.json` contains HTTPS production-like public defaults so the
+`dapp-store` profile cannot miss required public env keys. Before the submitted
+build, replace or override those values with the final production API, RPC,
+terms, privacy, and support URLs through the Expo dashboard project environment
+or the installed EAS CLI environment/secret command supported by that CLI
+version. Do not put keystores, private keys, or private operational secrets in
+the repository.
 
 Validate before building:
 
@@ -87,6 +91,9 @@ Verify the final APK:
 ```bash
 APK_PATH=/path/to/app-release.apk npm run app:apk:verify
 ```
+
+Record the build URL and verification output in
+`docs/final-release-evidence.md`.
 
 ## 6. Publisher Portal Submission
 
