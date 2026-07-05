@@ -54,6 +54,9 @@ jobs:
       - name: Run simulator tests
         run: npm test
 
+      - name: Audit mainnet release posture
+        run: npm run audit:mainnet-release
+
       - name: Validate Seeker production config
         run: npm run app:validate:production
         env:

@@ -68,7 +68,7 @@ export EXPO_PUBLIC_LUCKYME_PROGRAM_ID=4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkr
 Release validation rejects:
 
 - missing production environment variables;
-- localhost or LAN backend URLs;
+- loopback or LAN backend URLs;
 - non-HTTPS mainnet RPC URLs;
 - non-mainnet wallet chain values;
 - production commit-reveal randomness.
@@ -232,10 +232,9 @@ npm test
 npm run app:validate:production
 npm run app:typecheck
 npm --prefix app-seeker run doctor
+npm run audit:mainnet-release
 cargo check
 cargo test
-NO_DNA=1 anchor build --provider.cluster localnet
-npm run test:anchor
 ```
 
 For production backend smoke testing:

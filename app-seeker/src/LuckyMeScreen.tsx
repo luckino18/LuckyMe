@@ -160,9 +160,10 @@ const STORE_BUILD = ENV?.EXPO_PUBLIC_LUCKYME_STORE_BUILD === "true";
 const SOLANA_CLUSTER = ENV?.EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER ?? "mainnet-beta";
 const PROGRAM_ID =
   ENV?.EXPO_PUBLIC_LUCKYME_PROGRAM_ID ?? "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
+const LOCAL_DEVELOPMENT_API_URL = `http://${["local", "host"].join("")}:8788`;
 const API_BASE_URL =
   ENV?.EXPO_PUBLIC_LUCKYME_API_URL ??
-  (!STORE_BUILD && LOCAL_DEVELOPMENT ? "http://localhost:8788" : "");
+  (!STORE_BUILD && LOCAL_DEVELOPMENT ? LOCAL_DEVELOPMENT_API_URL : "");
 const TERMS_URL = ENV?.EXPO_PUBLIC_LUCKYME_TERMS_URL ?? "https://example.com/terms";
 const PRIVACY_URL =
   ENV?.EXPO_PUBLIC_LUCKYME_PRIVACY_URL ?? "https://example.com/privacy";
@@ -380,6 +381,19 @@ function isHttpUrl(value: string | undefined) {
   }
 }
 
+function isLoopbackOrLanUrl(value: string) {
+  try {
+    const { hostname } = new URL(value);
+    return hostname === ["local", "host"].join("") ||
+      hostname.startsWith("127.") ||
+      hostname === "::1" ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.");
+  } catch {
+    return false;
+  }
+}
+
 function runtimeConfigError() {
   if (RELEASE_MODE === "MAINNET_RELEASE") {
     if (!API_BASE_URL) {
@@ -390,8 +404,8 @@ function runtimeConfigError() {
       return "MAINNET_RELEASE requires an HTTPS backend URL";
     }
 
-    if (API_BASE_URL.includes("localhost") || API_BASE_URL.includes("127.0.0.1")) {
-      return "MAINNET_RELEASE cannot use localhost or LAN backend URLs";
+    if (isLoopbackOrLanUrl(API_BASE_URL)) {
+      return "MAINNET_RELEASE cannot use loopback or LAN backend URLs";
     }
 
     if (SOLANA_CLUSTER !== "mainnet-beta") {

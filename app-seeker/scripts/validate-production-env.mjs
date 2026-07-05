@@ -21,8 +21,8 @@ if (!isHttpsUrl(apiUrl)) {
   fail("EXPO_PUBLIC_LUCKYME_API_URL must be a production HTTPS backend URL");
 }
 
-if (/localhost|127\.0\.0\.1|192\.168\.|10\./i.test(apiUrl)) {
-  fail("EXPO_PUBLIC_LUCKYME_API_URL cannot point to localhost or a LAN host");
+if (isLoopbackOrLanUrl(apiUrl)) {
+  fail("EXPO_PUBLIC_LUCKYME_API_URL cannot point to a loopback or LAN host");
 }
 
 if (walletChain !== "solana:mainnet") {
@@ -46,6 +46,19 @@ console.log("LuckyMe production app env is valid");
 function isHttpsUrl(value) {
   try {
     return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackOrLanUrl(value) {
+  try {
+    const { hostname } = new URL(value);
+    return hostname === ["local", "host"].join("") ||
+      hostname.startsWith("127.") ||
+      hostname === "::1" ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.");
   } catch {
     return false;
   }

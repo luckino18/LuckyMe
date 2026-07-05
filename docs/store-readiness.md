@@ -37,7 +37,7 @@ Based on the official Solana Mobile publishing docs, prepare:
   `MAINNET_RELEASE` / `mainnet-beta`.
 - `app-seeker/app.config.js` and
   `app-seeker/scripts/validate-production-env.mjs` reject missing production
-  env, localhost backends, non-HTTPS backend/RPC URLs, non-mainnet wallet chain,
+  env, loopback/LAN backends, non-HTTPS backend/RPC URLs, non-mainnet wallet chain,
   and malformed Program IDs.
 - `README.md` and `docs/mainnet-readiness.md` document the same release mode,
   wallet chain, cluster, APK profile, and remaining credential-owned items.

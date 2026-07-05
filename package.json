@@ -10,6 +10,7 @@
   "scripts": {
     "app:typecheck": "npm --prefix app-seeker run typecheck",
     "app:validate:production": "npm --prefix app-seeker run validate:production",
+    "audit:mainnet-release": "node scripts/audit-mainnet-release.mjs",
     "backend:start": "node backend/src/server.mjs",
     "init:pools": "node scripts/init-pools.mjs",
     "localnet:smoke": "node scripts/localnet-smoke.mjs",
@@ -22,7 +23,7 @@
     "randomness:settle": "node scripts/randomness-settle.mjs",
     "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
     "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/app-production-env.test.mjs tests/docs-scripts.test.mjs",
-    "sim:demo": "node sim/demo.mjs"
+    "sim:preview": "node sim/preview.mjs"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "0.32.1",

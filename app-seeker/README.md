@@ -14,7 +14,7 @@ export EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER=mainnet-beta
 export EXPO_PUBLIC_LUCKYME_PROGRAM_ID=4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3
 ```
 
-The release validator rejects missing variables, localhost/LAN backend URLs,
+The release validator rejects missing variables, loopback/LAN backend URLs,
 non-HTTPS backend/RPC URLs, non-mainnet wallet chain values, and malformed
 Program IDs.
 
@@ -38,8 +38,10 @@ eas build --platform android --profile dapp-store --local
 
 - Mobile Wallet Adapter defaults to `solana:mainnet`.
 - The backend builds and simulates unsigned transactions.
-- The app displays amount, pool, connected wallet, Solana mainnet, Program ID,
-  simulation result, and expected ticket/refund behavior before signing.
+- The app displays amount, pool, connected wallet, Solana mainnet, simulation
+  result, and expected ticket/refund behavior before signing.
+- Program, vault, cluster, randomness, commitment, treasury, source, and
+  jackpot-odds details are available in `Details / Transparency`.
 - The connected wallet signs the transaction.
 - The backend does not hold user private keys and does not sign player
   transactions.

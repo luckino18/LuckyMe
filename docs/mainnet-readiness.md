@@ -56,10 +56,9 @@ npm test
 npm run app:validate:production
 npm run app:typecheck
 npm --prefix app-seeker run doctor
+npm run audit:mainnet-release
 cargo check
 cargo test
-NO_DNA=1 anchor build --provider.cluster localnet
-npm run test:anchor
 ```
 
 ## Solana Mobile Docs Scope

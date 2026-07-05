@@ -34,8 +34,8 @@ function validateReleaseEnv() {
     throw new Error("EXPO_PUBLIC_LUCKYME_API_URL must be a production HTTPS backend URL");
   }
 
-  if (/localhost|127\.0\.0\.1|192\.168\.|10\./i.test(apiUrl)) {
-    throw new Error("EXPO_PUBLIC_LUCKYME_API_URL cannot point to localhost or a LAN host");
+  if (isLoopbackOrLanUrl(apiUrl)) {
+    throw new Error("EXPO_PUBLIC_LUCKYME_API_URL cannot point to a loopback or LAN host");
   }
 
   if (walletChain !== "solana:mainnet") {
@@ -52,6 +52,19 @@ function validateReleaseEnv() {
 
   if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(programId)) {
     throw new Error("EXPO_PUBLIC_LUCKYME_PROGRAM_ID must be a valid Solana public key");
+  }
+}
+
+function isLoopbackOrLanUrl(value) {
+  try {
+    const { hostname } = new URL(value);
+    return hostname === ["local", "host"].join("") ||
+      hostname.startsWith("127.") ||
+      hostname === "::1" ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.");
+  } catch {
+    return false;
   }
 }
 

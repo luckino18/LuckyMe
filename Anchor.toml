@@ -8,6 +8,7 @@ skip-lint = false
 [programs.mainnet]
 luckyme = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3"
 
+# Local validator target for development and CI tests only.
 [programs.localnet]
 luckyme = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3"
 

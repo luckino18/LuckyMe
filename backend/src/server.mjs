@@ -32,17 +32,23 @@ import {
   u64Le,
 } from "../../scripts/anchor-client.mjs";
 
-const PORT = Number(process.env.PORT ?? 8788);
-const HOST = process.env.HOST ?? "127.0.0.1";
 const REFUND_DELAY_SECONDS = 600;
 const REFUND_SCAN_ROUNDS = Number(process.env.REFUND_SCAN_ROUNDS ?? 20);
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES ?? 100_000);
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 120);
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT === "true";
 const RELEASE_MODE = process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE";
 const IS_LOCAL_DEVELOPMENT = RELEASE_MODE === "LOCAL_DEVELOPMENT";
+const IS_NODE_PRODUCTION = process.env.NODE_ENV === "production";
+const IS_PRODUCTION_RUNTIME = RELEASE_MODE === "MAINNET_RELEASE" || IS_NODE_PRODUCTION;
+const PORT = Number(process.env.PORT ?? 8788);
+const HOST = process.env.HOST ?? (IS_LOCAL_DEVELOPMENT ? "127.0.0.1" : "0.0.0.0");
+const ALLOW_WILDCARD_CORS =
+  process.env.LUCKYME_ALLOW_WILDCARD_CORS === "true" &&
+  IS_LOCAL_DEVELOPMENT &&
+  !IS_NODE_PRODUCTION;
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? (ALLOW_WILDCARD_CORS ? "*" : "");
 const ANCHOR_PROVIDER_URL =
   process.env.ANCHOR_PROVIDER_URL ?? (IS_LOCAL_DEVELOPMENT ? "http://127.0.0.1:8899" : "");
 const RANDOMNESS_MODE =
@@ -58,7 +64,7 @@ const STRICT_ONCHAIN =
   RELEASE_MODE === "MAINNET_RELEASE" ||
   process.env.LUCKYME_STRICT_ONCHAIN === "true" ||
   process.env.LUCKYME_STORE_BUILD === "true" ||
-  process.env.NODE_ENV === "production";
+  IS_NODE_PRODUCTION;
 const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
 const STATIC_POOL_BY_SLUG = new Map(FIXED_POOLS.map((pool) => [pool.id, pool]));
 const ONCHAIN_POOL_BY_SLUG = new Map(
@@ -111,8 +117,13 @@ const server = http.createServer(async (req, res) => {
           onchain: state.onchain,
         });
       }
+      const source = state.onchain.available
+        ? "onchain"
+        : IS_LOCAL_DEVELOPMENT && !IS_NODE_PRODUCTION
+          ? "static"
+          : "unavailable";
       return json(res, 200, {
-        source: state.onchain.available ? "onchain" : "static",
+        source,
         onchain: state.onchain,
         config: state.config,
         pools: state.pools,
@@ -152,6 +163,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/simulate") {
+    if (!IS_LOCAL_DEVELOPMENT || IS_NODE_PRODUCTION) {
+      return json(res, 404, { error: "not found" });
+    }
+
     const poolId = url.searchParams.get("pool") ?? "normal";
     const pool = FIXED_POOLS.find((item) => item.id === poolId);
     if (!pool) {
@@ -161,11 +176,11 @@ const server = http.createServer(async (req, res) => {
     const result = settleRound({
       ticketPriceLamports: pool.ticketPriceLamports,
       jackpotBalanceLamports: 1_250_000_000n,
-      randomSeed: url.searchParams.get("seed") ?? "dev",
+      randomSeed: url.searchParams.get("seed") ?? "local-development",
       entries: [
-        { player: "alice", tickets: 3n },
-        { player: "ana", tickets: 8n },
-        { player: "marius", tickets: 1n },
+        { player: "local-player-1", tickets: 3n },
+        { player: "local-player-2", tickets: 8n },
+        { player: "local-player-3", tickets: 1n },
       ],
     });
 
@@ -405,6 +420,14 @@ async function getPublicConfig() {
   const roundDurationSeconds = Number(
     config.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS,
   );
+  const supportedRandomnessModes = IS_LOCAL_DEVELOPMENT && !IS_NODE_PRODUCTION
+    ? ["commit_reveal_demo", "orao_vrf"]
+    : ["orao_vrf"];
+  const randomnessProviderName = IS_PRODUCTION_RUNTIME
+    ? "orao_vrf"
+    : RANDOMNESS_MODE === "orao_vrf"
+      ? "orao_vrf"
+      : "commit_reveal_demo";
 
   return {
     service: "luckyme-api",
@@ -417,14 +440,14 @@ async function getPublicConfig() {
     onchainAvailable: state.onchain.available,
     onchain: state.onchain,
     randomnessMode: RANDOMNESS_MODE,
-    supportedRandomnessModes: ["commit_reveal_demo", "orao_vrf"],
+    supportedRandomnessModes,
     productionRandomnessEnabled: PRODUCTION_RANDOMNESS_ENABLED,
     randomnessProvider: {
       mode: RANDOMNESS_MODE,
-      provider: RANDOMNESS_MODE === "orao_vrf" ? "orao_vrf" : "commit_reveal_demo",
+      provider: randomnessProviderName,
       oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
       failover: "none",
-      commitRevealAllowed: RELEASE_MODE === "LOCAL_DEVELOPMENT",
+      commitRevealAllowed: IS_LOCAL_DEVELOPMENT && !IS_NODE_PRODUCTION,
     },
     mainnet: RELEASE_MODE === "MAINNET_RELEASE",
     realFundsEnabled: RELEASE_MODE === "MAINNET_RELEASE",
@@ -1181,7 +1204,11 @@ async function getRoundRandomness(poolInput, roundIdInput) {
     clusterUrl: url,
     programId: PROGRAM_ID.toBase58(),
     randomnessMode: RANDOMNESS_MODE,
-    provider: RANDOMNESS_MODE === "orao_vrf" ? "orao_vrf" : "commit_reveal_demo",
+    provider: IS_PRODUCTION_RUNTIME
+      ? "orao_vrf"
+      : RANDOMNESS_MODE === "orao_vrf"
+        ? "orao_vrf"
+        : "commit_reveal_demo",
     pool: poolSlug,
     roundId,
     round: round.toBase58(),
@@ -1596,20 +1623,26 @@ function json(res, status, body) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
-    "access-control-allow-origin": CORS_ORIGIN,
     "access-control-allow-headers": "content-type",
     "access-control-allow-methods": "GET, POST, OPTIONS",
+    ...corsHeaders(),
   });
   res.end(JSON.stringify(body, null, 2));
 }
 
 function empty(res, status) {
   res.writeHead(status, {
-    "access-control-allow-origin": CORS_ORIGIN,
     "access-control-allow-headers": "content-type",
     "access-control-allow-methods": "GET, POST, OPTIONS",
+    ...corsHeaders(),
   });
   res.end();
+}
+
+function corsHeaders() {
+  return CORS_ORIGIN
+    ? { "access-control-allow-origin": CORS_ORIGIN }
+    : {};
 }
 
 function httpError(status, code, message) {
@@ -1764,6 +1797,22 @@ function validateRuntimeConfig() {
     throw new Error("LUCKYME_RELEASE_MODE must be MAINNET_RELEASE or LOCAL_DEVELOPMENT");
   }
 
+  if (!Number.isSafeInteger(PORT) || PORT < 1 || PORT > 65_535) {
+    throw new Error("PORT must be an integer between 1 and 65535");
+  }
+
+  if (!HOST || typeof HOST !== "string") {
+    throw new Error("HOST must be configured");
+  }
+
+  if (isLoopbackHost(HOST) && !IS_LOCAL_DEVELOPMENT) {
+    throw new Error("Loopback HOST values are allowed only in LOCAL_DEVELOPMENT");
+  }
+
+  if (IS_NODE_PRODUCTION && RELEASE_MODE !== "MAINNET_RELEASE") {
+    throw new Error("NODE_ENV=production requires LUCKYME_RELEASE_MODE=MAINNET_RELEASE");
+  }
+
   if (!["commit_reveal_demo", "orao_vrf"].includes(RANDOMNESS_MODE)) {
     throw new Error("LUCKYME_RANDOMNESS_MODE must be commit_reveal_demo or orao_vrf");
   }
@@ -1783,6 +1832,10 @@ function validateRuntimeConfig() {
       throw new Error("MAINNET_RELEASE requires an HTTPS Solana RPC URL");
     }
 
+    if (isKnownNonMainnetRpcUrl(ANCHOR_PROVIDER_URL)) {
+      throw new Error("MAINNET_RELEASE requires a mainnet-beta Solana RPC URL");
+    }
+
     if (SOLANA_CLUSTER !== "mainnet-beta") {
       throw new Error("MAINNET_RELEASE requires LUCKYME_SOLANA_CLUSTER=mainnet-beta");
     }
@@ -1793,8 +1846,16 @@ function validateRuntimeConfig() {
       );
     }
 
+    if (!CORS_ORIGIN) {
+      throw new Error("CORS_ORIGIN is required for MAINNET_RELEASE");
+    }
+
     if (CORS_ORIGIN === "*") {
       throw new Error("CORS_ORIGIN must be strict for MAINNET_RELEASE");
+    }
+
+    if (!isHttpsOrigin(CORS_ORIGIN)) {
+      throw new Error("CORS_ORIGIN must be an HTTPS origin for MAINNET_RELEASE");
     }
 
     if (ENABLE_TRANSACTION_SUBMIT) {
@@ -1804,18 +1865,24 @@ function validateRuntimeConfig() {
     throw new Error("LOCAL_DEVELOPMENT randomness mode is invalid");
   }
 
-  if (process.env.NODE_ENV === "production") {
-    if (CORS_ORIGIN === "*") {
+  if (IS_NODE_PRODUCTION) {
+    if (!CORS_ORIGIN || CORS_ORIGIN === "*") {
       throw new Error("CORS_ORIGIN must be strict in production");
+    }
+
+    if (!isHttpsOrigin(CORS_ORIGIN)) {
+      throw new Error("CORS_ORIGIN must be an HTTPS origin in production");
     }
 
     if (ENABLE_TRANSACTION_SUBMIT) {
       throw new Error("ENABLE_TRANSACTION_SUBMIT must stay false in production");
     }
+  }
 
-    if (HOST === "0.0.0.0") {
-      throw new Error("HOST=0.0.0.0 is not allowed directly in production; put the API behind a proxy");
-    }
+  if (CORS_ORIGIN === "*" && !ALLOW_WILDCARD_CORS) {
+    throw new Error(
+      "Wildcard CORS requires LOCAL_DEVELOPMENT and LUCKYME_ALLOW_WILDCARD_CORS=true",
+    );
   }
 }
 
@@ -1829,6 +1896,23 @@ function isHttpsUrl(url) {
 
 function isMainnetUrl(url) {
   return /mainnet|api\.mainnet-beta\.solana\.com/i.test(url);
+}
+
+function isKnownNonMainnetRpcUrl(url) {
+  return /devnet|testnet|localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.|10\./i.test(url);
+}
+
+function isLoopbackHost(host) {
+  return /^(localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)$/i.test(host);
+}
+
+function isHttpsOrigin(origin) {
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === "https:" && parsed.origin === origin.replace(/\/$/, "");
+  } catch {
+    return false;
+  }
 }
 
 function clusterName(url) {

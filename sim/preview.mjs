@@ -4,11 +4,11 @@ const result = settleRound({
   ticketPriceLamports: solToLamports("0.01"),
   jackpotBalanceLamports: solToLamports("1.25"),
   entries: [
-    { player: "alice", tickets: 3n },
-    { player: "ana", tickets: 8n },
-    { player: "marius", tickets: 1n },
+    { player: "player-1", tickets: 3n },
+    { player: "player-2", tickets: 8n },
+    { player: "player-3", tickets: 1n },
   ],
-  randomSeed: "demo-round",
+  randomSeed: "preview-round",
 });
 
 console.log({

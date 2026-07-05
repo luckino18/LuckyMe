@@ -12,6 +12,8 @@ export LUCKYME_SOLANA_CLUSTER=mainnet-beta
 export ANCHOR_PROVIDER_URL=https://your-mainnet-rpc.example
 export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
+export HOST=0.0.0.0
+export PORT=8788
 export CORS_ORIGIN=https://your-production-app.example
 export ENABLE_TRANSACTION_SUBMIT=false
 node backend/src/server.mjs
@@ -24,6 +26,7 @@ node backend/src/server.mjs
 - `LUCKYME_SOLANA_CLUSTER` is not `mainnet-beta`;
 - randomness is not `orao_vrf`;
 - `LUCKYME_PRODUCTION_RANDOMNESS` is not `true`;
+- host/port config is invalid or loopback is used outside local development;
 - CORS is wildcard;
 - the public submit relay is enabled.
 

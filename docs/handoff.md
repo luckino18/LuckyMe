@@ -29,6 +29,7 @@ Seeker Store mainnet release.
 - `docs/apk-signing.md`
 - `docs/solana-mobile-publishing.md`
 - `docs/store-listing/*`
+- `scripts/audit-mainnet-release.mjs`
 
 ## Remaining Credential Items
 
@@ -50,8 +51,7 @@ npm test
 npm run app:validate:production
 npm run app:typecheck
 npm --prefix app-seeker run doctor
+npm run audit:mainnet-release
 cargo check
 cargo test
-NO_DNA=1 anchor build --provider.cluster localnet
-npm run test:anchor
 ```

@@ -28,6 +28,19 @@ test("backend refuses mainnet release on non-HTTPS RPC", async () => {
   assert.match(result.output, /MAINNET_RELEASE requires an HTTPS Solana RPC URL/);
 });
 
+test("backend refuses mainnet release on known non-mainnet RPC", async () => {
+  const result = await runServerExpectingExit({
+    ANCHOR_PROVIDER_URL: "https://api.devnet.solana.com",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
+    CORS_ORIGIN: "https://luckyme.example",
+  });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.output, /MAINNET_RELEASE requires a mainnet-beta Solana RPC URL/);
+});
+
 test("backend refuses mainnet release without ORAO production randomness", async () => {
   const result = await runServerExpectingExit({
     ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
@@ -45,6 +58,7 @@ test("backend accepts strict mainnet production health config", async () => {
   const port = await getFreePort();
   const child = startServer({
     PORT: String(port),
+    HOST: "0.0.0.0",
     NODE_ENV: "production",
     ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
     LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
@@ -67,6 +81,44 @@ test("backend accepts strict mainnet production health config", async () => {
     child.kill();
     await once(child, "exit").catch(() => {});
   }
+});
+
+test("backend disables simulate endpoint in mainnet release", async () => {
+  const port = await getFreePort();
+  const child = startServer({
+    PORT: String(port),
+    HOST: "0.0.0.0",
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
+    LUCKYME_RANDOMNESS_MODE: "orao_vrf",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
+    CORS_ORIGIN: "https://luckyme.example",
+  });
+
+  try {
+    await waitForOutput(child, /LuckyMe API listening/);
+    const response = await fetch(`http://127.0.0.1:${port}/simulate`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 404);
+    assert.equal(payload.error, "not found");
+  } finally {
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  }
+});
+
+test("backend production runtime requires mainnet release mode", async () => {
+  const result = await runServerExpectingExit({
+    HOST: "0.0.0.0",
+    NODE_ENV: "production",
+    LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
+    CORS_ORIGIN: "https://luckyme.example",
+  });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.output, /NODE_ENV=production requires LUCKYME_RELEASE_MODE=MAINNET_RELEASE/);
 });
 
 test("backend accepts ORAO randomness mode for public config", async () => {
@@ -95,9 +147,14 @@ test("backend accepts ORAO randomness mode for public config", async () => {
 
 test("backend production mode requires strict CORS", async () => {
   const result = await runServerExpectingExit({
+    HOST: "0.0.0.0",
     NODE_ENV: "production",
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
     CORS_ORIGIN: "*",
-    LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
+    LUCKYME_RANDOMNESS_MODE: "orao_vrf",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
   });
 
   assert.notEqual(result.code, 0);
@@ -173,8 +230,8 @@ function startServer(env) {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      HOST: "127.0.0.1",
-      PORT: "0",
+      HOST: "0.0.0.0",
+      PORT: "8788",
       LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
       LUCKYME_RANDOMNESS_MODE: "commit_reveal_demo",
       LUCKYME_STORE_BUILD: "false",
