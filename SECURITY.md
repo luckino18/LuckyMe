@@ -61,8 +61,3 @@ disclosure can be completed consistently with the deployed infrastructure.
 The Solana Mobile docs specify APK signing, metadata, Publisher Portal account
 and KYC/KYB, wallet funding for submission/storage, Publisher Policy, Developer
 Agreement, and optional publishing CLI prerequisites.
-
-The cited Solana Mobile docs do not list a third-party smart-contract audit
-report, written legal opinion, or uploaded gambling license as universal
-submission artifacts. Publisher Policy compliance remains the publisher's
-responsibility.

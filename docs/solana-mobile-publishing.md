@@ -44,14 +44,8 @@ dapp-store \
 The CLI maps the Android package name in the APK to the app under the publisher
 account.
 
-## Not Specified By Solana Mobile Docs
+## Official Submission Scope
 
-The cited Solana Mobile docs do not list these as universal submission
-artifacts:
-
-- third-party smart-contract audit report;
-- written legal opinion;
-- uploaded gambling license.
-
-The Publisher Policy still requires compliant content, transactions, and
-user-data disclosures.
+Keep the submission package aligned to the official Solana Mobile items above:
+signed APK, metadata, Publisher Portal account, KYC/KYB, publisher wallet SOL,
+storage provider, Publisher Policy review, and Developer Agreement review.

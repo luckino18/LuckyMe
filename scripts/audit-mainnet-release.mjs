@@ -7,8 +7,15 @@ const DEV_CLUSTER = ["dev", "net"].join("");
 const LOCAL_CLUSTER = ["local", "net"].join("");
 const DEV_STORE_MODE = ["DEVNET", "STORE", "DEMO"].join("_");
 const NO_REAL_FUNDS = ["no", "real", "funds"].join(" ");
+const NO_REAL_PRIZES = ["no", "real", "prizes"].join(" ");
 const MAINNET_FUNDS_WARNING = ["do not use with", "mainnet funds"].join(" ");
-const DEVNET_ONLY = [DEV_CLUSTER, "Only"].join("");
+const DEVNET_ONLY = [DEV_CLUSTER, "only"].join(" ");
+const LOCALNET_ONLY = [LOCAL_CLUSTER, "only"].join(" ");
+const EXTERNAL_AUDIT_REQUIRED = ["external", "audit", "required"].join(" ");
+const LEGAL_REVIEW_REQUIRED = ["legal", "review", "required"].join(" ");
+const LEGAL_OPINION_REQUIRED = ["legal", "opinion", "required"].join(" ");
+const GAMBLING_LICENSE_REQUIRED = ["gambling", "license", "required"].join(" ");
+const MAINNET_BLOCKED = ["mainnet", "blocked"].join(" ");
 
 const productionFacingFiles = [
   "README.md",
@@ -23,6 +30,7 @@ const productionFacingFiles = [
   "docs/apk-signing.md",
   "docs/handoff.md",
   "docs/mainnet-readiness.md",
+  "docs/release-v1.0.0-mainnet.md",
   "docs/solana-mobile-publishing.md",
   "docs/store-readiness.md",
   ...listFiles("docs/store-listing"),
@@ -33,13 +41,17 @@ const forbiddenTerms = [
   [`solana:${DEV_CLUSTER}`, new RegExp(`solana:${DEV_CLUSTER}`, "i")],
   [`api.${DEV_CLUSTER}.solana.com`, new RegExp(`api\\.${DEV_CLUSTER}\\.solana\\.com`, "i")],
   [NO_REAL_FUNDS, new RegExp(NO_REAL_FUNDS, "i")],
+  [NO_REAL_PRIZES, new RegExp(NO_REAL_PRIZES, "i")],
   [MAINNET_FUNDS_WARNING, new RegExp(MAINNET_FUNDS_WARNING, "i")],
   ["not audited", /not audited/i],
-  ["legal review required", /legal review required/i],
-  ["legal opinion required", /legal opinion required/i],
-  ["gambling license required", /gambling license required/i],
+  [EXTERNAL_AUDIT_REQUIRED, new RegExp(EXTERNAL_AUDIT_REQUIRED, "i")],
+  [LEGAL_REVIEW_REQUIRED, new RegExp(LEGAL_REVIEW_REQUIRED, "i")],
+  [LEGAL_OPINION_REQUIRED, new RegExp(LEGAL_OPINION_REQUIRED, "i")],
+  [GAMBLING_LICENSE_REQUIRED, new RegExp(GAMBLING_LICENSE_REQUIRED, "i")],
+  [MAINNET_BLOCKED, new RegExp(MAINNET_BLOCKED, "i")],
   ["realFundsEnabled:false", /realFundsEnabled\s*:\s*false/i],
   [DEVNET_ONLY, new RegExp(DEVNET_ONLY, "i")],
+  [LOCALNET_ONLY, new RegExp(LOCALNET_ONLY, "i")],
   [DEV_CLUSTER, new RegExp(`\\b${DEV_CLUSTER}\\b`, "i")],
   ["testnet", /\btestnet\b/i],
   [LOCAL_CLUSTER, new RegExp(`\\b${LOCAL_CLUSTER}\\b`, "i")],
@@ -310,6 +322,7 @@ function stripAllowedSections(content) {
   const allowedHeadings = [
     "Local Development",
     "Local Development Only",
+    "Historical Release Note",
     "Solana Mobile Docs Scope",
     "Not Specified By Solana Mobile Docs",
     "Solana Mobile Requirements Note",

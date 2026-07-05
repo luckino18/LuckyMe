@@ -198,7 +198,7 @@ test("backend transaction submit relay is disabled by default", async () => {
   const port = await getFreePort();
   const child = startServer({
     PORT: String(port),
-    ANCHOR_PROVIDER_URL: "http://127.0.0.1:1",
+    ANCHOR_PROVIDER_URL: "http://127.0.0.1:1/?api-key=super-secret-rpc-key",
     LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
   });
 
@@ -237,6 +237,9 @@ test("backend exposes safe public config", async () => {
     assert.equal(payload.releaseMode, "LOCAL_DEVELOPMENT");
     assert.equal(payload.randomnessMode, "commit_reveal_demo");
     assert.deepEqual(payload.supportedRandomnessModes, ["commit_reveal_demo", "orao_vrf"]);
+    assert.equal(payload.clusterUrl, "http://127.0.0.1:1/");
+    assert.equal(payload.onchain.clusterUrl, undefined);
+    assert.equal(JSON.stringify(payload).includes("super-secret-rpc-key"), false);
     assert.equal(payload.economics.houseFeeBps, 100);
     assert.equal(payload.economics.jackpotBps, 100);
     assert.equal(payload.economics.mainPrizeBps, 9800);

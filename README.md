@@ -215,23 +215,16 @@ be configured before submitting the APK.
 Store readiness is tracked in `docs/store-readiness.md`; it uses the same
 `MAINNET_RELEASE`, `solana:mainnet`, `mainnet-beta`, and signed APK release
 positioning as this README.
+The final `v1.0.0-mainnet` release checklist is in
+`docs/release-v1.0.0-mainnet.md`.
 
 ## Solana Mobile Docs Scope
 
-The official Solana Mobile docs specify APK signing, metadata, Publisher Portal
-account/KYC, wallet funding for submission/storage costs, Publisher Policy,
-Developer Agreement, and optional publishing CLI requirements.
-
-These are not specified by the cited Solana Mobile docs as universal submission
-artifacts:
-
-- a third-party smart-contract audit report;
-- a written legal opinion;
-- an uploaded gambling license.
-
-The Publisher Policy still requires submitted assets, content, transactions, and
-user-data practices to comply with the policy and applicable law. That is a
-publisher responsibility, not a repo-side build blocker encoded in LuckyMe.
+The official Solana Mobile docs specify signed APK submission, app metadata,
+Publisher Portal account/KYC, publisher wallet SOL for submission/storage,
+storage provider selection, Publisher Policy review, Developer Agreement review,
+and optional publishing CLI requirements. LuckyMe keeps those as the
+store-submission requirements in this repo.
 
 ## Validation Commands
 

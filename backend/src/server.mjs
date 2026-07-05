@@ -320,7 +320,7 @@ async function getProgramState({ player } = {}) {
       return {
         onchain: {
           available: false,
-          clusterUrl: url,
+          clusterUrl: publicRpcUrl(url),
           programId: PROGRAM_ID.toBase58(),
           reason: !programAccount ? "program_not_deployed" : "config_not_initialized",
         },
@@ -400,7 +400,7 @@ async function getProgramState({ player } = {}) {
     return {
       onchain: {
         available: true,
-        clusterUrl: url,
+        clusterUrl: publicRpcUrl(url),
         programId: PROGRAM_ID.toBase58(),
       },
       config: {
@@ -455,7 +455,7 @@ async function getPublicConfig() {
     releaseMode: RELEASE_MODE,
     supportedModes: ["MAINNET_RELEASE", "LOCAL_DEVELOPMENT"],
     cluster: clusterName(ANCHOR_PROVIDER_URL),
-    clusterUrl: ANCHOR_PROVIDER_URL,
+    clusterUrl: publicRpcUrl(ANCHOR_PROVIDER_URL),
     programId: PROGRAM_ID.toBase58(),
     onchainAvailable: state.onchain.available,
     onchain: state.onchain,
@@ -563,7 +563,7 @@ async function buildBuyTicketsTransaction(payload) {
   const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
 
   return {
-    clusterUrl: url,
+    clusterUrl: publicRpcUrl(url),
     programId: PROGRAM_ID.toBase58(),
     transactionBase64,
     summary: {
@@ -654,7 +654,7 @@ async function buildRefundEntryTransaction(payload) {
   const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
 
   return {
-    clusterUrl: url,
+    clusterUrl: publicRpcUrl(url),
     programId: PROGRAM_ID.toBase58(),
     transactionBase64,
     summary: {
@@ -782,7 +782,7 @@ async function buildSettleRoundTransaction(payload) {
   const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
 
   return {
-    clusterUrl: url,
+    clusterUrl: publicRpcUrl(url),
     programId: PROGRAM_ID.toBase58(),
     transactionBase64,
     summary: {
@@ -878,7 +878,7 @@ async function buildRequestRandomnessTransaction(payload) {
   const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
 
   return {
-    clusterUrl: url,
+    clusterUrl: publicRpcUrl(url),
     programId: PROGRAM_ID.toBase58(),
     transactionBase64,
     summary: {
@@ -1032,7 +1032,7 @@ async function buildSettleProviderRoundTransaction(payload) {
   const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
 
   return {
-    clusterUrl: url,
+    clusterUrl: publicRpcUrl(url),
     programId: PROGRAM_ID.toBase58(),
     transactionBase64,
     summary: {
@@ -1144,7 +1144,7 @@ async function submitSignedTransaction(payload) {
   }
 
   return {
-    clusterUrl: url,
+    clusterUrl: publicRpcUrl(url),
     signature,
     confirmation: {
       err: confirmation.value.err,
@@ -1221,7 +1221,7 @@ async function getRoundRandomness(poolInput, roundIdInput) {
   const refundState = getRefundState(roundAccount);
 
   return {
-    clusterUrl: url,
+    clusterUrl: publicRpcUrl(url),
     programId: PROGRAM_ID.toBase58(),
     randomnessMode: RANDOMNESS_MODE,
     provider: IS_RELEASE_SURFACE
@@ -1376,7 +1376,7 @@ async function getRefundableEntries(url) {
 
   if (!hasConfig) {
     return {
-      clusterUrl,
+      clusterUrl: publicRpcUrl(clusterUrl),
       programId: PROGRAM_ID.toBase58(),
       refunds: [],
     };
@@ -1432,7 +1432,7 @@ async function getRefundableEntries(url) {
   }
 
   return {
-    clusterUrl,
+    clusterUrl: publicRpcUrl(clusterUrl),
     programId: PROGRAM_ID.toBase58(),
     scanRounds: REFUND_SCAN_ROUNDS,
     refunds,
@@ -1911,6 +1911,19 @@ function isHttpsUrl(url) {
     return new URL(url).protocol === "https:";
   } catch {
     return false;
+  }
+}
+
+function publicRpcUrl(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.username = "";
+    parsed.password = "";
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
   }
 }
 

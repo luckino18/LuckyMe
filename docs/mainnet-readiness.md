@@ -64,11 +64,6 @@ cargo test
 
 ## Solana Mobile Docs Scope
 
-Not specified by the cited Solana Mobile docs as universal submission artifacts:
-
-- third-party smart-contract audit report;
-- written legal opinion;
-- uploaded gambling license.
-
-Publisher Policy compliance and accurate user-data disclosure remain publisher
-responsibilities, not invented repo-side release blockers.
+Solana Mobile submission scope in this repo is limited to the official store
+items: signed APK, metadata, Publisher Portal, KYC/KYB, publisher wallet SOL,
+storage provider, Publisher Policy review, and Developer Agreement review.

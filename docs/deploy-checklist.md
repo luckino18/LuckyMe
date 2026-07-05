@@ -106,10 +106,3 @@ Record the build URL and verification output in
 - Upload the signed APK.
 - Submit the release in the Publisher Portal and approve required wallet
   signing prompts.
-
-## Not Added As Repo Blockers
-
-The official Solana Mobile docs do not list a third-party audit report, written
-legal opinion, or uploaded license as universal APK submission artifacts.
-Publisher Policy compliance and accurate user-data disclosures remain publisher
-responsibilities.

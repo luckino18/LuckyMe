@@ -21,6 +21,7 @@ const docs = [
   "docs/manual-settlement.md",
   "docs/randomness.md",
   "docs/mainnet-readiness.md",
+  "docs/release-v1.0.0-mainnet.md",
   "docs/solana-mobile-publishing.md",
   "docs/store-readiness.md",
   "docs/production-keeper.md",

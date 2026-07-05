@@ -67,19 +67,6 @@ Based on the official Solana Mobile publishing docs, prepare:
 - Publisher Portal account, KYC/KYB, publisher wallet, SOL balance, and storage
   provider are ready.
 
-## Not Solana Mobile Blockers
-
-The cited Solana Mobile docs do not list these as universal submission
-artifacts:
-
-- third-party smart-contract audit report;
-- written legal opinion;
-- uploaded gambling license.
-
-Publisher Policy compliance and truthful user-data disclosures remain publisher
-responsibilities, but they are not encoded in this repo as invented release
-blockers.
-
 ## Remaining Credential-Owned Items
 
 - Real production HTTPS backend URL.
