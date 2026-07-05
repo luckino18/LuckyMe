@@ -74,9 +74,27 @@ function auditBackendReleaseGates() {
 
   mustMatch(
     "backend/src/server.mjs",
-    "GET /simulate is gated to LOCAL_DEVELOPMENT and disabled in production",
+    "STORE_BUILD is treated as a release surface",
     backend,
-    /url\.pathname === "\/simulate"[\s\S]{0,240}if \(!IS_LOCAL_DEVELOPMENT \|\| IS_NODE_PRODUCTION\)/,
+    /const IS_RELEASE_SURFACE = RELEASE_MODE === "MAINNET_RELEASE" \|\| IS_NODE_PRODUCTION \|\| IS_STORE_BUILD/,
+  );
+  mustMatch(
+    "backend/src/server.mjs",
+    "GET /simulate is gated to LOCAL_DEVELOPMENT and disabled in MAINNET_RELEASE/production/store builds",
+    backend,
+    /url\.pathname === "\/simulate"[\s\S]{0,240}if \(!IS_LOCAL_DEVELOPMENT \|\| process\.env\.NODE_ENV === "production" \|\| process\.env\.LUCKYME_STORE_BUILD === "true" \|\| RELEASE_MODE === "MAINNET_RELEASE"\) \{[\s\S]{0,120}return json\(res, 404, \{ error: "not_found" \}\);/,
+  );
+  mustNotMatch(
+    "backend/src/server.mjs",
+    "seed \"dev\" reachable from backend simulation data",
+    backend,
+    /(?:randomSeed|seed):\s*"dev"|url\.searchParams\.get\("seed"\)\s*\?\?\s*"dev"/,
+  );
+  mustNotMatch(
+    "backend/src/server.mjs",
+    "alice/ana/marius demo simulation players",
+    backend,
+    /["'](?:alice|ana|marius)["']/i,
   );
   mustNotMatch(
     "backend/src/server.mjs",
@@ -86,15 +104,33 @@ function auditBackendReleaseGates() {
   );
   mustMatch(
     "backend/src/server.mjs",
-    "static pool source is limited to local development",
+    "static pool source is limited to local development outside release surfaces",
     backend,
-    /IS_LOCAL_DEVELOPMENT && !IS_NODE_PRODUCTION[\s\S]{0,80}\?\s*"static"/,
+    /!IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT[\s\S]{0,80}\?\s*"static"/,
+  );
+  mustMatch(
+    "backend/src/server.mjs",
+    "MAINNET_RELEASE public config exposes ORAO as the only supported randomness mode",
+    backend,
+    /const supportedRandomnessModes = !IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT[\s\S]{0,80}\? \["commit_reveal_demo", "orao_vrf"\][\s\S]{0,40}: \["orao_vrf"\]/,
+  );
+  mustMatch(
+    "backend/src/server.mjs",
+    "MAINNET_RELEASE public config reports ORAO randomness provider",
+    backend,
+    /const randomnessProviderName = IS_RELEASE_SURFACE[\s\S]{0,80}\?\s*"orao_vrf"/,
+  );
+  mustMatch(
+    "backend/src/server.mjs",
+    "commit reveal is disabled in release public config",
+    backend,
+    /commitRevealAllowed:\s*!IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT/,
   );
   mustNotMatch(
     "backend/src/server.mjs",
     "commit_reveal_demo exposed as unconditional supported randomness mode",
     backend,
-    /supportedRandomnessModes:\s*\["commit_reveal_demo",\s*"orao_vrf"\]/,
+    /const supportedRandomnessModes\s*=\s*\[\s*"commit_reveal_demo",\s*"orao_vrf"\s*\]|supportedRandomnessModes:\s*\["commit_reveal_demo",\s*"orao_vrf"\]/,
   );
   mustMatch(
     "backend/src/server.mjs",

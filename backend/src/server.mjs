@@ -41,7 +41,8 @@ const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT === "tru
 const RELEASE_MODE = process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE";
 const IS_LOCAL_DEVELOPMENT = RELEASE_MODE === "LOCAL_DEVELOPMENT";
 const IS_NODE_PRODUCTION = process.env.NODE_ENV === "production";
-const IS_PRODUCTION_RUNTIME = RELEASE_MODE === "MAINNET_RELEASE" || IS_NODE_PRODUCTION;
+const IS_STORE_BUILD = process.env.LUCKYME_STORE_BUILD === "true";
+const IS_RELEASE_SURFACE = RELEASE_MODE === "MAINNET_RELEASE" || IS_NODE_PRODUCTION || IS_STORE_BUILD;
 const PORT = Number(process.env.PORT ?? 8788);
 const HOST = process.env.HOST ?? (IS_LOCAL_DEVELOPMENT ? "127.0.0.1" : "0.0.0.0");
 const ALLOW_WILDCARD_CORS =
@@ -63,7 +64,7 @@ const ORAO_PROGRAM_ID = parsePublicKeyConfig(
 const STRICT_ONCHAIN =
   RELEASE_MODE === "MAINNET_RELEASE" ||
   process.env.LUCKYME_STRICT_ONCHAIN === "true" ||
-  process.env.LUCKYME_STORE_BUILD === "true" ||
+  IS_STORE_BUILD ||
   IS_NODE_PRODUCTION;
 const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
 const STATIC_POOL_BY_SLUG = new Map(FIXED_POOLS.map((pool) => [pool.id, pool]));
@@ -119,7 +120,7 @@ const server = http.createServer(async (req, res) => {
       }
       const source = state.onchain.available
         ? "onchain"
-        : IS_LOCAL_DEVELOPMENT && !IS_NODE_PRODUCTION
+        : !IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT
           ? "static"
           : "unavailable";
       return json(res, 200, {
@@ -163,8 +164,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/simulate") {
-    if (!IS_LOCAL_DEVELOPMENT || IS_NODE_PRODUCTION) {
-      return json(res, 404, { error: "not found" });
+    if (!IS_LOCAL_DEVELOPMENT || process.env.NODE_ENV === "production" || process.env.LUCKYME_STORE_BUILD === "true" || RELEASE_MODE === "MAINNET_RELEASE") {
+      return json(res, 404, { error: "not_found" });
     }
 
     const poolId = url.searchParams.get("pool") ?? "normal";
@@ -173,16 +174,10 @@ const server = http.createServer(async (req, res) => {
       return json(res, 404, { error: "unknown pool" });
     }
 
-    const result = settleRound({
-      ticketPriceLamports: pool.ticketPriceLamports,
-      jackpotBalanceLamports: 1_250_000_000n,
-      randomSeed: url.searchParams.get("seed") ?? "local-development",
-      entries: [
-        { player: "local-player-1", tickets: 3n },
-        { player: "local-player-2", tickets: 8n },
-        { player: "local-player-3", tickets: 1n },
-      ],
-    });
+    const result = buildLocalDevelopmentSimulation(
+      pool,
+      url.searchParams.get("seed") ?? "local-development",
+    );
 
     return json(res, 200, serializeBigInts({
       pool: pool.id,
@@ -283,6 +278,19 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`LuckyMe API listening on http://${HOST}:${PORT}`);
 });
+
+function buildLocalDevelopmentSimulation(pool, randomSeed) {
+  return settleRound({
+    ticketPriceLamports: pool.ticketPriceLamports,
+    jackpotBalanceLamports: 1_250_000_000n,
+    randomSeed,
+    entries: [
+      { player: "local-player-1", tickets: 3n },
+      { player: "local-player-2", tickets: 8n },
+      { player: "local-player-3", tickets: 1n },
+    ],
+  });
+}
 
 async function getProgramState({ player } = {}) {
   const staticPools = STRICT_ONCHAIN ? [] : buildStaticPools();
@@ -420,10 +428,10 @@ async function getPublicConfig() {
   const roundDurationSeconds = Number(
     config.roundDurationSeconds ?? DEFAULT_ROUND_DURATION_SECONDS,
   );
-  const supportedRandomnessModes = IS_LOCAL_DEVELOPMENT && !IS_NODE_PRODUCTION
+  const supportedRandomnessModes = !IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT
     ? ["commit_reveal_demo", "orao_vrf"]
     : ["orao_vrf"];
-  const randomnessProviderName = IS_PRODUCTION_RUNTIME
+  const randomnessProviderName = IS_RELEASE_SURFACE
     ? "orao_vrf"
     : RANDOMNESS_MODE === "orao_vrf"
       ? "orao_vrf"
@@ -447,7 +455,7 @@ async function getPublicConfig() {
       provider: randomnessProviderName,
       oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
       failover: "none",
-      commitRevealAllowed: IS_LOCAL_DEVELOPMENT && !IS_NODE_PRODUCTION,
+      commitRevealAllowed: !IS_RELEASE_SURFACE && IS_LOCAL_DEVELOPMENT,
     },
     mainnet: RELEASE_MODE === "MAINNET_RELEASE",
     realFundsEnabled: RELEASE_MODE === "MAINNET_RELEASE",
@@ -1204,7 +1212,7 @@ async function getRoundRandomness(poolInput, roundIdInput) {
     clusterUrl: url,
     programId: PROGRAM_ID.toBase58(),
     randomnessMode: RANDOMNESS_MODE,
-    provider: IS_PRODUCTION_RUNTIME
+    provider: IS_RELEASE_SURFACE
       ? "orao_vrf"
       : RANDOMNESS_MODE === "orao_vrf"
         ? "orao_vrf"

@@ -102,7 +102,42 @@ test("backend disables simulate endpoint in mainnet release", async () => {
     const payload = await response.json();
 
     assert.equal(response.status, 404);
-    assert.equal(payload.error, "not found");
+    assert.equal(payload.error, "not_found");
+  } finally {
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  }
+});
+
+test("backend store build disables local simulate and commit-reveal public config", async () => {
+  const port = await getFreePort();
+  const child = startServer({
+    PORT: String(port),
+    ANCHOR_PROVIDER_URL: "http://127.0.0.1:1",
+    LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
+    LUCKYME_RANDOMNESS_MODE: "commit_reveal_demo",
+    LUCKYME_STORE_BUILD: "true",
+  });
+
+  try {
+    await waitForOutput(child, /LuckyMe API listening/);
+
+    const simulateResponse = await fetch(`http://127.0.0.1:${port}/simulate`);
+    const simulatePayload = await simulateResponse.json();
+    assert.equal(simulateResponse.status, 404);
+    assert.equal(simulatePayload.error, "not_found");
+
+    const configResponse = await fetch(`http://127.0.0.1:${port}/config`);
+    const configPayload = await configResponse.json();
+    assert.equal(configResponse.status, 200);
+    assert.deepEqual(configPayload.supportedRandomnessModes, ["orao_vrf"]);
+    assert.equal(configPayload.randomnessProvider.provider, "orao_vrf");
+    assert.equal(configPayload.randomnessProvider.commitRevealAllowed, false);
+
+    const poolsResponse = await fetch(`http://127.0.0.1:${port}/pools`);
+    const poolsPayload = await poolsResponse.json();
+    assert.equal(poolsResponse.status, 503);
+    assert.notEqual(poolsPayload.source, "static");
   } finally {
     child.kill();
     await once(child, "exit").catch(() => {});
