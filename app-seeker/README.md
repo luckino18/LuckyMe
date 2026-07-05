@@ -49,7 +49,7 @@ npm install
 npm run validate:production
 npm run typecheck
 npm run doctor
-eas build --platform android --profile dapp-store
+npm run build:dapp-store
 ```
 
 For a local EAS build:
@@ -95,7 +95,7 @@ unavailability, RPC failures, settlement, and refund mode.
 Verify a signed APK with:
 
 ```bash
-apksigner verify --print-certs app-release.apk
+APK_PATH=/path/to/app-release.apk npm run apk:verify
 ```
 
 ## Local Development Only

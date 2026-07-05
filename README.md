@@ -242,6 +242,7 @@ npm install
 npm test
 npm run app:validate:production
 npm run app:typecheck
+npm run backend:validate:production
 npm --prefix app-seeker run doctor
 npm run audit:mainnet-release
 cargo check
@@ -258,5 +259,12 @@ LUCKYME_RANDOMNESS_MODE=orao_vrf \
 LUCKYME_PRODUCTION_RANDOMNESS=true \
 CORS_ORIGIN=https://app.your-domain.com \
 ENABLE_TRANSACTION_SUBMIT=false \
-node backend/src/server.mjs
+npm run backend:validate:production
+```
+
+Build and verify the Solana Mobile APK after final EAS env values are set:
+
+```bash
+npm run app:build:dapp-store
+APK_PATH=/path/to/app-release.apk npm run app:apk:verify
 ```

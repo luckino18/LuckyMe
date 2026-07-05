@@ -5,6 +5,8 @@
   "main": "index.ts",
   "scripts": {
     "android": "expo run:android",
+    "apk:verify": "apksigner verify --print-certs ${APK_PATH:-app-release.apk}",
+    "build:dapp-store": "eas build --platform android --profile dapp-store",
     "doctor": "expo-doctor",
     "prebuild:android": "expo prebuild --platform android",
     "start": "expo start --dev-client",

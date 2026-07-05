@@ -82,6 +82,11 @@ const rateBuckets = new Map();
 
 validateRuntimeConfig();
 
+if (process.env.LUCKYME_VALIDATE_CONFIG_ONLY === "true") {
+  console.log("LuckyMe backend production config is valid");
+  process.exit(0);
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 

@@ -16,6 +16,7 @@ const docs = [
   "backend/README.md",
   "app-seeker/README.md",
   "docs/apk-signing.md",
+  "docs/deploy-checklist.md",
   "docs/local-development.md",
   "docs/manual-settlement.md",
   "docs/randomness.md",

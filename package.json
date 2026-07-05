@@ -10,8 +10,11 @@
   "scripts": {
     "app:typecheck": "npm --prefix app-seeker run typecheck",
     "app:validate:production": "npm --prefix app-seeker run validate:production",
+    "app:build:dapp-store": "npm --prefix app-seeker run build:dapp-store",
+    "app:apk:verify": "npm --prefix app-seeker run apk:verify",
     "audit:mainnet-release": "node scripts/audit-mainnet-release.mjs",
     "backend:start": "node backend/src/server.mjs",
+    "backend:validate:production": "LUCKYME_VALIDATE_CONFIG_ONLY=true node backend/src/server.mjs",
     "init:pools": "node scripts/init-pools.mjs",
     "localnet:smoke": "node scripts/localnet-smoke.mjs",
     "round:open": "node scripts/open-round.mjs",

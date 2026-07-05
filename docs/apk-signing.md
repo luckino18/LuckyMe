@@ -23,7 +23,7 @@ Build:
 ```bash
 cd app-seeker
 npm run validate:production
-eas build --platform android --profile dapp-store
+npm run build:dapp-store
 ```
 
 Local build:
@@ -51,7 +51,7 @@ Keep keystore files and passwords outside the repository.
 ## Verify Signed APK
 
 ```bash
-apksigner verify --print-certs app-release.apk
+APK_PATH=/path/to/app-release.apk npm run apk:verify
 ```
 
 The command should print certificate details and exit successfully.
