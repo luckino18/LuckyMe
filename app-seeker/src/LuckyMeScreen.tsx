@@ -44,14 +44,16 @@ function parseStitchMessage(data: string): StitchMessage {
   return undefined;
 }
 
-function injectedNavigation(screen: StitchScreenId) {
+function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
   const labels = JSON.stringify(SCREEN_BY_LABEL);
   const currentScreen = JSON.stringify(screen);
+  const canNavigateOnchainScreens = JSON.stringify(onchainAvailable);
 
   return `
     (function () {
       const labels = ${labels};
       const currentScreen = ${currentScreen};
+      const canNavigateOnchainScreens = ${canNavigateOnchainScreens};
 
       function send(screen) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -75,8 +77,16 @@ function injectedNavigation(screen: StitchScreenId) {
 
         for (const label in labels) {
           if (text === label || text.endsWith(label)) {
-            return labels[label];
+            const route = labels[label];
+            return canNavigateOnchainScreens || route === 'settings' ? route : null;
           }
+        }
+
+        if (!canNavigateOnchainScreens) {
+          if (text.includes('retry')) {
+            refresh();
+          }
+          return null;
         }
 
         if (text.includes('confirm') || text.includes('sign')) {
@@ -131,6 +141,11 @@ type BackendConfig = {
   };
 };
 
+type InitialScreenResult = {
+  onchainAvailable: boolean;
+  screen: StitchScreenId;
+};
+
 async function loadInitialScreen() {
   const response = await fetch(`${API_URL}/config`, {
     headers: {
@@ -139,33 +154,42 @@ async function loadInitialScreen() {
   });
 
   if (!response.ok) {
-    return UNAVAILABLE_SCREEN;
+    return { onchainAvailable: false, screen: UNAVAILABLE_SCREEN };
   }
 
   const config = (await response.json()) as BackendConfig;
   const onchainAvailable =
     config.onchainAvailable === true || config.onchain?.available === true;
 
-  return onchainAvailable ? INITIAL_SCREEN : UNAVAILABLE_SCREEN;
+  return {
+    onchainAvailable,
+    screen: onchainAvailable ? INITIAL_SCREEN : UNAVAILABLE_SCREEN,
+  } satisfies InitialScreenResult;
 }
 
 export function LuckyMeScreen() {
+  const [onchainAvailable, setOnchainAvailable] = useState(false);
   const [screen, setScreen] = useState<StitchScreenId>(UNAVAILABLE_SCREEN);
   const html = STITCH_SCREENS[screen];
 
-  const injectedJavaScript = useMemo(() => injectedNavigation(screen), [screen]);
+  const injectedJavaScript = useMemo(
+    () => injectedNavigation(screen, onchainAvailable),
+    [onchainAvailable, screen],
+  );
 
   const refreshFromBackend = useCallback(() => {
     let active = true;
 
     loadInitialScreen()
-      .then((nextScreen) => {
+      .then((next) => {
         if (active) {
-          setScreen(nextScreen);
+          setOnchainAvailable(next.onchainAvailable);
+          setScreen(next.screen);
         }
       })
       .catch(() => {
         if (active) {
+          setOnchainAvailable(false);
           setScreen(UNAVAILABLE_SCREEN);
         }
       });
@@ -186,9 +210,13 @@ export function LuckyMeScreen() {
     }
 
     if (message?.screen) {
-      setScreen(message.screen);
+      setScreen(
+        onchainAvailable || message.screen === "settings"
+          ? message.screen
+          : UNAVAILABLE_SCREEN,
+      );
     }
-  }, [refreshFromBackend]);
+  }, [onchainAvailable, refreshFromBackend]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
