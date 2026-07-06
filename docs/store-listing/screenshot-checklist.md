@@ -1,8 +1,8 @@
 # Screenshot Checklist
 
-Stitch-generated screenshots are committed in:
+Screenshots are committed in:
 
-`docs/store-listing/stitch-screenshots/`
+`docs/store-listing/screenshots/`
 
 - Home screen with pool selector and active round.
 - Transaction review screen showing amount, pool, wallet, Solana mainnet, and

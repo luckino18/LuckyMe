@@ -6,6 +6,18 @@ with their wallet. Pool math is transparent: fixed ticket price, total tickets,
 winner chance, prize, jackpot contribution, and treasury fee. Results and
 payouts are executed by the Solana program.
 
+## Screenshots
+
+<p>
+  <img src="docs/store-listing/screenshots/01-home.png" width="170" alt="LuckyMe home screen" />
+  <img src="docs/store-listing/screenshots/02-pool-details.png" width="170" alt="LuckyMe pool details screen" />
+  <img src="docs/store-listing/screenshots/03-activity.png" width="170" alt="LuckyMe activity screen" />
+  <img src="docs/store-listing/screenshots/04-wallet.png" width="170" alt="LuckyMe wallet screen" />
+  <img src="docs/store-listing/screenshots/06-review-transaction.png" width="170" alt="LuckyMe transaction review screen" />
+</p>
+
+[All screenshots](docs/store-listing/screenshots)
+
 ## Product Overview
 
 - **Release mode:** `MAINNET_RELEASE`
