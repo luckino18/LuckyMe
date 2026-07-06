@@ -2,7 +2,7 @@
 
 Required before submission:
 
-- final privacy policy URL for `EXPO_PUBLIC_LUCKYME_PRIVACY_URL`;
+- final privacy policy URL: `https://lucky-me.app/privacy`;
 - production privacy statement matching the deployed backend, hosting, logging,
   analytics, and support tooling.
 
@@ -19,4 +19,4 @@ Do not state that no user data is processed unless production logging,
 analytics, hosting, and support tooling are configured that way.
 
 The app production validator requires `EXPO_PUBLIC_LUCKYME_PRIVACY_URL` to be a
-final HTTPS URL.
+final HTTPS URL. The configured public domain is `lucky-me.app`.

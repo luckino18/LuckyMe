@@ -17,9 +17,9 @@ test("Seeker production env validation rejects localhost backend", () => {
     EXPO_PUBLIC_LUCKYME_WALLET_CHAIN: "solana:mainnet",
     EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL: "https://api.mainnet-beta.solana.com",
     EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
-    EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://luckyme.app/terms",
-    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://luckyme.app/privacy",
-    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://luckyme.app/support",
+    EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://lucky-me.app/terms",
+    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://lucky-me.app/privacy",
+    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://lucky-me.app/support",
   });
 
   assert.notEqual(result.status, 0);
@@ -29,13 +29,13 @@ test("Seeker production env validation rejects localhost backend", () => {
 test("Seeker production env validation rejects placeholder policy links", () => {
   const exampleHost = ["example", "com"].join(".");
   const result = runValidation({
-    EXPO_PUBLIC_LUCKYME_API_URL: "https://api.luckyme.app",
+    EXPO_PUBLIC_LUCKYME_API_URL: "https://api.lucky-me.app",
     EXPO_PUBLIC_LUCKYME_WALLET_CHAIN: "solana:mainnet",
     EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL: "https://api.mainnet-beta.solana.com",
     EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
     EXPO_PUBLIC_LUCKYME_TERMS_URL: `https://${exampleHost}/terms`,
-    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://luckyme.app/privacy",
-    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://luckyme.app/support",
+    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://lucky-me.app/privacy",
+    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://lucky-me.app/support",
   });
 
   assert.notEqual(result.status, 0);
@@ -44,14 +44,14 @@ test("Seeker production env validation rejects placeholder policy links", () => 
 
 test("Seeker production env validation accepts mainnet release config", () => {
   const result = runValidation({
-    EXPO_PUBLIC_LUCKYME_API_URL: "https://api.luckyme.app",
+    EXPO_PUBLIC_LUCKYME_API_URL: "https://api.lucky-me.app",
     EXPO_PUBLIC_LUCKYME_WALLET_CHAIN: "solana:mainnet",
     EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL: "https://api.mainnet-beta.solana.com",
     EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
     EXPO_PUBLIC_LUCKYME_PROGRAM_ID: "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3",
-    EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://luckyme.app/terms",
-    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://luckyme.app/privacy",
-    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://luckyme.app/support",
+    EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://lucky-me.app/terms",
+    EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://lucky-me.app/privacy",
+    EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://lucky-me.app/support",
   });
 
   assert.equal(result.status, 0);

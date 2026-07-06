@@ -12,10 +12,10 @@ Use provider settlement for `MAINNET_RELEASE`:
 ```bash
 LUCKYME_RELEASE_MODE=MAINNET_RELEASE \
 LUCKYME_SOLANA_CLUSTER=mainnet-beta \
-ANCHOR_PROVIDER_URL=https://rpc.your-domain.com \
+ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com \
 LUCKYME_RANDOMNESS_MODE=orao_vrf \
 LUCKYME_PRODUCTION_RANDOMNESS=true \
-CORS_ORIGIN=https://app.your-domain.com \
+CORS_ORIGIN=https://lucky-me.app \
 ENABLE_TRANSACTION_SUBMIT=false \
 node backend/src/server.mjs
 ```
@@ -23,7 +23,7 @@ node backend/src/server.mjs
 Build the unsigned settlement transaction:
 
 ```bash
-curl -sS https://api.your-domain.com/transactions/settle-provider-round \
+curl -sS https://api.lucky-me.app/transactions/settle-provider-round \
   -H 'content-type: application/json' \
   -d '{
     "pool": "normal",
@@ -41,7 +41,7 @@ the keeper/settler wallet.
 When refund state is available:
 
 ```bash
-curl -sS https://api.your-domain.com/transactions/refund-entry \
+curl -sS https://api.lucky-me.app/transactions/refund-entry \
   -H 'content-type: application/json' \
   -d '{
     "pool": "normal",

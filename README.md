@@ -46,10 +46,10 @@ Set these backend variables for `MAINNET_RELEASE`:
 ```bash
 export LUCKYME_RELEASE_MODE=MAINNET_RELEASE
 export LUCKYME_SOLANA_CLUSTER=mainnet-beta
-export ANCHOR_PROVIDER_URL=https://rpc.your-domain.com
+export ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com
 export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
-export CORS_ORIGIN=https://app.your-domain.com
+export CORS_ORIGIN=https://lucky-me.app
 export ENABLE_TRANSACTION_SUBMIT=false
 ```
 
@@ -58,14 +58,14 @@ Set these app variables for the Solana Mobile dApp Store APK build:
 ```bash
 export EXPO_PUBLIC_LUCKYME_RELEASE_MODE=MAINNET_RELEASE
 export EXPO_PUBLIC_LUCKYME_STORE_BUILD=true
-export EXPO_PUBLIC_LUCKYME_API_URL=https://api.your-domain.com
+export EXPO_PUBLIC_LUCKYME_API_URL=https://api.lucky-me.app
 export EXPO_PUBLIC_LUCKYME_WALLET_CHAIN=solana:mainnet
-export EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL=https://rpc.your-domain.com
+export EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL=https://api.mainnet-beta.solana.com
 export EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER=mainnet-beta
 export EXPO_PUBLIC_LUCKYME_PROGRAM_ID=4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3
-export EXPO_PUBLIC_LUCKYME_TERMS_URL=https://your-domain.com/terms
-export EXPO_PUBLIC_LUCKYME_PRIVACY_URL=https://your-domain.com/privacy
-export EXPO_PUBLIC_LUCKYME_SUPPORT_URL=https://your-domain.com/support
+export EXPO_PUBLIC_LUCKYME_TERMS_URL=https://lucky-me.app/terms
+export EXPO_PUBLIC_LUCKYME_PRIVACY_URL=https://lucky-me.app/privacy
+export EXPO_PUBLIC_LUCKYME_SUPPORT_URL=https://lucky-me.app/support
 ```
 
 Release validation rejects:
@@ -247,10 +247,10 @@ For production backend smoke testing:
 ```bash
 LUCKYME_RELEASE_MODE=MAINNET_RELEASE \
 LUCKYME_SOLANA_CLUSTER=mainnet-beta \
-ANCHOR_PROVIDER_URL=https://rpc.your-domain.com \
+ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com \
 LUCKYME_RANDOMNESS_MODE=orao_vrf \
 LUCKYME_PRODUCTION_RANDOMNESS=true \
-CORS_ORIGIN=https://app.your-domain.com \
+CORS_ORIGIN=https://lucky-me.app \
 ENABLE_TRANSACTION_SUBMIT=false \
 npm run backend:validate:production
 ```

@@ -22,14 +22,14 @@ Set these variables before running validation or building the store APK:
 ```bash
 export EXPO_PUBLIC_LUCKYME_RELEASE_MODE=MAINNET_RELEASE
 export EXPO_PUBLIC_LUCKYME_STORE_BUILD=true
-export EXPO_PUBLIC_LUCKYME_API_URL=https://api.your-domain.com
+export EXPO_PUBLIC_LUCKYME_API_URL=https://api.lucky-me.app
 export EXPO_PUBLIC_LUCKYME_WALLET_CHAIN=solana:mainnet
-export EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL=https://rpc.your-domain.com
+export EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL=https://api.mainnet-beta.solana.com
 export EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER=mainnet-beta
 export EXPO_PUBLIC_LUCKYME_PROGRAM_ID=4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3
-export EXPO_PUBLIC_LUCKYME_TERMS_URL=https://your-domain.com/terms
-export EXPO_PUBLIC_LUCKYME_PRIVACY_URL=https://your-domain.com/privacy
-export EXPO_PUBLIC_LUCKYME_SUPPORT_URL=https://your-domain.com/support
+export EXPO_PUBLIC_LUCKYME_TERMS_URL=https://lucky-me.app/terms
+export EXPO_PUBLIC_LUCKYME_PRIVACY_URL=https://lucky-me.app/privacy
+export EXPO_PUBLIC_LUCKYME_SUPPORT_URL=https://lucky-me.app/support
 ```
 
 For EAS cloud builds, configure `EXPO_PUBLIC_LUCKYME_API_URL`,

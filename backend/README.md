@@ -9,12 +9,12 @@ user funds.
 ```bash
 export LUCKYME_RELEASE_MODE=MAINNET_RELEASE
 export LUCKYME_SOLANA_CLUSTER=mainnet-beta
-export ANCHOR_PROVIDER_URL=https://rpc.your-domain.com
+export ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com
 export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
 export HOST=0.0.0.0
 export PORT=8788
-export CORS_ORIGIN=https://app.your-domain.com
+export CORS_ORIGIN=https://lucky-me.app
 export ENABLE_TRANSACTION_SUBMIT=false
 node backend/src/server.mjs
 ```
