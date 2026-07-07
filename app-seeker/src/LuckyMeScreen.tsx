@@ -39,6 +39,7 @@ const UNAVAILABLE_ALLOWED_SCREENS = new Set<StitchScreenId>([
   "settings",
   "wallet",
 ]);
+const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "wallet", "settings"];
 
 function parseStitchMessage(data: string): StitchMessage {
   try {
@@ -227,6 +228,14 @@ export function LuckyMeScreen() {
 
   useEffect(() => refreshFromBackend(), [refreshFromBackend]);
 
+  const navigateTo = useCallback((nextScreen: StitchScreenId) => {
+    if (onchainAvailable || UNAVAILABLE_ALLOWED_SCREENS.has(nextScreen)) {
+      setScreen(nextScreen);
+    } else {
+      setScreen(UNAVAILABLE_SCREEN);
+    }
+  }, [onchainAvailable]);
+
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     const message = parseStitchMessage(event.nativeEvent.data);
 
@@ -236,13 +245,9 @@ export function LuckyMeScreen() {
     }
 
     if (message?.screen) {
-      setScreen(
-        onchainAvailable || UNAVAILABLE_ALLOWED_SCREENS.has(message.screen)
-          ? message.screen
-          : UNAVAILABLE_SCREEN,
-      );
+      navigateTo(message.screen);
     }
-  }, [onchainAvailable, refreshFromBackend]);
+  }, [navigateTo, refreshFromBackend]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -264,6 +269,17 @@ export function LuckyMeScreen() {
         style={styles.webView}
       />
       {screen === "wallet" ? <WalletPreflightPanel wallet={wallet} /> : null}
+      <View style={styles.nativeNavHitbox}>
+        {NAV_ITEMS.map((item) => (
+          <Pressable
+            accessibilityLabel={`Open ${item}`}
+            accessibilityRole="tab"
+            key={item}
+            onPress={() => navigateTo(item)}
+            style={styles.nativeNavItem}
+          />
+        ))}
+      </View>
     </SafeAreaView>
   );
 }
@@ -402,6 +418,18 @@ const styles = StyleSheet.create({
     shadowOffset: { height: 18, width: 0 },
     shadowOpacity: 0.36,
     shadowRadius: 24,
+  },
+  nativeNavHitbox: {
+    bottom: 12,
+    flexDirection: "row",
+    height: 72,
+    left: 12,
+    position: "absolute",
+    right: 12,
+    zIndex: 20,
+  },
+  nativeNavItem: {
+    flex: 1,
   },
   walletPanelHeader: {
     alignItems: "flex-start",
