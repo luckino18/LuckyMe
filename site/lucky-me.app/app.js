@@ -15,11 +15,14 @@ const WALLETCONNECT_SOLANA_METHODS = [
   "solana_signAndSendTransaction",
   "solana_signMessage",
 ];
+const WALLETCONNECT_PROVIDER_URL = "https://unpkg.com/@walletconnect/universal-provider@2.23.9/dist/index.umd.js";
+const WALLETCONNECT_MODAL_URL = "https://unpkg.com/@walletconnect/modal@2.7.0/dist/cdn/bundle.js";
 const MOBILE_WALLET_BROWSERS = [
   { id: "phantom", name: "Phantom" },
   { id: "solflare", name: "Solflare" },
   { id: "backpack", name: "Backpack" },
 ];
+const scriptLoaders = new Map();
 
 const POOLS = [
   {
@@ -73,6 +76,7 @@ const state = {
   walletMenuOpen: false,
   walletConnectProvider: null,
   walletConnectModal: null,
+  walletConnectUri: "",
   selectedPool: null,
   preparedTransaction: null,
   lastError: "",
@@ -258,7 +262,6 @@ function openMobileWalletBrowser(walletId) {
 
 function renderWallets() {
   const wallets = discoverWallets();
-  const canUseMobileWallet = hasMobileWalletFallback();
 
   if (state.wallet) {
     dom.walletList.innerHTML = `
@@ -278,6 +281,7 @@ function renderWallets() {
     `;
     showWalletMessage(`Connected ${state.wallet.name}: ${state.wallet.address}`, "success");
   } else {
+    const hasWalletOption = wallets.length || hasMobileWalletFallback() || Boolean(WALLETCONNECT_PROJECT_ID);
     dom.walletList.innerHTML = `
       <article class="wallet-card wallet-connect-card">
         <div class="row">
@@ -295,11 +299,11 @@ function renderWallets() {
     `;
     showWalletMessage(
       state.walletMenuOpen
-        ? wallets.length || canUseMobileWallet
+        ? hasWalletOption
           ? "Choose a wallet connection to continue."
           : "No compatible Solana wallet was detected in this browser."
         : "Connect a wallet before reviewing a pool entry.",
-      state.walletMenuOpen && wallets.length === 0 && !canUseMobileWallet ? "warning" : "soft",
+      state.walletMenuOpen && !hasWalletOption ? "warning" : "soft",
     );
   }
 }
@@ -341,6 +345,13 @@ function walletMenu(wallets) {
           </button>
         `).join("")}
       </div>
+      ${state.walletConnectUri ? `
+        <div class="wallet-uri-box">
+          <span class="label">WalletConnect ready</span>
+          <p>Open the WalletConnect prompt in your wallet app, or copy the session URI if the prompt is blocked.</p>
+          <button class="secondary-button" data-action="copy-walletconnect-uri">Copy session URI</button>
+        </div>
+      ` : ""}
       ${mobileWallets.length ? `<p class="wallet-menu-note">Chrome mobile cannot read phone wallet apps directly. Open LuckyMe inside your wallet app, then connect from that wallet browser.</p>` : ""}
     </article>
   `;
@@ -388,6 +399,47 @@ function discoverWallets() {
   return discoverInjectedWallets();
 }
 
+function loadScript(src) {
+  if (!scriptLoaders.has(src)) {
+    const loader = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(script);
+    });
+    scriptLoaders.set(src, loader);
+  }
+
+  return scriptLoaders.get(src);
+}
+
+async function loadWalletConnectProviderClass() {
+  await loadScript(WALLETCONNECT_PROVIDER_URL);
+  const providerModule = window["@walletconnect/universal-provider"];
+  const UniversalProvider = providerModule?.UniversalProvider || providerModule?.default;
+
+  if (typeof UniversalProvider?.init !== "function") {
+    throw new Error("WalletConnect provider failed to load");
+  }
+
+  return UniversalProvider;
+}
+
+async function loadWalletConnectModalClass() {
+  try {
+    globalThis.process = globalThis.process || { env: {} };
+    globalThis.process.env = globalThis.process.env || {};
+    const modalModule = await import(WALLETCONNECT_MODAL_URL);
+    return modalModule?.WalletConnectModal || null;
+  } catch (error) {
+    console.warn("WalletConnect modal failed to load", error);
+    return null;
+  }
+}
+
 async function getWalletConnectProvider() {
   if (!WALLETCONNECT_PROJECT_ID) {
     throw new Error("Mobile wallet connection is not configured yet");
@@ -397,9 +449,9 @@ async function getWalletConnectProvider() {
     return state.walletConnectProvider;
   }
 
-  const [{ default: UniversalProvider }, { WalletConnectModal }] = await Promise.all([
-    import("https://esm.sh/@walletconnect/universal-provider@2.23.9?bundle"),
-    import("https://esm.sh/@walletconnect/modal@2.7.0?bundle"),
+  const [UniversalProvider, WalletConnectModal] = await Promise.all([
+    loadWalletConnectProviderClass(),
+    loadWalletConnectModalClass(),
   ]);
 
   const provider = await UniversalProvider.init({
@@ -412,17 +464,23 @@ async function getWalletConnectProvider() {
     },
   });
 
-  const modal = new WalletConnectModal({
-    projectId: WALLETCONNECT_PROJECT_ID,
-    chains: WALLETCONNECT_SOLANA_CHAINS,
-    themeMode: "dark",
-  });
+  const modal = typeof WalletConnectModal === "function"
+    ? new WalletConnectModal({
+        projectId: WALLETCONNECT_PROJECT_ID,
+        chains: WALLETCONNECT_SOLANA_CHAINS,
+        themeMode: "dark",
+      })
+    : null;
 
   provider.on("display_uri", (uri) => {
-    modal.openModal({ uri });
+    state.walletConnectUri = uri;
+    modal?.openModal?.({ uri });
+    renderWallets();
+    showWalletMessage("WalletConnect session ready. Continue in your wallet app.", "soft");
   });
 
   provider.on("session_delete", () => {
+    state.walletConnectUri = "";
     if (state.wallet?.type === "walletconnect") {
       state.wallet = null;
       state.preparedTransaction = null;
@@ -447,6 +505,7 @@ function parseWalletConnectAccount(session) {
 
 async function connectWalletConnect() {
   const provider = await getWalletConnectProvider();
+  state.walletConnectUri = "";
   const session = provider.session || await provider.connect({
     optionalNamespaces: {
       solana: {
@@ -458,6 +517,7 @@ async function connectWalletConnect() {
   });
 
   state.walletConnectModal?.closeModal?.();
+  state.walletConnectUri = "";
 
   const account = parseWalletConnectAccount(session || provider.session);
   state.wallet = {
@@ -541,9 +601,24 @@ async function disconnectWallet() {
     }
   } finally {
     state.wallet = null;
+    state.walletConnectUri = "";
     state.preparedTransaction = null;
     renderWalletPill();
     renderWallets();
+  }
+}
+
+async function copyWalletConnectUri() {
+  if (!state.walletConnectUri) {
+    showWalletMessage("WalletConnect session is not ready yet.", "warning");
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(state.walletConnectUri);
+    showWalletMessage("WalletConnect session URI copied.", "success");
+  } catch (error) {
+    showWalletMessage(error instanceof Error ? error.message : "Could not copy WalletConnect URI.", "danger");
   }
 }
 
@@ -790,6 +865,8 @@ document.addEventListener("click", async (event) => {
   } else if (action === "toggle-wallet-menu") {
     state.walletMenuOpen = !state.walletMenuOpen;
     renderWallets();
+  } else if (action === "copy-walletconnect-uri") {
+    await copyWalletConnectUri();
   } else if (action === "prepare") {
     await prepareTransaction();
   } else if (action === "sign") {

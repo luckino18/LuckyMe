@@ -132,8 +132,11 @@ Implemented in the static web shell:
 - One visible `Connect wallet` control.
 - The wallet menu opens only after the user clicks `Connect wallet`.
 - The menu lists only Solana wallets already detected in that browser.
-- If `window.LUCKYME_WALLETCONNECT_PROJECT_ID` is set in `/config.js`, the same
+- `window.LUCKYME_WALLETCONNECT_PROJECT_ID` is set in `/config.js`, so the same
   menu also shows one neutral `Mobile wallet` WalletConnect/Reown fallback.
+- The live Reown/WalletConnect Project ID was tested on 2026-07-07 and produced
+  a valid `wc:` pairing URI. Keep the Reown allowlist on `https://lucky-me.app`
+  and `https://www.lucky-me.app`.
 - On mobile Chrome, where Solana wallet providers are not injected, the same
   wallet menu shows neutral app-browser actions: `Open in Phantom`,
   `Open in Solflare`, and `Open in Backpack`. These open LuckyMe inside the

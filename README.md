@@ -130,9 +130,10 @@ The public site lives under `site/lucky-me.app` and deploys as static files to
 The web wallet UI exposes one public `Connect wallet` action. After click it
 shows detected Solana browser wallets. On mobile Chrome, where Solana providers
 are not injected, it also offers neutral app-browser actions for Phantom,
-Solflare, and Backpack. WalletConnect/Reown can be enabled by setting
+Solflare, and Backpack. WalletConnect/Reown is configured through
 `window.LUCKYME_WALLETCONNECT_PROJECT_ID` in `/config.js`; the public Reown
-project must allow `https://lucky-me.app` and `https://www.lucky-me.app`.
+project must keep `https://lucky-me.app` and `https://www.lucky-me.app`
+allowlisted.
 
 ## Solana Mobile APK Build
 

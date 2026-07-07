@@ -18,8 +18,9 @@ Wallet UI rules:
 - After click, the chooser shows detected Solana browser wallets.
 - On mobile Chrome, where Solana providers are not injected, the chooser offers
   neutral app-browser actions for Phantom, Solflare, and Backpack.
-- WalletConnect/Reown is optional and requires
-  `window.LUCKYME_WALLETCONNECT_PROJECT_ID` in `/config.js`.
+- WalletConnect/Reown is configured through
+  `window.LUCKYME_WALLETCONNECT_PROJECT_ID` in `/config.js`; keep the Reown
+  project allowlist on `https://lucky-me.app` and `https://www.lucky-me.app`.
 - Do not show wallet prompts that read as app installation, promoted wallet
   marketing, or disabled wallet providers.
 

@@ -546,6 +546,15 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
 .wallet-option strong { color: var(--emerald); font-size: 11px; }
 .wallet-option:hover { border-color: var(--line-emerald); background: rgba(20, 241, 149, 0.08); }
 .wallet-menu-note { margin-top: 2px; font-size: 12px; color: var(--soft); }
+.wallet-uri-box {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 241, 149, 0.18);
+  background: rgba(20, 241, 149, 0.045);
+}
+.wallet-uri-box p { font-size: 12.5px; }
 
 /* review */
 
