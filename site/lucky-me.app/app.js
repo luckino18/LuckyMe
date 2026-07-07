@@ -71,6 +71,7 @@ const state = {
   route: "home",
   config: null,
   pools: [],
+  poolsLoaded: false,
   onchainAvailable: false,
   wallet: null,
   walletMenuOpen: false,
@@ -167,11 +168,13 @@ function roundTiming(poolId = state.selectedPool) {
   const roundId = round?.roundId ?? livePool?.currentRound ?? null;
 
   if (!round) {
+    const syncing = state.onchainAvailable && (!state.poolsLoaded || state.pools.length === 0);
     return {
       isOpen: false,
+      canDetermine: !syncing,
       roundId,
-      status: state.onchainAvailable ? "No active round" : "Pending",
-      timeLeft: state.onchainAvailable ? "Closed" : "Pending",
+      status: syncing ? "Syncing" : state.onchainAvailable ? "No active round" : "Pending",
+      timeLeft: syncing ? "Syncing" : state.onchainAvailable ? "Unavailable" : "Pending",
       chipClass: "warning",
     };
   }
@@ -179,6 +182,7 @@ function roundTiming(poolId = state.selectedPool) {
   if (round.settled) {
     return {
       isOpen: false,
+      canDetermine: true,
       roundId,
       status: `Round ${roundId}`,
       timeLeft: "Settled",
@@ -190,6 +194,7 @@ function roundTiming(poolId = state.selectedPool) {
   const isOpen = remainingSeconds > 0;
   return {
     isOpen,
+    canDetermine: true,
     roundId,
     status: `Round ${roundId}`,
     timeLeft: isOpen ? formatDuration(remainingSeconds) : "Closed",
@@ -215,7 +220,9 @@ function renderPoolCard(pool, compact = false) {
     ? `${livePool.jackpotSol} SOL`
     : "Pending";
   const actionLabel = state.onchainAvailable
-    ? timing.isOpen
+    ? !timing.canDetermine
+      ? "Review setup"
+      : timing.isOpen
       ? `Join ${pool.name}`
       : "Round closed"
     : "Review setup";
@@ -238,7 +245,7 @@ function renderPoolCard(pool, compact = false) {
         <div class="fact jackpot-fact"><span class="label">Jackpot</span><strong>${jackpotValue}</strong></div>
       </div>
       ${compact ? "" : `<p>${pool.note} Live state loads only from verified on-chain data.</p>`}
-      <button class="primary-button" data-pool="${pool.id}" ${state.onchainAvailable && !timing.isOpen ? "disabled" : ""}>${actionLabel}</button>
+      <button class="primary-button" data-pool="${pool.id}" ${state.onchainAvailable && timing.canDetermine && !timing.isOpen ? "disabled" : ""}>${actionLabel}</button>
     </article>
   `;
 }
@@ -749,7 +756,7 @@ function renderReview() {
       <button class="secondary-button" data-route="pools">Back to pools</button>
     </div>
     ${state.onchainAvailable ? "" : `<div class="notice">Mainnet pool state is not available yet.</div>`}
-    ${state.onchainAvailable && !timing.isOpen ? `<div class="notice">This round is closed. Wait for the next round to open.</div>` : ""}
+    ${state.onchainAvailable && timing.canDetermine && !timing.isOpen ? `<div class="notice">This round is closed. Wait for the next round to open.</div>` : ""}
   `;
 }
 
@@ -905,12 +912,12 @@ async function loadConfig() {
 }
 
 async function loadPools() {
-  if (!state.wallet) {
-    return;
-  }
-
   try {
-    const response = await fetch(`${API_BASE}/pools?player=${encodeURIComponent(state.wallet.address)}`, {
+    const url = new URL(`${API_BASE}/pools`);
+    if (state.wallet?.address) {
+      url.searchParams.set("player", state.wallet.address);
+    }
+    const response = await fetch(url.toString(), {
       headers: { accept: "application/json" },
       cache: "no-store",
     });
@@ -919,9 +926,11 @@ async function loadPools() {
       throw new Error(payload.message || payload.error || "Pool fetch failed");
     }
     state.pools = Array.isArray(payload.pools) ? payload.pools : [];
+    state.poolsLoaded = true;
     state.onchainAvailable = payload.onchain?.available === true;
   } catch (error) {
     state.pools = [];
+    state.poolsLoaded = false;
     state.onchainAvailable = false;
     state.lastError = error instanceof Error ? error.message : String(error);
   }
@@ -962,9 +971,7 @@ document.addEventListener("click", async (event) => {
   const action = actionButton.dataset.action;
   if (action === "refresh") {
     await loadConfig();
-    if (state.wallet) {
-      await loadPools();
-    }
+    await loadPools();
   } else if (action === "toggle-wallet-menu") {
     state.walletMenuOpen = !state.walletMenuOpen;
     renderWallets();
@@ -1012,3 +1019,4 @@ if (new URLSearchParams(window.location.search).has("wallet")) {
   setRoute("wallet");
 }
 loadConfig();
+loadPools();
