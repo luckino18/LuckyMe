@@ -2,9 +2,12 @@
 
 LuckyMe is a Solana mobile-first luck pool game for fixed-entry rounds. Users
 connect a Solana wallet, choose a pool, review the ticket transaction, and sign
-with their wallet. Pool math is transparent: fixed ticket price, total tickets,
-winner chance, prize, jackpot contribution, and treasury fee. Results and
-payouts are executed by the Solana program.
+with their wallet. The project includes the Solana Mobile / Seeker app and the
+browser web app at `https://www.lucky-me.app/play/`.
+
+Pool math is transparent: fixed ticket price, total tickets, winner chance,
+prize, jackpot contribution, and treasury fee. Results and payouts are executed
+by the Solana program.
 
 ## Screenshots
 
@@ -25,10 +28,13 @@ payouts are executed by the Solana program.
 - **Wallet chain:** `solana:mainnet`
 - **Program ID:** `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
 - **Mobile app:** Expo React Native with Mobile Wallet Adapter
+- **Web app:** static landing and browser dapp shell for `lucky-me.app`
 - **Backend:** transaction builder and public state API
 - **Randomness:** ORAO VRF provider path for `MAINNET_RELEASE`
 - **Player custody:** the backend never signs player transactions and never
   custodies user funds.
+- **Device smoke test:** Victor reported the signed Seeker build tested on a
+  Seeker phone on 2026-07-07.
 
 The app builds and reviews an unsigned transaction, the connected wallet signs
 it, and the backend submit relay is disabled by default. Users see the amount,
@@ -61,7 +67,7 @@ export LUCKYME_SOLANA_CLUSTER=mainnet-beta
 export ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com
 export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
-export CORS_ORIGIN=https://lucky-me.app
+export CORS_ORIGIN=https://lucky-me.app,https://www.lucky-me.app
 export ENABLE_TRANSACTION_SUBMIT=false
 ```
 
@@ -111,6 +117,22 @@ Important backend behavior:
   `POST /transactions/settle-provider-round` support the ORAO keeper flow.
 - `POST /transactions/submit` is disabled unless explicitly enabled; keep it
   disabled for production.
+
+## Web App
+
+The public site lives under `site/lucky-me.app` and deploys as static files to
+`/var/www/luckyme/public`.
+
+- Landing: `https://www.lucky-me.app/`
+- Browser dapp: `https://www.lucky-me.app/play/`
+- Legal/support pages: `/terms/`, `/privacy/`, `/support/`
+
+The web wallet UI exposes one public `Connect wallet` action. After click it
+shows detected Solana browser wallets. On mobile Chrome, where Solana providers
+are not injected, it also offers neutral app-browser actions for Phantom,
+Solflare, and Backpack. WalletConnect/Reown can be enabled by setting
+`window.LUCKYME_WALLETCONNECT_PROJECT_ID` in `/config.js`; the public Reown
+project must allow `https://lucky-me.app` and `https://www.lucky-me.app`.
 
 ## Solana Mobile APK Build
 

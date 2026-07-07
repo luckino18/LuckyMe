@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   SafeAreaView,
   StatusBar,
@@ -12,14 +13,15 @@ import { WebView } from "react-native-webview";
 import type { WebViewMessageEvent } from "react-native-webview";
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
 
-import { STITCH_SCREENS } from "./stitchScreens";
+import { renderStitchScreen, stitchDefaultTab, STITCH_SCREENS } from "./stitchScreens";
 import type { StitchScreenId } from "./stitchScreens";
 
+type LegalLinkKey = "terms" | "privacy" | "support";
+
 type StitchMessage =
-  | {
-      screen?: StitchScreenId;
-      type?: "navigate" | "refresh";
-    }
+  | { type: "navigate"; screen: StitchScreenId }
+  | { type: "refresh" }
+  | { type: "link"; link: LegalLinkKey }
   | undefined;
 
 const INITIAL_SCREEN: StitchScreenId = "home";
@@ -27,6 +29,14 @@ const UNAVAILABLE_SCREEN: StitchScreenId = "unavailable";
 const API_URL =
   process.env.EXPO_PUBLIC_LUCKYME_API_URL ?? "https://api.lucky-me.app";
 const UI_PREVIEW_ENABLED = process.env.EXPO_PUBLIC_LUCKYME_UI_PREVIEW === "true";
+
+const LEGAL_LINKS: Record<LegalLinkKey, string> = {
+  terms: process.env.EXPO_PUBLIC_LUCKYME_TERMS_URL ?? "https://lucky-me.app/terms",
+  privacy:
+    process.env.EXPO_PUBLIC_LUCKYME_PRIVACY_URL ?? "https://lucky-me.app/privacy",
+  support:
+    process.env.EXPO_PUBLIC_LUCKYME_SUPPORT_URL ?? "https://lucky-me.app/support",
+};
 
 const SCREEN_BY_LABEL: Record<string, StitchScreenId> = {
   activity: "activity",
@@ -40,17 +50,30 @@ const UNAVAILABLE_ALLOWED_SCREENS = new Set<StitchScreenId>([
   "wallet",
 ]);
 const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "wallet", "settings"];
+const NAV_TABS = new Set<StitchScreenId>(NAV_ITEMS);
+
+function isLegalLinkKey(value: unknown): value is LegalLinkKey {
+  return value === "terms" || value === "privacy" || value === "support";
+}
 
 function parseStitchMessage(data: string): StitchMessage {
   try {
-    const message = JSON.parse(data) as StitchMessage;
+    const message = JSON.parse(data) as {
+      type?: string;
+      screen?: StitchScreenId;
+      link?: string;
+    };
 
     if (message?.type === "refresh") {
-      return message;
+      return { type: "refresh" };
+    }
+
+    if (message?.type === "link" && isLegalLinkKey(message.link)) {
+      return { type: "link", link: message.link };
     }
 
     if (message?.type === "navigate" && message.screen && message.screen in STITCH_SCREENS) {
-      return message;
+      return { type: "navigate", screen: message.screen };
     }
   } catch {
     return undefined;
@@ -70,17 +93,20 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
       const currentScreen = ${currentScreen};
       const canNavigateOnchainScreens = ${canNavigateOnchainScreens};
 
+      function post(payload) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+      }
+
       function send(screen) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'navigate',
-          screen: screen
-        }));
+        post({ type: 'navigate', screen: screen });
       }
 
       function refresh() {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'refresh'
-        }));
+        post({ type: 'refresh' });
+      }
+
+      function sendLink(link) {
+        post({ type: 'link', link: link });
       }
 
       function textOf(element) {
@@ -88,6 +114,29 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
       }
 
       function routeFor(element) {
+        // Preferred path: explicit route metadata on the control.
+        const carrier = element.closest ? element.closest('[data-route]') : null;
+        const dataRoute = carrier ? carrier.getAttribute('data-route') : null;
+
+        if (dataRoute === 'refresh') {
+          refresh();
+          return null;
+        }
+
+        if (dataRoute === 'link') {
+          const link = carrier.getAttribute('data-link') || '';
+          if (link) {
+            sendLink(link);
+          }
+          return null;
+        }
+
+        if (dataRoute) {
+          // The native wrapper applies availability gating authoritatively.
+          return dataRoute;
+        }
+
+        // Fallback: legacy text matching for controls without metadata.
         const text = textOf(element);
 
         for (const label in labels) {
@@ -113,7 +162,7 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
           return null;
         }
 
-        if (text.includes('complete') || text.includes('success')) {
+        if (text.includes('complete') || text.includes('continue') || text.includes('success')) {
           return 'success';
         }
 
@@ -196,8 +245,20 @@ async function loadInitialScreen() {
 export function LuckyMeScreen() {
   const [onchainAvailable, setOnchainAvailable] = useState(false);
   const [screen, setScreen] = useState<StitchScreenId>(UNAVAILABLE_SCREEN);
+  const [requestedTab, setRequestedTab] = useState<StitchScreenId>(INITIAL_SCREEN);
   const wallet = useMobileWallet();
-  const html = STITCH_SCREENS[screen];
+
+  const html = useMemo(
+    () =>
+      renderStitchScreen(screen, {
+        onchainAvailable,
+        activeTab: screen === UNAVAILABLE_SCREEN ? requestedTab : undefined,
+      }),
+    [onchainAvailable, requestedTab, screen],
+  );
+
+  const activeTab =
+    screen === UNAVAILABLE_SCREEN ? requestedTab : stitchDefaultTab(screen);
 
   const injectedJavaScript = useMemo(
     () => injectedNavigation(screen, onchainAvailable),
@@ -229,12 +290,24 @@ export function LuckyMeScreen() {
   useEffect(() => refreshFromBackend(), [refreshFromBackend]);
 
   const navigateTo = useCallback((nextScreen: StitchScreenId) => {
+    if (NAV_TABS.has(nextScreen)) {
+      setRequestedTab(nextScreen);
+    }
+
     if (onchainAvailable || UNAVAILABLE_ALLOWED_SCREENS.has(nextScreen)) {
       setScreen(nextScreen);
     } else {
       setScreen(UNAVAILABLE_SCREEN);
     }
   }, [onchainAvailable]);
+
+  const openLegalLink = useCallback((link: LegalLinkKey) => {
+    const url = LEGAL_LINKS[link];
+
+    if (url && url.startsWith("https://")) {
+      Linking.openURL(url).catch(() => {});
+    }
+  }, []);
 
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     const message = parseStitchMessage(event.nativeEvent.data);
@@ -244,14 +317,19 @@ export function LuckyMeScreen() {
       return;
     }
 
-    if (message?.screen) {
+    if (message?.type === "link") {
+      openLegalLink(message.link);
+      return;
+    }
+
+    if (message?.type === "navigate") {
       navigateTo(message.screen);
     }
-  }, [navigateTo, refreshFromBackend]);
+  }, [navigateTo, openLegalLink, refreshFromBackend]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor="#000000" barStyle="light-content" translucent={false} />
+      <StatusBar backgroundColor="transparent" barStyle="light-content" hidden translucent />
       <WebView
         key={screen}
         allowsBackForwardNavigationGestures
@@ -274,9 +352,13 @@ export function LuckyMeScreen() {
           <Pressable
             accessibilityLabel={`Open ${item}`}
             accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === item }}
             key={item}
             onPress={() => navigateTo(item)}
-            style={styles.nativeNavItem}
+            style={({ pressed }) => [
+              styles.nativeNavItem,
+              pressed ? styles.nativeNavItemPressed : null,
+            ]}
           />
         ))}
       </View>
@@ -329,10 +411,12 @@ function WalletPreflightPanel({ wallet }: WalletPreflightPanelProps) {
       <View style={styles.walletPanelHeader}>
         <View>
           <Text style={styles.walletKicker}>Mobile Wallet Adapter</Text>
-          <Text style={styles.walletTitle}>{address ? "Wallet connected" : "Test wallet connection"}</Text>
+          <Text style={styles.walletTitle}>{address ? "Wallet connected" : "Wallet connection"}</Text>
         </View>
         <View style={[styles.walletStatusPill, address ? styles.walletStatusPillConnected : null]}>
-          <Text style={styles.walletStatusText}>{address ? "READY" : "NEEDED"}</Text>
+          <Text style={[styles.walletStatusText, address ? styles.walletStatusTextConnected : null]}>
+            {address ? "CONNECTED" : "NOT CONNECTED"}
+          </Text>
         </View>
       </View>
 
@@ -353,7 +437,7 @@ function WalletPreflightPanel({ wallet }: WalletPreflightPanelProps) {
           pending || pressed ? styles.walletButtonPressed : null,
         ]}
       >
-        {pending ? <ActivityIndicator color={address ? "#d8b9ff" : "#240052"} /> : null}
+        {pending ? <ActivityIndicator color={address ? "#CBB2FF" : "#FFFFFF"} /> : null}
         <Text style={[styles.walletButtonText, address ? styles.walletButtonTextSecondary : null]}>
           {address ? "Disconnect wallet" : "Connect wallet"}
         </Text>
@@ -396,18 +480,17 @@ function walletAddressToString(address: unknown) {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: "#000000",
+    backgroundColor: "#05070C",
     flex: 1,
-    paddingTop: StatusBar.currentHeight ?? 0,
   },
   webView: {
-    backgroundColor: "#000000",
+    backgroundColor: "#05070C",
     flex: 1,
   },
   walletPanel: {
-    backgroundColor: "rgba(12, 15, 16, 0.94)",
-    borderColor: "rgba(255, 255, 255, 0.14)",
-    borderRadius: 8,
+    backgroundColor: "rgba(13, 18, 28, 0.96)",
+    borderColor: "rgba(148, 163, 184, 0.18)",
+    borderRadius: 16,
     borderWidth: 1,
     bottom: 104,
     left: 18,
@@ -431,6 +514,10 @@ const styles = StyleSheet.create({
   nativeNavItem: {
     flex: 1,
   },
+  nativeNavItemPressed: {
+    backgroundColor: "rgba(153, 69, 255, 0.16)",
+    borderRadius: 14,
+  },
   walletPanelHeader: {
     alignItems: "flex-start",
     flexDirection: "row",
@@ -438,39 +525,42 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   walletKicker: {
-    color: "rgba(206, 194, 216, 0.64)",
+    color: "rgba(148, 163, 184, 0.85)",
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
   walletTitle: {
-    color: "#ffffff",
+    color: "#FFFFFF",
     fontSize: 20,
     fontWeight: "800",
     lineHeight: 25,
     marginTop: 4,
   },
   walletStatusPill: {
-    borderColor: "rgba(251, 191, 36, 0.28)",
-    borderRadius: 8,
+    borderColor: "rgba(245, 158, 11, 0.34)",
+    borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   walletStatusPillConnected: {
-    borderColor: "rgba(86, 255, 168, 0.32)",
+    borderColor: "rgba(20, 241, 149, 0.34)",
   },
   walletStatusText: {
-    color: "#d8b9ff",
+    color: "#F59E0B",
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1,
   },
+  walletStatusTextConnected: {
+    color: "#14F195",
+  },
   walletAddressRow: {
     alignItems: "center",
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    borderRadius: 8,
+    borderColor: "rgba(148, 163, 184, 0.14)",
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -479,25 +569,25 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   walletLabel: {
-    color: "rgba(206, 194, 216, 0.62)",
+    color: "rgba(148, 163, 184, 0.9)",
     fontSize: 13,
     fontWeight: "600",
   },
   walletAddress: {
-    color: "#ffffff",
+    color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "700",
   },
   walletError: {
-    color: "#ffb4ab",
+    color: "#FB7185",
     fontSize: 13,
     lineHeight: 18,
     marginTop: 10,
   },
   walletButton: {
     alignItems: "center",
-    backgroundColor: "#d8b9ff",
-    borderRadius: 8,
+    backgroundColor: "#9945FF",
+    borderRadius: 12,
     flexDirection: "row",
     gap: 10,
     justifyContent: "center",
@@ -506,19 +596,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   walletButtonSecondary: {
-    backgroundColor: "rgba(216, 185, 255, 0.08)",
-    borderColor: "rgba(216, 185, 255, 0.18)",
+    backgroundColor: "rgba(153, 69, 255, 0.10)",
+    borderColor: "rgba(153, 69, 255, 0.36)",
     borderWidth: 1,
   },
   walletButtonPressed: {
     opacity: 0.72,
   },
   walletButtonText: {
-    color: "#240052",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "800",
   },
   walletButtonTextSecondary: {
-    color: "#d8b9ff",
+    color: "#CBB2FF",
   },
 });

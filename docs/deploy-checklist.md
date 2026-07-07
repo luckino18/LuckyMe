@@ -31,7 +31,7 @@ export LUCKYME_SOLANA_CLUSTER=mainnet-beta
 export ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com
 export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
-export CORS_ORIGIN=https://lucky-me.app
+export CORS_ORIGIN=https://lucky-me.app,https://www.lucky-me.app
 export ENABLE_TRANSACTION_SUBMIT=false
 npm run backend:validate:production
 npm run backend:start

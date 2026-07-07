@@ -11,7 +11,8 @@ the Publisher Portal.
 | Backend production HTTPS URL | Pending |
 | EAS APK build URL | Pending |
 | `apksigner verify --print-certs` output | Pending |
-| Android / Seeker wallet test result | Pending |
+| Android / Seeker phone smoke test | Victor reported the signed Seeker build tested on a Seeker phone on 2026-07-07. |
+| Android / Seeker wallet-signing test result | Pending until the mainnet program and pools are deployed/initialized. |
 
 Notes:
 

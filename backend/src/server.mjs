@@ -53,6 +53,7 @@ const ALLOW_WILDCARD_CORS =
   IS_LOCAL_DEVELOPMENT &&
   !IS_NODE_PRODUCTION;
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? (ALLOW_WILDCARD_CORS ? "*" : "");
+const CORS_ORIGINS = parseCorsOrigins(CORS_ORIGIN);
 const ANCHOR_PROVIDER_URL =
   process.env.ANCHOR_PROVIDER_URL ?? (IS_LOCAL_DEVELOPMENT ? "http://127.0.0.1:8899" : "");
 const RANDOMNESS_MODE =
@@ -92,6 +93,7 @@ if (process.env.LUCKYME_VALIDATE_CONFIG_ONLY === "true") {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  applyCorsHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return empty(res, 204);
@@ -1740,7 +1742,6 @@ function json(res, status, body) {
     "cache-control": "no-store",
     "access-control-allow-headers": "content-type",
     "access-control-allow-methods": "GET, POST, OPTIONS",
-    ...corsHeaders(),
   });
   res.end(JSON.stringify(body, null, 2));
 }
@@ -1749,15 +1750,32 @@ function empty(res, status) {
   res.writeHead(status, {
     "access-control-allow-headers": "content-type",
     "access-control-allow-methods": "GET, POST, OPTIONS",
-    ...corsHeaders(),
   });
   res.end();
 }
 
-function corsHeaders() {
-  return CORS_ORIGIN
-    ? { "access-control-allow-origin": CORS_ORIGIN }
-    : {};
+function applyCorsHeaders(req, res) {
+  if (CORS_ORIGINS.includes("*")) {
+    res.setHeader("access-control-allow-origin", "*");
+    return;
+  }
+
+  const requestOrigin = req.headers.origin;
+  if (!requestOrigin) {
+    return;
+  }
+
+  if (CORS_ORIGINS.includes(requestOrigin)) {
+    res.setHeader("access-control-allow-origin", requestOrigin);
+    res.setHeader("vary", "Origin");
+  }
+}
+
+function parseCorsOrigins(value) {
+  return String(value ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 }
 
 function httpError(status, code, message) {
@@ -2067,16 +2085,16 @@ function validateRuntimeConfig() {
       );
     }
 
-    if (!CORS_ORIGIN) {
+    if (CORS_ORIGINS.length === 0) {
       throw new Error("CORS_ORIGIN is required for MAINNET_RELEASE");
     }
 
-    if (CORS_ORIGIN === "*") {
+    if (CORS_ORIGINS.includes("*")) {
       throw new Error("CORS_ORIGIN must be strict for MAINNET_RELEASE");
     }
 
-    if (!isHttpsOrigin(CORS_ORIGIN)) {
-      throw new Error("CORS_ORIGIN must be an HTTPS origin for MAINNET_RELEASE");
+    if (!CORS_ORIGINS.every(isHttpsOrigin)) {
+      throw new Error("CORS_ORIGIN must contain HTTPS origins for MAINNET_RELEASE");
     }
 
     if (ENABLE_TRANSACTION_SUBMIT) {
@@ -2087,12 +2105,12 @@ function validateRuntimeConfig() {
   }
 
   if (IS_NODE_PRODUCTION) {
-    if (!CORS_ORIGIN || CORS_ORIGIN === "*") {
+    if (CORS_ORIGINS.length === 0 || CORS_ORIGINS.includes("*")) {
       throw new Error("CORS_ORIGIN must be strict in production");
     }
 
-    if (!isHttpsOrigin(CORS_ORIGIN)) {
-      throw new Error("CORS_ORIGIN must be an HTTPS origin in production");
+    if (!CORS_ORIGINS.every(isHttpsOrigin)) {
+      throw new Error("CORS_ORIGIN must contain HTTPS origins in production");
     }
 
     if (ENABLE_TRANSACTION_SUBMIT) {
@@ -2100,7 +2118,7 @@ function validateRuntimeConfig() {
     }
   }
 
-  if (CORS_ORIGIN === "*" && !ALLOW_WILDCARD_CORS) {
+  if (CORS_ORIGINS.includes("*") && !ALLOW_WILDCARD_CORS) {
     throw new Error(
       "Wildcard CORS requires LOCAL_DEVELOPMENT and LUCKYME_ALLOW_WILDCARD_CORS=true",
     );

@@ -1,0 +1,809 @@
+import { Connection, Transaction } from "https://esm.sh/@solana/web3.js@1.98.4?bundle";
+
+const API_BASE = "https://api.lucky-me.app";
+const PROGRAM_ID = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
+const SOLANA_CHAIN = "solana:mainnet";
+const DEFAULT_RPC = "https://api.mainnet-beta.solana.com";
+const WALLETCONNECT_PROJECT_ID = window.LUCKYME_WALLETCONNECT_PROJECT_ID || "";
+const WALLETCONNECT_SOLANA_CHAIN = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+const WALLETCONNECT_SOLANA_CHAINS = [
+  WALLETCONNECT_SOLANA_CHAIN,
+  "solana:4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZ",
+];
+const WALLETCONNECT_SOLANA_METHODS = [
+  "solana_signTransaction",
+  "solana_signAndSendTransaction",
+  "solana_signMessage",
+];
+const MOBILE_WALLET_BROWSERS = [
+  { id: "phantom", name: "Phantom" },
+  { id: "solflare", name: "Solflare" },
+  { id: "backpack", name: "Backpack" },
+];
+
+const POOLS = [
+  {
+    id: "mini",
+    name: "Mini",
+    chip: "Low entry",
+    entrySol: "0.005",
+    prize: "95% main prize",
+    winners: "1 winner",
+    limit: "1,000 tickets max",
+    note: "Low entry, same settlement rules.",
+  },
+  {
+    id: "normal",
+    name: "Normal",
+    chip: "Balanced",
+    entrySol: "0.01",
+    prize: "95% main prize",
+    winners: "1 winner",
+    limit: "1,000 tickets max",
+    note: "Balanced public pool.",
+  },
+  {
+    id: "high",
+    name: "High",
+    chip: "Higher entry",
+    entrySol: "0.05",
+    prize: "95% main prize",
+    winners: "1 winner",
+    limit: "1,000 tickets max",
+    note: "Higher entry, single winner.",
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    chip: "3 winners",
+    entrySol: "0.1",
+    prize: "70 / 20 / 10 split",
+    winners: "3 winners",
+    limit: "1 ticket per wallet",
+    note: "Minimum 3 wallets required.",
+  },
+];
+
+const state = {
+  route: "home",
+  config: null,
+  pools: [],
+  onchainAvailable: false,
+  wallet: null,
+  walletMenuOpen: false,
+  walletConnectProvider: null,
+  walletConnectModal: null,
+  selectedPool: null,
+  preparedTransaction: null,
+  lastError: "",
+};
+
+const dom = {
+  chainStatus: document.querySelector("#chain-status"),
+  homeStatusTitle: document.querySelector("#home-status-title"),
+  homeStatusCopy: document.querySelector("#home-status-copy"),
+  homeStatusPill: document.querySelector("#home-status-pill"),
+  homePools: document.querySelector("#home-pools"),
+  poolList: document.querySelector("#pool-list"),
+  poolsNote: document.querySelector("#pools-note"),
+  activityList: document.querySelector("#activity-list"),
+  walletList: document.querySelector("#wallet-list"),
+  walletMessage: document.querySelector("#wallet-message"),
+  walletPill: document.querySelector("#wallet-pill"),
+  reviewPanel: document.querySelector("#review-panel"),
+  screens: Array.from(document.querySelectorAll("[data-screen]")),
+  navItems: Array.from(document.querySelectorAll(".nav-item")),
+};
+
+function setRoute(route) {
+  state.route = route;
+  dom.screens.forEach((screen) => {
+    screen.hidden = screen.dataset.screen !== route;
+  });
+  dom.navItems.forEach((item) => {
+    item.classList.toggle("active", item.dataset.route === route);
+  });
+  if (route === "wallet") {
+    renderWallets();
+  }
+  if (route === "review") {
+    renderReview();
+  }
+}
+
+function formatAddress(address) {
+  if (!address) {
+    return "Not connected";
+  }
+  return address.length > 14 ? `${address.slice(0, 6)}...${address.slice(-6)}` : address;
+}
+
+function poolById(poolId) {
+  return POOLS.find((pool) => pool.id === poolId) || POOLS[0];
+}
+
+function poolFromApi(poolId) {
+  return state.pools.find((pool) => pool.id === poolId || pool.slug === poolId);
+}
+
+function renderPoolCard(pool, compact = false) {
+  const livePool = poolFromApi(pool.id);
+  const liveRound = livePool?.currentRound ?? livePool?.round ?? null;
+  const liveStatus = state.onchainAvailable ? `Round ${liveRound || "open"}` : "Pending";
+  const jackpotValue = state.onchainAvailable && livePool?.jackpotSol
+    ? `${livePool.jackpotSol} SOL`
+    : "Pending";
+  const actionLabel = state.onchainAvailable ? `Join ${pool.name}` : "Review setup";
+
+  return `
+    <article class="pool-card">
+      <div class="pool-title">
+        <div>
+          <span class="label">${pool.chip}</span>
+          <h3>${pool.name}</h3>
+        </div>
+        <span class="pool-chip">${liveStatus}</span>
+      </div>
+      <div class="entry">${pool.entrySol}<span>SOL</span></div>
+      <div class="facts-grid">
+        <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
+        <div class="fact"><span class="label">Winners</span><strong>${pool.winners}</strong></div>
+        <div class="fact"><span class="label">Limit</span><strong>${pool.limit}</strong></div>
+        <div class="fact jackpot-fact"><span class="label">Jackpot</span><strong>${jackpotValue}</strong></div>
+      </div>
+      ${compact ? "" : `<p>${pool.note} Live state loads only from verified on-chain data.</p>`}
+      <button class="primary-button" data-pool="${pool.id}">${actionLabel}</button>
+    </article>
+  `;
+}
+
+function renderPools() {
+  const homeCards = POOLS.slice(0, 4).map((pool) => renderPoolCard(pool, true)).join("");
+  const poolCards = POOLS.map((pool) => renderPoolCard(pool)).join("");
+  dom.homePools.innerHTML = homeCards;
+  dom.poolList.innerHTML = poolCards;
+}
+
+function renderActivity() {
+  const rows = [
+    ["Latest settlement", "Pending", "Loaded from verified state"],
+    ["Open rounds", state.onchainAvailable ? "Live" : "Pending", "Backend /pools"],
+    ["Reserve jackpot", "Pending", "No fake balances shown"],
+    ["Randomness provider", "ORAO VRF", "Production randomness"],
+  ];
+
+  dom.activityList.innerHTML = rows.map(([label, value, detail]) => `
+    <div class="list-row">
+      <div>
+        <span class="label">${label}</span>
+        <p>${detail}</p>
+      </div>
+      <strong class="mono ${value === "Pending" ? "warning" : "success"}">${value}</strong>
+    </div>
+  `).join("");
+}
+
+function renderStatus() {
+  const live = state.onchainAvailable;
+  const reason = state.config?.onchain?.reason || normalizeReason(state.lastError) || "";
+  const statusText = live ? "Mainnet live" : "Mainnet syncing";
+  const dotClass = live ? "dot-live" : "dot-sync";
+
+  dom.chainStatus.innerHTML = `<span class="status-dot ${dotClass}"></span><span>${statusText}</span>`;
+  dom.homeStatusTitle.textContent = live ? "Live" : "Pending";
+  dom.homeStatusCopy.textContent = live
+    ? "Backend and on-chain pool state are available."
+    : reason
+      ? `Waiting for verified chain state: ${reason}.`
+      : "Live pool values appear only after the backend confirms the deployed program.";
+  dom.homeStatusPill.textContent = live ? "Live" : "Syncing";
+  dom.homeStatusPill.className = `status-pill ${live ? "success" : "warning"}`;
+  dom.poolsNote.textContent = live
+    ? "Live pool state is available. Review each transaction before signing."
+    : "Static rules are shown now. Live rounds load from the backend when on-chain state is available.";
+}
+
+function normalizeReason(reason) {
+  if (!reason) {
+    return "";
+  }
+  return /failed to fetch|load failed|networkerror/i.test(reason)
+    ? "api_unavailable_or_cors"
+    : reason;
+}
+
+function renderWalletPill() {
+  const label = state.wallet ? formatAddress(state.wallet.address) : "Connect wallet";
+  dom.walletPill.textContent = label;
+}
+
+function isMobileBrowser() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || window.matchMedia("(max-width: 760px)").matches;
+}
+
+function hasMobileWalletFallback() {
+  return Boolean(WALLETCONNECT_PROJECT_ID) || isMobileBrowser();
+}
+
+function mobileWalletBrowserOptions() {
+  return isMobileBrowser() ? MOBILE_WALLET_BROWSERS : [];
+}
+
+function appUrlForMobileWallet() {
+  const url = new URL("/play/", window.location.origin);
+  url.searchParams.set("wallet", "1");
+  return url.toString();
+}
+
+function mobileWalletBrowseUrl(walletId) {
+  const target = encodeURIComponent(appUrlForMobileWallet());
+  const ref = encodeURIComponent(window.location.origin);
+
+  if (walletId === "phantom") {
+    return `https://phantom.app/ul/browse/${target}?ref=${ref}`;
+  }
+  if (walletId === "solflare") {
+    return `https://solflare.com/ul/v1/browse/${target}?ref=${ref}`;
+  }
+  if (walletId === "backpack") {
+    return `https://backpack.app/ul/v1/browse/${target}?ref=${ref}`;
+  }
+  throw new Error("Unsupported mobile wallet");
+}
+
+function openMobileWalletBrowser(walletId) {
+  window.location.assign(mobileWalletBrowseUrl(walletId));
+}
+
+function renderWallets() {
+  const wallets = discoverWallets();
+  const canUseMobileWallet = hasMobileWalletFallback();
+
+  if (state.wallet) {
+    dom.walletList.innerHTML = `
+      <article class="wallet-card active">
+        <div class="row">
+          <div>
+            <span class="label">Connected wallet</span>
+            <h3>${state.wallet.name}</h3>
+          </div>
+          <strong class="success">CONNECTED</strong>
+        </div>
+        <p class="mono">${state.wallet.address}</p>
+        <div class="wallet-actions">
+          <button class="secondary-button" data-action="disconnect">Disconnect</button>
+        </div>
+      </article>
+    `;
+    showWalletMessage(`Connected ${state.wallet.name}: ${state.wallet.address}`, "success");
+  } else {
+    dom.walletList.innerHTML = `
+      <article class="wallet-card wallet-connect-card">
+        <div class="row">
+          <div>
+            <span class="label">Wallet</span>
+            <h3>Connect wallet</h3>
+          </div>
+        </div>
+        <p>Choose a detected browser wallet or continue with a mobile wallet app.</p>
+        <div class="wallet-actions">
+          <button class="primary-button" data-action="toggle-wallet-menu">Connect wallet</button>
+        </div>
+      </article>
+      ${state.walletMenuOpen ? walletMenu(wallets) : ""}
+    `;
+    showWalletMessage(
+      state.walletMenuOpen
+        ? wallets.length || canUseMobileWallet
+          ? "Choose a wallet connection to continue."
+          : "No compatible Solana wallet was detected in this browser."
+        : "Connect a wallet before reviewing a pool entry.",
+      state.walletMenuOpen && wallets.length === 0 && !canUseMobileWallet ? "warning" : "soft",
+    );
+  }
+}
+
+function walletMenu(wallets) {
+  const canUseWalletConnect = Boolean(WALLETCONNECT_PROJECT_ID);
+  const mobileWallets = mobileWalletBrowserOptions();
+  const hasOptions = wallets.length || canUseWalletConnect || mobileWallets.length;
+
+  if (!hasOptions) {
+    return `
+      <article class="wallet-card wallet-menu">
+        <span class="label">Detected wallets</span>
+        <p>No compatible Solana wallet was detected in this browser.</p>
+      </article>
+    `;
+  }
+
+  return `
+    <article class="wallet-card wallet-menu">
+      <span class="label">${hasOptions ? "Wallet connection" : "Detected wallets"}</span>
+      <div class="wallet-option-list">
+        ${wallets.map((wallet) => `
+          <button class="wallet-option" data-connect="${wallet.id}">
+            <span>${wallet.name}</span>
+            <strong>Connect</strong>
+          </button>
+        `).join("")}
+        ${canUseWalletConnect ? `
+          <button class="wallet-option" data-connect="mobile-wallet">
+            <span>Mobile wallet</span>
+            <strong>Connect</strong>
+          </button>
+        ` : ""}
+        ${mobileWallets.map((wallet) => `
+          <button class="wallet-option" data-connect="mobile-open:${wallet.id}">
+            <span>Open in ${wallet.name}</span>
+            <strong>Open</strong>
+          </button>
+        `).join("")}
+      </div>
+      ${mobileWallets.length ? `<p class="wallet-menu-note">Chrome mobile cannot read phone wallet apps directly. Open LuckyMe inside your wallet app, then connect from that wallet browser.</p>` : ""}
+    </article>
+  `;
+}
+
+function showWalletMessage(message, tone = "warning") {
+  dom.walletMessage.hidden = false;
+  dom.walletMessage.textContent = message;
+  dom.walletMessage.className = `notice ${tone}`;
+}
+
+function injectedWallet(id, name, provider) {
+  return {
+    id,
+    name,
+    provider,
+    type: "injected",
+  };
+}
+
+function discoverInjectedWallets() {
+  const candidates = [];
+  const seen = new Set();
+  const add = (wallet) => {
+    if (!wallet.provider || seen.has(wallet.provider)) {
+      return;
+    }
+    seen.add(wallet.provider);
+    candidates.push(wallet);
+  };
+
+  add(injectedWallet("phantom", "Phantom", window.phantom?.solana));
+  if (window.solana?.isPhantom) {
+    add(injectedWallet("phantom-window", "Phantom", window.solana));
+  }
+  add(injectedWallet("solflare", "Solflare", window.solflare));
+  add(injectedWallet("backpack", "Backpack", window.backpack?.solana || window.backpack));
+  add(injectedWallet("brave", "Brave Wallet", window.braveSolana));
+  add(injectedWallet("glow", "Glow", window.glowSolana));
+
+  return candidates.filter((wallet) => typeof wallet.provider?.connect === "function");
+}
+
+function discoverWallets() {
+  return discoverInjectedWallets();
+}
+
+async function getWalletConnectProvider() {
+  if (!WALLETCONNECT_PROJECT_ID) {
+    throw new Error("Mobile wallet connection is not configured yet");
+  }
+
+  if (state.walletConnectProvider) {
+    return state.walletConnectProvider;
+  }
+
+  const [{ default: UniversalProvider }, { WalletConnectModal }] = await Promise.all([
+    import("https://esm.sh/@walletconnect/universal-provider@2.23.9?bundle"),
+    import("https://esm.sh/@walletconnect/modal@2.7.0?bundle"),
+  ]);
+
+  const provider = await UniversalProvider.init({
+    projectId: WALLETCONNECT_PROJECT_ID,
+    metadata: {
+      name: "LuckyMe",
+      description: "LuckyMe Solana pools",
+      url: window.location.origin,
+      icons: [`${window.location.origin}/assets/brand/apple-touch-icon.png`],
+    },
+  });
+
+  const modal = new WalletConnectModal({
+    projectId: WALLETCONNECT_PROJECT_ID,
+    chains: WALLETCONNECT_SOLANA_CHAINS,
+    themeMode: "dark",
+  });
+
+  provider.on("display_uri", (uri) => {
+    modal.openModal({ uri });
+  });
+
+  provider.on("session_delete", () => {
+    if (state.wallet?.type === "walletconnect") {
+      state.wallet = null;
+      state.preparedTransaction = null;
+      renderWalletPill();
+      renderWallets();
+    }
+  });
+
+  state.walletConnectProvider = provider;
+  state.walletConnectModal = modal;
+  return provider;
+}
+
+function parseWalletConnectAccount(session) {
+  const account = session?.namespaces?.solana?.accounts?.find((item) => item.startsWith("solana:"));
+  const [, reference, address] = account?.split(":") || [];
+  if (!address) {
+    throw new Error("Mobile wallet did not return a Solana account");
+  }
+  return { account, chainId: `solana:${reference}`, address };
+}
+
+async function connectWalletConnect() {
+  const provider = await getWalletConnectProvider();
+  const session = provider.session || await provider.connect({
+    optionalNamespaces: {
+      solana: {
+        chains: WALLETCONNECT_SOLANA_CHAINS,
+        methods: WALLETCONNECT_SOLANA_METHODS,
+        events: [],
+      },
+    },
+  });
+
+  state.walletConnectModal?.closeModal?.();
+
+  const account = parseWalletConnectAccount(session || provider.session);
+  state.wallet = {
+    id: "mobile-wallet",
+    name: "Mobile wallet",
+    type: "walletconnect",
+    provider,
+    session: session || provider.session,
+    chainId: account.chainId,
+    address: account.address,
+  };
+}
+
+async function connectInjected(wallet) {
+  const response = await wallet.provider.connect({ onlyIfTrusted: false });
+  const publicKey = response?.publicKey || wallet.provider.publicKey;
+  const address = publicKey?.toBase58 ? publicKey.toBase58() : publicKey?.toString?.();
+
+  if (!address) {
+    throw new Error(`${wallet.name} did not return a Solana address`);
+  }
+
+  state.wallet = {
+    id: wallet.id,
+    name: wallet.name,
+    type: "injected",
+    provider: wallet.provider,
+    address,
+  };
+}
+
+async function connectWallet(walletId) {
+  if (walletId.startsWith("mobile-open:")) {
+    try {
+      openMobileWalletBrowser(walletId.replace("mobile-open:", ""));
+    } catch (error) {
+      showWalletMessage(error instanceof Error ? error.message : String(error), "danger");
+    }
+    return;
+  }
+
+  if (walletId === "mobile-wallet") {
+    try {
+      await connectWalletConnect();
+      state.walletMenuOpen = false;
+      renderWalletPill();
+      renderWallets();
+      await loadPools();
+    } catch (error) {
+      state.walletConnectModal?.closeModal?.();
+      showWalletMessage(error instanceof Error ? error.message : String(error), "danger");
+    }
+    return;
+  }
+
+  const wallet = discoverWallets().find((item) => item.id === walletId);
+  if (!wallet) {
+    return;
+  }
+
+  try {
+    await connectInjected(wallet);
+    state.walletMenuOpen = false;
+
+    renderWalletPill();
+    renderWallets();
+    await loadPools();
+  } catch (error) {
+    showWalletMessage(error instanceof Error ? error.message : String(error), "danger");
+  }
+}
+
+async function disconnectWallet() {
+  try {
+    if (state.wallet?.type === "walletconnect") {
+      await state.wallet.provider?.disconnect?.();
+    } else if (state.wallet?.disconnect) {
+      await state.wallet.disconnect();
+    } else if (state.wallet?.provider?.disconnect) {
+      await state.wallet.provider.disconnect();
+    }
+  } finally {
+    state.wallet = null;
+    state.preparedTransaction = null;
+    renderWalletPill();
+    renderWallets();
+  }
+}
+
+function renderReview() {
+  const pool = state.selectedPool ? poolById(state.selectedPool) : POOLS[0];
+  const connected = Boolean(state.wallet);
+  const prepared = state.preparedTransaction;
+  const sim = prepared?.simulation;
+  const canBuild = connected && state.onchainAvailable;
+
+  dom.reviewPanel.innerHTML = `
+    <div>
+      <span class="label">Pool</span>
+      <h2>${pool.name}</h2>
+      <p>${pool.entrySol} SOL entry. ${pool.prize}. ${pool.winners}.</p>
+    </div>
+    <div class="review-summary">
+      <div class="list-row">
+        <div><span class="label">Wallet</span><p class="mono">${state.wallet?.address || "Not connected"}</p></div>
+        <strong class="${connected ? "success" : "warning"}">${connected ? "CONNECTED" : "REQUIRED"}</strong>
+      </div>
+      <div class="list-row">
+        <div><span class="label">Program</span><p class="mono">${PROGRAM_ID}</p></div>
+        <strong class="success">Set</strong>
+      </div>
+      <div class="list-row">
+        <div><span class="label">Backend simulation</span><p>${sim ? JSON.stringify(sim.err || "ok") : "Required before wallet prompt"}</p></div>
+        <strong class="${sim?.ok ? "success" : "warning"}">${sim ? (sim.ok ? "OK" : "CHECK") : "PENDING"}</strong>
+      </div>
+    </div>
+    ${prepared ? `<pre class="code-box">${JSON.stringify(prepared.summary, null, 2)}</pre>` : ""}
+    ${state.lastError ? `<div class="notice danger">${state.lastError}</div>` : ""}
+    <div class="wallet-actions">
+      ${connected ? "" : `<button class="primary-button" data-route="wallet">Connect wallet</button>`}
+      <button class="primary-button" data-action="prepare" ${canBuild ? "" : "disabled"}>Build and simulate</button>
+      <button class="secondary-button" data-action="sign" ${prepared?.simulation?.ok ? "" : "disabled"}>Sign and send in wallet</button>
+      <button class="secondary-button" data-route="pools">Back to pools</button>
+    </div>
+    ${state.onchainAvailable ? "" : `<div class="notice">Mainnet program state is not available yet. Transaction build is disabled until backend /pools is live.</div>`}
+  `;
+}
+
+async function prepareTransaction() {
+  if (!state.wallet || !state.selectedPool) {
+    return;
+  }
+  state.lastError = "";
+  state.preparedTransaction = null;
+  renderReview();
+
+  try {
+    const response = await fetch(`${API_BASE}/transactions/buy-tickets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        pool: state.selectedPool,
+        ticketCount: 1,
+        player: state.wallet.address,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || payload.error || "Transaction build failed");
+    }
+    state.preparedTransaction = payload;
+  } catch (error) {
+    state.lastError = error instanceof Error ? error.message : String(error);
+  }
+
+  renderReview();
+}
+
+async function signAndSendPreparedTransaction() {
+  if (!state.wallet || !state.preparedTransaction?.transactionBase64) {
+    return;
+  }
+
+  state.lastError = "";
+  renderReview();
+
+  try {
+    const transaction = Transaction.from(base64ToBytes(state.preparedTransaction.transactionBase64));
+    const provider = state.wallet.provider;
+    let signature;
+
+    if (state.wallet.type === "walletconnect") {
+      signature = await signAndSendWalletConnectTransaction(state.preparedTransaction.transactionBase64);
+    } else if (typeof provider.signAndSendTransaction === "function") {
+      const result = await provider.signAndSendTransaction(transaction);
+      signature = typeof result === "string" ? result : result?.signature;
+    } else if (typeof provider.signTransaction === "function") {
+      const signed = await provider.signTransaction(transaction);
+      const connection = new Connection(state.preparedTransaction.clusterUrl || state.config?.clusterUrl || DEFAULT_RPC, "confirmed");
+      signature = await connection.sendRawTransaction(signed.serialize(), {
+        maxRetries: 3,
+        skipPreflight: false,
+      });
+      await connection.confirmTransaction(signature, "confirmed");
+    } else {
+      throw new Error(`${state.wallet.name} does not expose a Solana transaction signing method`);
+    }
+
+    state.preparedTransaction.signature = signature;
+    state.lastError = signature ? `Submitted: ${signature}` : "Transaction submitted";
+  } catch (error) {
+    state.lastError = error instanceof Error ? error.message : String(error);
+  }
+
+  renderReview();
+}
+
+async function signAndSendWalletConnectTransaction(transactionBase64) {
+  const provider = state.wallet?.provider;
+  const chainId = state.wallet?.chainId || WALLETCONNECT_SOLANA_CHAIN;
+  const methods = state.wallet?.session?.namespaces?.solana?.methods || [];
+  const connection = new Connection(state.preparedTransaction.clusterUrl || state.config?.clusterUrl || DEFAULT_RPC, "confirmed");
+
+  if (methods.includes("solana_signAndSendTransaction")) {
+    const result = await provider.request({
+      method: "solana_signAndSendTransaction",
+      params: {
+        transaction: transactionBase64,
+        sendOptions: {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+          maxRetries: 3,
+        },
+      },
+    }, chainId);
+    return result?.signature || result;
+  }
+
+  const result = await provider.request({
+    method: "solana_signTransaction",
+    params: {
+      transaction: transactionBase64,
+    },
+  }, chainId);
+
+  if (!result?.transaction) {
+    throw new Error("Mobile wallet did not return a signed transaction");
+  }
+
+  const signature = await connection.sendRawTransaction(base64ToBytes(result.transaction), {
+    maxRetries: 3,
+    skipPreflight: false,
+  });
+  await connection.confirmTransaction(signature, "confirmed");
+  return signature;
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+async function loadConfig() {
+  try {
+    const response = await fetch(`${API_BASE}/config`, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    });
+    const payload = await response.json();
+    state.config = payload;
+    state.onchainAvailable = payload.onchainAvailable === true || payload.onchain?.available === true;
+    state.lastError = "";
+  } catch (error) {
+    state.config = null;
+    state.onchainAvailable = false;
+    state.lastError = error instanceof Error ? error.message : String(error);
+  }
+
+  renderStatus();
+  renderPools();
+  renderActivity();
+}
+
+async function loadPools() {
+  if (!state.wallet) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/pools?player=${encodeURIComponent(state.wallet.address)}`, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || payload.error || "Pool fetch failed");
+    }
+    state.pools = Array.isArray(payload.pools) ? payload.pools : [];
+    state.onchainAvailable = payload.onchain?.available === true;
+  } catch (error) {
+    state.pools = [];
+    state.onchainAvailable = false;
+    state.lastError = error instanceof Error ? error.message : String(error);
+  }
+
+  renderStatus();
+  renderPools();
+  renderActivity();
+}
+
+document.addEventListener("click", async (event) => {
+  const routeButton = event.target.closest("[data-route]");
+  if (routeButton) {
+    setRoute(routeButton.dataset.route);
+    return;
+  }
+
+  const poolButton = event.target.closest("[data-pool]");
+  if (poolButton) {
+    state.selectedPool = poolButton.dataset.pool;
+    state.preparedTransaction = null;
+    state.lastError = "";
+    setRoute("review");
+    return;
+  }
+
+  const connectButton = event.target.closest("[data-connect]");
+  if (connectButton) {
+    await connectWallet(connectButton.dataset.connect);
+    return;
+  }
+
+  const actionButton = event.target.closest("[data-action]");
+  if (!actionButton) {
+    return;
+  }
+
+  const action = actionButton.dataset.action;
+  if (action === "refresh") {
+    await loadConfig();
+    if (state.wallet) {
+      await loadPools();
+    }
+  } else if (action === "toggle-wallet-menu") {
+    state.walletMenuOpen = !state.walletMenuOpen;
+    renderWallets();
+  } else if (action === "prepare") {
+    await prepareTransaction();
+  } else if (action === "sign") {
+    await signAndSendPreparedTransaction();
+  } else if (action === "disconnect") {
+    await disconnectWallet();
+  }
+});
+
+renderPools();
+renderActivity();
+renderWalletPill();
+if (new URLSearchParams(window.location.search).has("wallet")) {
+  state.walletMenuOpen = true;
+  setRoute("wallet");
+}
+loadConfig();

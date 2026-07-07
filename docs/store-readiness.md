@@ -41,6 +41,9 @@ Based on the official Solana Mobile publishing docs, prepare:
   and malformed Program IDs.
 - `README.md` and `docs/mainnet-readiness.md` document the same release mode,
   wallet chain, cluster, APK profile, and remaining credential-owned items.
+- Victor reported the signed Seeker build tested on a Seeker phone on
+  2026-07-07. Full wallet-signing release evidence remains gated by deployed
+  and initialized mainnet program state.
 
 ## User-Facing App Requirements
 

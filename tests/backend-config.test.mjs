@@ -83,6 +83,40 @@ test("backend accepts strict mainnet production health config", async () => {
   }
 });
 
+test("backend reflects allowed CORS origin from production allowlist", async () => {
+  const port = await getFreePort();
+  const child = startServer({
+    PORT: String(port),
+    HOST: "0.0.0.0",
+    NODE_ENV: "production",
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
+    LUCKYME_RANDOMNESS_MODE: "orao_vrf",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
+    CORS_ORIGIN: "https://lucky-me.app,https://www.lucky-me.app",
+  });
+
+  try {
+    await waitForOutput(child, /LuckyMe API listening/);
+    const response = await fetch(`http://127.0.0.1:${port}/health`, {
+      headers: {
+        origin: "https://www.lucky-me.app",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(
+      response.headers.get("access-control-allow-origin"),
+      "https://www.lucky-me.app",
+    );
+    assert.equal(response.headers.get("vary"), "Origin");
+  } finally {
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  }
+});
+
 test("backend disables simulate endpoint in mainnet release", async () => {
   const port = await getFreePort();
   const child = startServer({

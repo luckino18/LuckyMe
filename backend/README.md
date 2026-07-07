@@ -14,7 +14,7 @@ export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
 export HOST=0.0.0.0
 export PORT=8788
-export CORS_ORIGIN=https://lucky-me.app
+export CORS_ORIGIN=https://lucky-me.app,https://www.lucky-me.app
 export ENABLE_TRANSACTION_SUBMIT=false
 node backend/src/server.mjs
 ```
@@ -27,7 +27,7 @@ node backend/src/server.mjs
 - randomness is not `orao_vrf`;
 - `LUCKYME_PRODUCTION_RANDOMNESS` is not `true`;
 - host/port config is invalid or loopback is used outside local development;
-- CORS is wildcard;
+- CORS is missing, wildcard, or contains a non-HTTPS origin;
 - the public submit relay is enabled.
 
 ## Endpoints
@@ -51,7 +51,7 @@ on-chain state cannot be read. Player transactions are always returned unsigned
 for Mobile Wallet Adapter signing.
 
 Use a production HTTPS reverse proxy or managed platform in front of this
-process. Keep CORS restricted to the production app origin and apply upstream
+process. Keep CORS restricted to the production app origins and apply upstream
 rate limiting/WAF controls for public deployments.
 
 ## Local Development

@@ -3,76 +3,161 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LuckyMe</title>
+    <title>LuckyMe — Solana mainnet luck pools</title>
     <meta
       name="description"
-      content="LuckyMe is a Solana mobile-first luck pool app for fixed-entry rounds."
+      content="Fixed-entry luck pools on Solana mainnet. Connect a browser wallet, review the unsigned transaction, and approve only inside your wallet."
     />
+    <link rel="icon" type="image/png" href="/assets/brand/favicon.png" />
+    <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
+    <meta property="og:title" content="LuckyMe — Solana mainnet luck pools" />
+    <meta property="og:description" content="Fixed-entry pools, external wallet signing, verifiable VRF settlement." />
+    <meta property="og:image" content="https://lucky-me.app/assets/brand/og-image.png" />
+    <meta property="og:url" content="https://lucky-me.app/" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="shell">
-      <header class="nav">
-        <a class="brand" href="/">LuckyMe</a>
-        <nav class="navlinks" aria-label="Main navigation">
-          <a href="/terms/">Terms</a>
-          <a href="/privacy/">Privacy</a>
-          <a href="/support/">Support</a>
-        </nav>
-      </header>
+    <header class="site-nav">
+      <a class="brand" href="/" aria-label="LuckyMe home">
+        <img src="/assets/brand/luckyme-mark-small.webp" alt="" aria-hidden="true" />
+        <span>LuckyMe</span>
+      </a>
+      <nav class="navlinks" aria-label="Main navigation">
+        <a href="/terms/">Terms</a>
+        <a href="/privacy/">Privacy</a>
+        <a href="/support/">Support</a>
+        <a class="button" href="/play/">Play</a>
+      </nav>
+    </header>
 
-      <main class="hero">
-        <section>
+    <main>
+      <section class="landing-hero">
+        <div class="landing-copy">
           <p class="eyebrow">Solana mainnet pools</p>
-          <h1>Mobile-first luck pools on Solana.</h1>
+          <h1>Rounds you can verify.</h1>
           <p class="lead">
-            LuckyMe lets users connect a Solana wallet, review a fixed-entry
-            pool ticket, and sign the transaction in their wallet. The backend
-            builds unsigned transactions and never signs for players.
+            Fixed-entry luck pools on Solana. Connect a browser wallet, choose
+            a pool, review the unsigned transaction, and approve only inside
+            your wallet.
           </p>
-          <div class="actions">
-            <a class="button" href="/support/">Contact support</a>
-            <a class="button secondary" href="https://api.lucky-me.app/config">View API status</a>
+          <div class="chip-row" aria-label="Round rules">
+            <span class="chip">95% main prize</span>
+            <span class="chip">1 hour rounds</span>
+            <span class="chip">ORAO VRF</span>
           </div>
-        </section>
-        <aside class="phone" aria-label="LuckyMe app screenshot">
-          <img src="/assets/screenshots/home.png" alt="LuckyMe home screen" />
-        </aside>
-      </main>
-
-      <section class="grid" aria-label="Product highlights">
-        <article class="card">
-          <h2>Mainnet Ready</h2>
-          <p>
-            The production target is Solana mainnet-beta with wallet chain
-            validation and HTTPS backend validation.
-          </p>
-        </article>
-        <article class="card">
-          <h2>User-Signed</h2>
-          <p>
-            Player transactions are reviewed in-app and signed by the connected
-            wallet. LuckyMe does not custody user private keys.
-          </p>
-        </article>
-        <article class="card">
-          <h2>Transparent Rounds</h2>
-          <p>
-            Pool pricing, round state, treasury split, jackpot contribution,
-            and program details are shown before signing.
-          </p>
-        </article>
+          <div class="actions">
+            <a class="button" href="/play/">Play</a>
+            <a class="button secondary" href="#pools">See the pools</a>
+          </div>
+        </div>
+        <div class="landing-art">
+          <img
+            src="/assets/brand/luckyme-mark.webp"
+            alt="LuckyMe — Solana coin, clover and rocket mark"
+            width="460"
+            height="421"
+          />
+        </div>
       </section>
 
-      <footer class="footer">
-        <span>LuckyMe</span>
-        <span>
-          <a href="/terms/">Terms</a>
-          <a href="/privacy/">Privacy</a>
-          <a href="/support/">Support</a>
-        </span>
-      </footer>
-    </div>
+      <section class="section-band" id="pools">
+        <div class="section-inner two-col">
+          <div>
+            <p class="eyebrow">Game structure</p>
+            <h2>Same pools, browser access.</h2>
+            <p>
+              The web app uses the LuckyMe production model: Mini, Normal,
+              High, and Premium pools, one-hour rounds, a 95% main prize, 2%
+              treasury, and 3% jackpot reserve. Rules are fixed at build time —
+              live values appear only after verified on-chain state.
+            </p>
+          </div>
+          <div class="pool-strip" aria-label="LuckyMe pool tiers">
+            <article class="mini-card">
+              <span>Mini</span>
+              <strong>0.005 SOL</strong>
+            </article>
+            <article class="mini-card">
+              <span>Normal</span>
+              <strong>0.01 SOL</strong>
+            </article>
+            <article class="mini-card">
+              <span>High</span>
+              <strong>0.05 SOL</strong>
+            </article>
+            <article class="mini-card premium">
+              <span>Premium</span>
+              <strong>0.1 SOL</strong>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-band muted-band">
+        <div class="section-inner steps-grid">
+          <article class="step-card">
+            <span class="step-num">1</span>
+            <h3>Connect a wallet</h3>
+            <p>
+              LuckyMe shows only Solana wallets already detected in your
+              browser. It never asks for seed phrases or private keys.
+            </p>
+          </article>
+          <article class="step-card">
+            <span class="step-num">2</span>
+            <h3>Review the transaction</h3>
+            <p>
+              The backend builds an unsigned transaction and simulates it
+              first. You see the full summary before any wallet prompt.
+            </p>
+          </article>
+          <article class="step-card">
+            <span class="step-num">3</span>
+            <h3>Approve in your wallet</h3>
+            <p>
+              Signing happens only inside your wallet. The website never
+              custodies funds and the backend never signs player transactions.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-band">
+        <div class="section-inner feature-grid">
+          <article class="feature">
+            <h2>Self-custody</h2>
+            <p>
+              Every player action is approved in your own wallet. App custody
+              is none, on Solana mainnet.
+            </p>
+          </article>
+          <article class="feature">
+            <h2>Verifiable draws</h2>
+            <p>
+              Settlement randomness comes from ORAO VRF and rounds settle
+              on-chain.
+            </p>
+          </article>
+          <article class="feature">
+            <h2>Nothing simulated</h2>
+            <p>
+              Pool values move from Pending to live only after the production
+              program and backend state are confirmed. No fake balances, ever.
+            </p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>LuckyMe · Solana mainnet</span>
+      <span>
+        <a href="/play/">Play</a>
+        <a href="/terms/">Terms</a>
+        <a href="/privacy/">Privacy</a>
+        <a href="/support/">Support</a>
+      </span>
+    </footer>
   </body>
 </html>
-

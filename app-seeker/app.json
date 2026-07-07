@@ -6,13 +6,19 @@
     "orientation": "portrait",
     "scheme": "luckyme",
     "userInterfaceStyle": "dark",
+    "androidStatusBar": {
+      "hidden": true,
+      "translucent": true,
+      "backgroundColor": "#00000000",
+      "barStyle": "light-content"
+    },
     "icon": "./assets/icon.png",
     "android": {
       "package": "com.luckyme.seeker",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#101316"
+        "backgroundColor": "#0A0E14"
       },
       "permissions": []
     },
@@ -24,12 +30,14 @@
       }
     },
     "plugins": [
+      "./plugins/with-luckyme-immersive-android",
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash.png",
+          "imageWidth": 240,
           "resizeMode": "contain",
-          "backgroundColor": "#101316"
+          "backgroundColor": "#0A0E14"
         }
       ]
     ]
