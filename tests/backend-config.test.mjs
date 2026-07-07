@@ -240,10 +240,12 @@ test("backend exposes safe public config", async () => {
     assert.equal(payload.clusterUrl, "http://127.0.0.1:1/");
     assert.equal(payload.onchain.clusterUrl, undefined);
     assert.equal(JSON.stringify(payload).includes("super-secret-rpc-key"), false);
-    assert.equal(payload.economics.houseFeeBps, 100);
-    assert.equal(payload.economics.jackpotBps, 100);
-    assert.equal(payload.economics.mainPrizeBps, 9800);
+    assert.equal(payload.economics.houseFeeBps, 200);
+    assert.equal(payload.economics.jackpotBps, 300);
+    assert.equal(payload.economics.mainPrizeBps, 9500);
     assert.equal(payload.economics.roundDurationSeconds, 3600);
+    assert.equal("jackpotOddsDenominator" in payload.economics, false);
+    assert.equal(JSON.stringify(payload).includes("jackpotOddsDenominator"), false);
     assert.equal(payload.realFundsEnabled, false);
     assert.equal(payload.releaseChecks.backendSignsPlayerTransactions, false);
   } finally {

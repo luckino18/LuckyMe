@@ -10,7 +10,7 @@ import {
 const DRY_RUN = process.env.DRY_RUN === "true";
 const POOL = process.env.POOL?.toLowerCase() ?? "normal";
 const ROUND_ID = parsePositiveInteger(process.env.ROUND_ID, "ROUND_ID");
-const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.label.toLowerCase(), pool]));
+const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.slug, pool]));
 
 if (!POOL_BY_SLUG.has(POOL)) {
   throw new Error(`Unknown POOL=${POOL}. Use one of: ${[...POOL_BY_SLUG.keys()].join(", ")}`);

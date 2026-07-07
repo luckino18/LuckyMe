@@ -20,19 +20,20 @@ test("fixed pools use the intended ticket prices", () => {
     [
       ["mini", "0.005"],
       ["normal", "0.01"],
-      ["high", "0.1"],
+      ["high", "0.05"],
+      ["premium", "0.1"],
     ],
   );
 });
 
-test("default economics use hourly rounds and a 98/1/1 split", () => {
+test("default economics use hourly rounds and a 95/2/3 split", () => {
   assert.equal(DEFAULT_ROUND_DURATION_SECONDS, 3_600);
-  assert.equal(DEFAULT_MAIN_PRIZE_BPS, 9_800n);
-  assert.equal(DEFAULT_CONFIG.houseFeeBps, 100n);
-  assert.equal(DEFAULT_CONFIG.jackpotBps, 100n);
+  assert.equal(DEFAULT_MAIN_PRIZE_BPS, 9_500n);
+  assert.equal(DEFAULT_CONFIG.houseFeeBps, 200n);
+  assert.equal(DEFAULT_CONFIG.jackpotBps, 300n);
 });
 
-test("round settlement splits 98 percent prize, 1 percent house, 1 percent jackpot", () => {
+test("round settlement splits 95 percent prize, 2 percent house, 3 percent jackpot", () => {
   const result = settleRound({
     ticketPriceLamports: solToLamports("0.01"),
     entries: [
@@ -44,9 +45,9 @@ test("round settlement splits 98 percent prize, 1 percent house, 1 percent jackp
   });
 
   assert.equal(lamportsToSol(result.totalLamports), "0.2");
-  assert.equal(lamportsToSol(result.mainPrize), "0.196");
-  assert.equal(lamportsToSol(result.houseFee), "0.002");
-  assert.equal(lamportsToSol(result.jackpotAdd), "0.002");
+  assert.equal(lamportsToSol(result.mainPrize), "0.19");
+  assert.equal(lamportsToSol(result.houseFee), "0.004");
+  assert.equal(lamportsToSol(result.jackpotAdd), "0.006");
 });
 
 test("winning chance is proportional to ticket count", () => {
@@ -114,24 +115,85 @@ test("refunds are only available after the reveal timeout", () => {
   assert.equal(result.remainingTickets, 1n);
 });
 
-test("jackpot payout includes previous balance plus current 1 percent contribution", () => {
+test("premium requires three entrants and pays three distinct winners 70/20/10", () => {
+  const premium = FIXED_POOLS.find((pool) => pool.id === "premium");
   const result = settleRound({
-    ticketPriceLamports: solToLamports("0.1"),
+    pool: premium,
+    jackpotBalanceLamports: 0n,
+    config: {
+      ...DEFAULT_CONFIG,
+      jackpotOddsDenominator: 999_999n,
+    },
+    entries: [
+      { player: "alice", tickets: 1n },
+      { player: "bob", tickets: 1n },
+      { player: "carol", tickets: 1n },
+    ],
+    randomSeed: "premium-three-winners",
+  });
+
+  assert.equal(result.winnerCount, 3);
+  assert.equal(new Set(result.winners.map((winner) => winner.player)).size, 3);
+  assert.deepEqual(
+    result.winners.map((winner) => lamportsToSol(winner.prizeLamports)),
+    ["0.1995", "0.057", "0.0285"],
+  );
+  assert.equal(lamportsToSol(result.mainPrize), "0.285");
+});
+
+test("premium rejects fewer than three entrants", () => {
+  const premium = FIXED_POOLS.find((pool) => pool.id === "premium");
+
+  assert.throws(
+    () =>
+      settleRound({
+        pool: premium,
+        entries: [
+          { player: "alice", tickets: 1n },
+          { player: "bob", tickets: 1n },
+        ],
+        randomSeed: "premium-too-few",
+      }),
+    /requires at least 3 entrants/,
+  );
+});
+
+test("premium allows only one ticket per wallet", () => {
+  const premium = FIXED_POOLS.find((pool) => pool.id === "premium");
+
+  assert.throws(
+    () =>
+      settleRound({
+        pool: premium,
+        entries: [
+          { player: "alice", tickets: 2n },
+          { player: "bob", tickets: 1n },
+          { player: "carol", tickets: 1n },
+        ],
+        randomSeed: "premium-ticket-limit",
+      }),
+    /per-entry maximum of 1/,
+  );
+});
+
+test("jackpot payout includes previous balance plus current 3 percent contribution", () => {
+  const result = settleRound({
+    ticketPriceLamports: solToLamports("0.01"),
     jackpotBalanceLamports: solToLamports("2"),
     config: {
       ...DEFAULT_CONFIG,
       jackpotOddsDenominator: 1n,
     },
     entries: [
-      { player: "alice", tickets: 1n },
-      { player: "bob", tickets: 1n },
+      { player: "alice", tickets: 10n },
+      { player: "bob", tickets: 10n },
     ],
     randomSeed: "force-jackpot",
   });
 
   assert.equal(result.jackpotTriggered, true);
-  assert.equal(lamportsToSol(result.jackpotAdd), "0.002");
-  assert.equal(lamportsToSol(result.jackpotPayout), "2.002");
+  assert.equal(lamportsToSol(result.jackpotAdd), "0.006");
+  assert.equal(lamportsToSol(result.jackpotPayout), "2.006");
   assert.equal(lamportsToSol(result.jackpotBalanceAfter), "0");
   assert.match(result.jackpotWinner, /alice|bob/);
 });

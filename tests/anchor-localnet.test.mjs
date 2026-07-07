@@ -16,12 +16,17 @@ import {
   derivePoolVault,
   deriveRound,
   deriveRoundRandomnessAccount,
+  mainPrizePayouts,
+  randomModDomain,
+  selectWinnerTickets,
 } from "../scripts/anchor-client.mjs";
 
 const CLOCK_SYSVAR = new PublicKey("SysvarC1ock11111111111111111111111111111111");
 const PROGRAM_ID = new PublicKey("4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3");
 const POOL_ID = 1;
 const TICKET_PRICE_LAMPORTS = 5_000_000;
+const PREMIUM_POOL_ID = 4;
+const PREMIUM_TICKET_PRICE_LAMPORTS = 100_000_000;
 const ROUND_DURATION_SECONDS = 2;
 const REFUND_DELAY_SECONDS = 2;
 
@@ -37,9 +42,12 @@ test("localnet buy, settlement, and refund-mode state machine", async () => {
   const pool = derivePool(config, POOL_ID);
   const poolVault = derivePoolVault(pool);
   const jackpotVault = deriveJackpotVault(pool);
+  const premiumPool = derivePool(config, PREMIUM_POOL_ID);
+  const premiumPoolVault = derivePoolVault(premiumPool);
+  const premiumJackpotVault = deriveJackpotVault(premiumPool);
 
   await program.methods
-    .initializeConfig(treasury, 100, 100, 1, new BN(ROUND_DURATION_SECONDS))
+    .initializeConfig(treasury, 200, 300, 1, new BN(ROUND_DURATION_SECONDS))
     .accounts({
       authority: authority.publicKey,
       config,
@@ -59,7 +67,29 @@ test("localnet buy, settlement, and refund-mode state machine", async () => {
     })
     .rpc();
 
+  await program.methods
+    .initializePool(PREMIUM_POOL_ID, new BN(PREMIUM_TICKET_PRICE_LAMPORTS))
+    .accounts({
+      authority: authority.publicKey,
+      config,
+      pool: premiumPool,
+      poolVault: premiumPoolVault,
+      jackpotVault: premiumJackpotVault,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
   await testSettlementFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault });
+  await testPremiumSettlementFlow({
+    program,
+    provider,
+    authority,
+    treasury,
+    config,
+    pool: premiumPool,
+    poolVault: premiumPoolVault,
+    jackpotVault: premiumJackpotVault,
+  });
   await testRefundModeFlow({ program, provider, authority, config, pool, poolVault, jackpotVault });
   await testPauseAndEmptyRoundFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault });
   await testProviderRandomnessRequestAndRefundFlow({ program, provider, authority, config, pool, poolVault, jackpotVault });
@@ -197,8 +227,8 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
     },
   ];
   const randomness = deriveRoundRandomness(round, 3n, reveal);
-  const winnerTicket = randomMod(randomness, 0, 3n);
-  const jackpotTicket = randomMod(randomness, 16, 3n);
+  const [winnerTicket] = selectWinnerTickets(randomness, 3n, 1);
+  const jackpotTicket = randomModDomain(randomness, "jackpot-winner", 0, 3n);
   const winnerEntry = findEntryByTicket(entries, winnerTicket);
   const jackpotEntry = findEntryByTicket(entries, jackpotTicket);
   const wrongWinnerEntry = otherEntry(entries, winnerEntry).address;
@@ -313,7 +343,10 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
   roundAccount = await program.account.round.fetch(round);
   const poolAccount = await program.account.pool.fetch(pool);
   assert.equal(roundAccount.settled, true);
+  assert.equal(roundAccount.winnerCount, 1);
   assert.equal(roundAccount.winner.toBase58(), winnerEntry.player.toBase58());
+  assert.equal(roundAccount.winnerSecond.toBase58(), PublicKey.default.toBase58());
+  assert.equal(roundAccount.winnerThird.toBase58(), PublicKey.default.toBase58());
   assert.equal(roundAccount.jackpotTriggered, true);
   assert.equal(roundAccount.jackpotWinner.toBase58(), jackpotEntry.player.toBase58());
   assert.notDeepEqual(roundAccount.randomness, Array(32).fill(0));
@@ -341,6 +374,143 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
         .rpc(),
     "RoundSettled",
   );
+}
+
+async function testPremiumSettlementFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault }) {
+  const players = [Keypair.generate(), Keypair.generate(), Keypair.generate()];
+  const oversizedBuyer = Keypair.generate();
+  await Promise.all([
+    ...players.map((player) => fund(provider, player.publicKey)),
+    fund(provider, oversizedBuyer.publicKey),
+  ]);
+
+  const reveal = Buffer.from("premium-round-reveal-00000000000", "utf8");
+  const commitment = commitmentForReveal(reveal);
+  const round = deriveRound(pool, 1);
+  const entries = players.map((player) => ({
+    player: player.publicKey,
+    address: deriveEntry(round, player.publicKey),
+  }));
+  const oversizedEntry = deriveEntry(round, oversizedBuyer.publicKey);
+
+  await program.methods
+    .openRound([...commitment])
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      pool,
+      round,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .buyTickets(new BN(2))
+        .accounts({
+          player: oversizedBuyer.publicKey,
+          config,
+          pool,
+          round,
+          entry: oversizedEntry,
+          poolVault,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([oversizedBuyer])
+        .rpc(),
+    "InvalidTicketCount",
+  );
+
+  for (const [index, player] of players.entries()) {
+    await buyTickets({
+      program,
+      player,
+      config,
+      pool,
+      round,
+      entry: entries[index].address,
+      poolVault,
+      ticketCount: 1,
+    });
+  }
+
+  let roundAccount = await program.account.round.fetch(round);
+  assert.equal(roundAccount.totalTickets.toString(), "3");
+  assert.equal(roundAccount.totalLamports.toString(), String(PREMIUM_TICKET_PRICE_LAMPORTS * 3));
+  assert.equal(roundAccount.entrantCount, 3);
+  await waitForClock(provider, Number(roundAccount.endTs), "premium settlement");
+
+  const fullEntries = entries.map((entry, index) => ({
+    ...entry,
+    ticketStart: BigInt(index),
+    ticketEndExclusive: BigInt(index + 1),
+  }));
+  const randomness = deriveRoundRandomness(round, 3n, reveal);
+  const winnerTickets = selectWinnerTickets(randomness, 3n, 3);
+  const winnerEntries = winnerTickets.map((ticket) => findEntryByTicket(fullEntries, ticket));
+  const jackpotTicket = randomModDomain(randomness, "jackpot-winner", 0, 3n);
+  const jackpotEntry = findEntryByTicket(fullEntries, jackpotTicket);
+  const mainPrize = 285_000_000n;
+  const prizePayouts = mainPrizePayouts(mainPrize, {
+    winnerCount: 3,
+    prizeSplitBps: [7_000, 2_000, 1_000],
+  });
+  assert.deepEqual(prizePayouts.map(String), ["199500000", "57000000", "28500000"]);
+
+  const balancesBefore = new Map();
+  for (const player of players) {
+    balancesBefore.set(
+      player.publicKey.toBase58(),
+      BigInt(await provider.connection.getBalance(player.publicKey)),
+    );
+  }
+
+  await program.methods
+    .settleRound([...reveal])
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      pool,
+      round,
+      poolVault,
+      jackpotVault,
+      winner: winnerEntries[0].player,
+      winnerEntry: winnerEntries[0].address,
+      jackpotWinner: jackpotEntry.player,
+      jackpotEntry: jackpotEntry.address,
+      treasury,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(remainingWinnerAccounts(winnerEntries))
+    .rpc();
+
+  roundAccount = await program.account.round.fetch(round);
+  const poolAccount = await program.account.pool.fetch(pool);
+  assert.equal(roundAccount.settled, true);
+  assert.equal(roundAccount.winnerCount, 3);
+  assert.equal(roundAccount.winner.toBase58(), winnerEntries[0].player.toBase58());
+  assert.equal(roundAccount.winnerSecond.toBase58(), winnerEntries[1].player.toBase58());
+  assert.equal(roundAccount.winnerThird.toBase58(), winnerEntries[2].player.toBase58());
+  assert.equal(roundAccount.jackpotTriggered, true);
+  assert.equal(roundAccount.jackpotWinner.toBase58(), jackpotEntry.player.toBase58());
+  assert.equal(poolAccount.jackpotLamports.toString(), "0");
+
+  const expectedDeltas = new Map(players.map((player) => [player.publicKey.toBase58(), 0n]));
+  for (const [index, entry] of winnerEntries.entries()) {
+    const key = entry.player.toBase58();
+    expectedDeltas.set(key, expectedDeltas.get(key) + prizePayouts[index]);
+  }
+  expectedDeltas.set(
+    jackpotEntry.player.toBase58(),
+    expectedDeltas.get(jackpotEntry.player.toBase58()) + 9_000_000n,
+  );
+
+  for (const player of players) {
+    const key = player.publicKey.toBase58();
+    const after = BigInt(await provider.connection.getBalance(player.publicKey));
+    assert.equal(after - balancesBefore.get(key), expectedDeltas.get(key));
+  }
 }
 
 async function testPauseAndEmptyRoundFlow({ program, provider, authority, config, pool, poolVault }) {
@@ -537,7 +707,10 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
 
   roundAccount = await program.account.round.fetch(round);
   assert.equal(roundAccount.settled, true);
+  assert.equal(roundAccount.winnerCount, 0);
   assert.equal(roundAccount.winner.toBase58(), PublicKey.default.toBase58());
+  assert.equal(roundAccount.winnerSecond.toBase58(), PublicKey.default.toBase58());
+  assert.equal(roundAccount.winnerThird.toBase58(), PublicKey.default.toBase58());
   assert.equal(roundAccount.jackpotWinner.toBase58(), PublicKey.default.toBase58());
   assert.deepEqual(roundAccount.randomness, Array(32).fill(0));
   assert.equal(roundAccount.totalTickets.toString(), "3");
@@ -866,10 +1039,6 @@ function u64Le(value) {
   return buffer;
 }
 
-function randomMod(randomness, offset, modulo) {
-  return randomness.readBigUInt64LE(offset) % modulo;
-}
-
 function findEntryByTicket(entries, ticket) {
   const entry = entries.find((item) =>
     ticket >= item.ticketStart && ticket < item.ticketEndExclusive,
@@ -884,6 +1053,15 @@ function otherEntry(entries, selected) {
   );
   assert.ok(other, "other entry exists");
   return other;
+}
+
+function remainingWinnerAccounts(winnerEntries) {
+  return [
+    { pubkey: winnerEntries[1].player, isWritable: true, isSigner: false },
+    { pubkey: winnerEntries[1].address, isWritable: false, isSigner: false },
+    { pubkey: winnerEntries[2].player, isWritable: true, isSigner: false },
+    { pubkey: winnerEntries[2].address, isWritable: false, isSigner: false },
+  ];
 }
 
 function readIdl() {

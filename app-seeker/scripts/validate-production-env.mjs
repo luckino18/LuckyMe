@@ -23,6 +23,10 @@ const privacyUrl = process.env.EXPO_PUBLIC_LUCKYME_PRIVACY_URL;
 const supportUrl = process.env.EXPO_PUBLIC_LUCKYME_SUPPORT_URL;
 const programId = process.env.EXPO_PUBLIC_LUCKYME_PROGRAM_ID ?? MAINNET_PROGRAM_ID;
 
+if (process.env.EXPO_PUBLIC_LUCKYME_UI_PREVIEW === "true") {
+  fail("EXPO_PUBLIC_LUCKYME_UI_PREVIEW cannot be true for production builds");
+}
+
 if (!isHttpsUrl(apiUrl)) {
   fail("EXPO_PUBLIC_LUCKYME_API_URL must be a production HTTPS backend URL");
 }

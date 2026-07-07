@@ -22,7 +22,7 @@ const walletEndpoint =
   "https://api.mainnet-beta.solana.com";
 const identity: AppIdentity = {
   name: "LuckyMe",
-  uri: "https://github.com/luckino18/LuckyMe",
+  uri: "https://lucky-me.app",
 };
 
 export default function App() {

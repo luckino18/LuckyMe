@@ -10,10 +10,45 @@ const { AnchorProvider, BN, Program, Wallet } = anchor;
 export const PROGRAM_ID = new PublicKey("4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3");
 export const ORAO_VRF_PROGRAM_ID = new PublicKey("VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y");
 export const ORAO_RANDOMNESS_ACCOUNT_SEED = Buffer.from("orao-vrf-randomness-request");
+export const BPS_DENOMINATOR = 10_000n;
+export const MAX_WINNERS = 3;
 export const POOLS = [
-  { id: 1, label: "Mini", ticketPriceLamports: new BN(5_000_000) },
-  { id: 2, label: "Normal", ticketPriceLamports: new BN(10_000_000) },
-  { id: 3, label: "High", ticketPriceLamports: new BN(100_000_000) },
+  {
+    id: 1,
+    slug: "mini",
+    label: "Mini",
+    ticketPriceLamports: new BN(5_000_000),
+    winnerCount: 1,
+    prizeSplitBps: [10_000, 0, 0],
+    maxTicketsPerEntry: 1_000,
+  },
+  {
+    id: 2,
+    slug: "normal",
+    label: "Normal",
+    ticketPriceLamports: new BN(10_000_000),
+    winnerCount: 1,
+    prizeSplitBps: [10_000, 0, 0],
+    maxTicketsPerEntry: 1_000,
+  },
+  {
+    id: 3,
+    slug: "high",
+    label: "High",
+    ticketPriceLamports: new BN(50_000_000),
+    winnerCount: 1,
+    prizeSplitBps: [10_000, 0, 0],
+    maxTicketsPerEntry: 1_000,
+  },
+  {
+    id: 4,
+    slug: "premium",
+    label: "Premium",
+    ticketPriceLamports: new BN(100_000_000),
+    winnerCount: 3,
+    prizeSplitBps: [7_000, 2_000, 1_000],
+    maxTicketsPerEntry: 1,
+  },
 ];
 
 class ReadonlyWallet {
@@ -141,6 +176,59 @@ export function randomnessHash(providerRandomness) {
     .digest();
 }
 
+export function randomModDomain(randomness, domain, nonce, modulo) {
+  const digest = createHash("sha256")
+    .update(Buffer.from("luckyme-random-mod-v2"))
+    .update(Buffer.from(randomness))
+    .update(Buffer.from(domain))
+    .update(Buffer.from([Number(nonce)]))
+    .digest();
+  return digest.readBigUInt64LE(0) % BigInt(modulo);
+}
+
+export function selectWinnerTickets(randomness, totalTickets, winnerCount) {
+  const resolvedWinnerCount = Number(winnerCount);
+  if (resolvedWinnerCount !== 1 && resolvedWinnerCount !== MAX_WINNERS) {
+    throw new Error("invalid winner count");
+  }
+  if (BigInt(totalTickets) < BigInt(resolvedWinnerCount)) {
+    throw new Error(`pool requires at least ${resolvedWinnerCount} tickets`);
+  }
+
+  const first = randomModDomain(randomness, "main-winner", 0, totalTickets);
+  if (resolvedWinnerCount === 1) {
+    return [first, 0n, 0n];
+  }
+
+  const secondRaw = randomModDomain(randomness, "main-winner", 1, BigInt(totalTickets) - 1n);
+  const second = ticketFromAvailableIndex(secondRaw, [first]);
+  const thirdRaw = randomModDomain(randomness, "main-winner", 2, BigInt(totalTickets) - 2n);
+  const third = ticketFromAvailableIndex(thirdRaw, [first, second]);
+  return [first, second, third];
+}
+
+export function mainPrizePayouts(mainPrize, pool) {
+  const winnerCount = Number(pool.winnerCount);
+  if (winnerCount !== 1 && winnerCount !== MAX_WINNERS) {
+    throw new Error("invalid winner count");
+  }
+
+  const split = Array.from(pool.prizeSplitBps ?? [10_000, 0, 0], BigInt);
+  const splitTotal = split.slice(0, winnerCount).reduce((sum, bps) => sum + bps, 0n);
+  if (splitTotal !== BPS_DENOMINATOR) {
+    throw new Error("invalid prize split");
+  }
+
+  const payouts = [0n, 0n, 0n];
+  let allocated = 0n;
+  for (let index = 1; index < winnerCount; index += 1) {
+    payouts[index] = (BigInt(mainPrize) * split[index]) / BPS_DENOMINATOR;
+    allocated += payouts[index];
+  }
+  payouts[0] = BigInt(mainPrize) - allocated;
+  return payouts;
+}
+
 export function parseOraoRandomnessV2(data) {
   const buffer = Buffer.from(data);
   const discriminator = anchorAccountDiscriminator("account:RandomnessV2");
@@ -207,6 +295,18 @@ export function u32Le(value) {
   const buffer = Buffer.alloc(4);
   buffer.writeUInt32LE(Number(value));
   return buffer;
+}
+
+function ticketFromAvailableIndex(index, excluded) {
+  let ticket = BigInt(index);
+  for (const excludedTicket of [...excluded].map(BigInt).sort((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  )) {
+    if (ticket >= excludedTicket) {
+      ticket += 1n;
+    }
+  }
+  return ticket;
 }
 
 export function expandHome(value) {

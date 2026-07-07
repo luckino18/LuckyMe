@@ -28,7 +28,10 @@ import {
   deriveProviderRoundRandomness,
   deriveRound,
   deriveRoundRandomnessAccount,
+  mainPrizePayouts,
   parseOraoRandomnessV2,
+  randomModDomain,
+  selectWinnerTickets,
   u64Le,
 } from "../../scripts/anchor-client.mjs";
 
@@ -76,7 +79,7 @@ const NON_MAINNET_RPC_RE = new RegExp(
 );
 const STATIC_POOL_BY_SLUG = new Map(FIXED_POOLS.map((pool) => [pool.id, pool]));
 const ONCHAIN_POOL_BY_SLUG = new Map(
-  ONCHAIN_POOLS.map((pool) => [pool.label.toLowerCase(), pool]),
+  ONCHAIN_POOLS.map((pool) => [pool.slug, pool]),
 );
 const rateBuckets = new Map();
 
@@ -197,7 +200,13 @@ const server = http.createServer(async (req, res) => {
       mainPrizeSol: lamportsToSol(result.mainPrize),
       houseFeeSol: lamportsToSol(result.houseFee),
       jackpotAddSol: lamportsToSol(result.jackpotAdd),
+      winnerCount: result.winnerCount,
       winner: result.winner,
+      winners: result.winners.map((winner) => ({
+        player: winner.player,
+        ticket: winner.ticket.toString(),
+        prizeSol: lamportsToSol(winner.prizeLamports),
+      })),
       jackpotTriggered: result.jackpotTriggered,
       jackpotWinner: result.jackpotWinner,
       jackpotPayoutSol: lamportsToSol(result.jackpotPayout),
@@ -293,6 +302,7 @@ server.listen(PORT, HOST, () => {
 
 function buildLocalDevelopmentSimulation(pool, randomSeed) {
   return settleRound({
+    pool,
     ticketPriceLamports: pool.ticketPriceLamports,
     jackpotBalanceLamports: 1_250_000_000n,
     randomSeed,
@@ -336,7 +346,7 @@ async function getProgramState({ player } = {}) {
     const pools = [];
 
     for (const poolSpec of ONCHAIN_POOLS) {
-      const slug = poolSpec.label.toLowerCase();
+      const slug = poolSpec.slug;
       const poolAddress = derivePool(configAddress, poolSpec.id);
       const poolVault = derivePoolVault(poolAddress);
       const jackpotVault = deriveJackpotVault(poolAddress);
@@ -384,9 +394,13 @@ async function getProgramState({ player } = {}) {
         mainPrizeBps: 10_000 - config.houseFeeBps - config.jackpotBps,
         houseFeeBps: config.houseFeeBps,
         jackpotBps: config.jackpotBps,
+        winnerCount: numberFromAnchor(pool.winnerCount),
+        prizeSplitBps: pool.prizeSplitBps.map(numberFromAnchor),
+        maxTicketsPerEntry: numberFromAnchor(pool.maxTicketsPerEntry),
         currentRound,
         jackpotLamports: stringFromAnchor(pool.jackpotLamports),
         jackpotSol: lamportsToSol(bigintFromAnchor(pool.jackpotLamports)),
+        jackpotMessage: "Random jackpot can trigger after any completed round.",
         addresses: {
           pool: poolAddress.toBase58(),
           poolVault: poolVault.toBase58(),
@@ -409,7 +423,6 @@ async function getProgramState({ player } = {}) {
         authority: config.authority.toBase58(),
         treasury: config.treasury.toBase58(),
         paused: config.paused,
-        jackpotOddsDenominator: config.jackpotOddsDenominator,
         roundDurationSeconds: numberFromAnchor(config.roundDurationSecs),
         houseFeeBps: config.houseFeeBps,
         jackpotBps: config.jackpotBps,
@@ -477,7 +490,6 @@ async function getPublicConfig() {
       jackpotBps,
       roundDurationSeconds,
       refundDelaySeconds: REFUND_DELAY_SECONDS,
-      jackpotOddsDenominator: config.jackpotOddsDenominator ?? null,
     },
     treasury: config.treasury ?? null,
     authority: config.authority ?? null,
@@ -506,6 +518,15 @@ async function buildBuyTicketsTransaction(payload) {
   const poolVault = derivePoolVault(pool);
   const poolAccount = await program.account.pool.fetch(pool);
   const currentRound = numberFromAnchor(poolAccount.currentRound);
+  const maxTicketsPerEntry = numberFromAnchor(poolAccount.maxTicketsPerEntry ?? poolSpec.maxTicketsPerEntry);
+
+  if (ticketCount > maxTicketsPerEntry) {
+    throw httpError(
+      400,
+      "invalid_ticket_count",
+      `${poolSpec.label} allows at most ${maxTicketsPerEntry} ticket${maxTicketsPerEntry === 1 ? "" : "s"} per wallet per round`,
+    );
+  }
 
   if (currentRound <= 0) {
     throw httpError(409, "no_open_round", "Pool has no open round");
@@ -571,6 +592,7 @@ async function buildBuyTicketsTransaction(payload) {
       pool: poolSlug,
       roundId: currentRound,
       ticketCount,
+      maxTicketsPerEntry,
       ticketPriceLamports: ticketPriceLamports.toString(),
       amountLamports: amountLamports.toString(),
       amountSol: lamportsToSol(amountLamports),
@@ -735,24 +757,31 @@ async function buildSettleRoundTransaction(payload) {
 
   const entries = await fetchEntriesForRound(program, round);
   const randomness = deriveRoundRandomness(round, totalTickets, reveal);
-  const winningTicket = randomMod(randomness, 0, totalTickets);
-  const winnerEntry = findEntryByTicket(entries, winningTicket, "winner");
-  const jackpotRoll = randomMod(
+  const settlement = buildSettlementPreview({
+    config,
+    poolAccount,
+    poolSpec,
+    roundAccount,
+    poolJackpotLamports: bigintFromAnchor(poolAccount.jackpotLamports),
+    entries,
     randomness,
-    8,
-    bigintFromAnchor(config.jackpotOddsDenominator),
-  );
-  const jackpotTriggered = jackpotRoll === 0n;
-  const jackpotTicket = randomMod(randomness, 16, totalTickets);
-  const jackpotEntry = findEntryByTicket(entries, jackpotTicket, "jackpot");
-
-  const totalLamports = bigintFromAnchor(roundAccount.totalLamports);
-  const houseFee = bpsAmount(totalLamports, bigintFromAnchor(config.houseFeeBps));
-  const jackpotAdd = bpsAmount(totalLamports, bigintFromAnchor(config.jackpotBps));
-  const mainPrize = totalLamports - houseFee - jackpotAdd;
-  const jackpotPayout = jackpotTriggered
-    ? bigintFromAnchor(poolAccount.jackpotLamports) + jackpotAdd
-    : 0n;
+  });
+  const {
+    totalLamports,
+    poolConfig,
+    winnerTickets,
+    winnerEntries,
+    jackpotRoll,
+    jackpotTriggered,
+    jackpotTicket,
+    jackpotEntry,
+    houseFee,
+    jackpotAdd,
+    mainPrize,
+    prizePayouts,
+    jackpotPayout,
+  } = settlement;
+  const winnerEntry = winnerEntries[0];
 
   const latestBlockhash = await connection.getLatestBlockhash("confirmed");
   const transaction = await program.methods
@@ -771,6 +800,7 @@ async function buildSettleRoundTransaction(payload) {
       treasury: config.treasury,
       systemProgram: SystemProgram.programId,
     })
+    .remainingAccounts(remainingWinnerAccounts(winnerEntries))
     .transaction();
 
   transaction.feePayer = settler;
@@ -795,14 +825,22 @@ async function buildSettleRoundTransaction(payload) {
       totalTickets: totalTickets.toString(),
       totalLamports: totalLamports.toString(),
       totalSol: lamportsToSol(totalLamports),
-      winnerTicket: winningTicket.toString(),
+      winnerCount: poolConfig.winnerCount,
+      winnerTicket: winnerTickets[0].toString(),
       winner: winnerEntry.player.toBase58(),
+      winners: winnerSummaries(winnerEntries, winnerTickets, prizePayouts),
       jackpotRoll: jackpotRoll.toString(),
       jackpotTriggered,
       jackpotTicket: jackpotTicket.toString(),
       jackpotWinner: jackpotTriggered ? jackpotEntry.player.toBase58() : null,
       mainPrizeLamports: mainPrize.toString(),
       mainPrizeSol: lamportsToSol(mainPrize),
+      firstPrizeLamports: prizePayouts[0].toString(),
+      firstPrizeSol: lamportsToSol(prizePayouts[0]),
+      secondPrizeLamports: prizePayouts[1].toString(),
+      secondPrizeSol: lamportsToSol(prizePayouts[1]),
+      thirdPrizeLamports: prizePayouts[2].toString(),
+      thirdPrizeSol: lamportsToSol(prizePayouts[2]),
       houseFeeLamports: houseFee.toString(),
       houseFeeSol: lamportsToSol(houseFee),
       jackpotAddLamports: jackpotAdd.toString(),
@@ -817,6 +855,18 @@ async function buildSettleRoundTransaction(payload) {
         jackpotVault: jackpotVault.toBase58(),
         winner: winnerEntry.player.toBase58(),
         winnerEntry: winnerEntry.address.toBase58(),
+        ...(winnerEntries[1]
+          ? {
+              winnerSecond: winnerEntries[1].player.toBase58(),
+              winnerSecondEntry: winnerEntries[1].address.toBase58(),
+            }
+          : {}),
+        ...(winnerEntries[2]
+          ? {
+              winnerThird: winnerEntries[2].player.toBase58(),
+              winnerThirdEntry: winnerEntries[2].address.toBase58(),
+            }
+          : {}),
         jackpotWinner: jackpotEntry.player.toBase58(),
         jackpotEntry: jackpotEntry.address.toBase58(),
         treasury: config.treasury.toBase58(),
@@ -983,24 +1033,31 @@ async function buildSettleProviderRoundTransaction(payload) {
     totalTickets,
     parsedRandomness.randomness,
   );
-  const winningTicket = randomMod(randomness, 0, totalTickets);
-  const winnerEntry = findEntryByTicket(entries, winningTicket, "winner");
-  const jackpotRoll = randomMod(
+  const settlement = buildSettlementPreview({
+    config: configAccount,
+    poolAccount,
+    poolSpec,
+    roundAccount,
+    poolJackpotLamports: bigintFromAnchor(poolAccount.jackpotLamports),
+    entries,
     randomness,
-    8,
-    bigintFromAnchor(configAccount.jackpotOddsDenominator),
-  );
-  const jackpotTriggered = jackpotRoll === 0n;
-  const jackpotTicket = randomMod(randomness, 16, totalTickets);
-  const jackpotEntry = findEntryByTicket(entries, jackpotTicket, "jackpot");
-
-  const totalLamports = bigintFromAnchor(roundAccount.totalLamports);
-  const houseFee = bpsAmount(totalLamports, bigintFromAnchor(configAccount.houseFeeBps));
-  const jackpotAdd = bpsAmount(totalLamports, bigintFromAnchor(configAccount.jackpotBps));
-  const mainPrize = totalLamports - houseFee - jackpotAdd;
-  const jackpotPayout = jackpotTriggered
-    ? bigintFromAnchor(poolAccount.jackpotLamports) + jackpotAdd
-    : 0n;
+  });
+  const {
+    totalLamports,
+    poolConfig,
+    winnerTickets,
+    winnerEntries,
+    jackpotRoll,
+    jackpotTriggered,
+    jackpotTicket,
+    jackpotEntry,
+    houseFee,
+    jackpotAdd,
+    mainPrize,
+    prizePayouts,
+    jackpotPayout,
+  } = settlement;
+  const winnerEntry = winnerEntries[0];
 
   const latestBlockhash = await connection.getLatestBlockhash("confirmed");
   const transaction = await program.methods
@@ -1021,6 +1078,7 @@ async function buildSettleProviderRoundTransaction(payload) {
       treasury: configAccount.treasury,
       systemProgram: SystemProgram.programId,
     })
+    .remainingAccounts(remainingWinnerAccounts(winnerEntries))
     .transaction();
 
   transaction.feePayer = settler;
@@ -1050,14 +1108,22 @@ async function buildSettleProviderRoundTransaction(payload) {
       totalTickets: totalTickets.toString(),
       totalLamports: totalLamports.toString(),
       totalSol: lamportsToSol(totalLamports),
-      winnerTicket: winningTicket.toString(),
+      winnerCount: poolConfig.winnerCount,
+      winnerTicket: winnerTickets[0].toString(),
       winner: winnerEntry.player.toBase58(),
+      winners: winnerSummaries(winnerEntries, winnerTickets, prizePayouts),
       jackpotRoll: jackpotRoll.toString(),
       jackpotTriggered,
       jackpotTicket: jackpotTicket.toString(),
       jackpotWinner: jackpotTriggered ? jackpotEntry.player.toBase58() : null,
       mainPrizeLamports: mainPrize.toString(),
       mainPrizeSol: lamportsToSol(mainPrize),
+      firstPrizeLamports: prizePayouts[0].toString(),
+      firstPrizeSol: lamportsToSol(prizePayouts[0]),
+      secondPrizeLamports: prizePayouts[1].toString(),
+      secondPrizeSol: lamportsToSol(prizePayouts[1]),
+      thirdPrizeLamports: prizePayouts[2].toString(),
+      thirdPrizeSol: lamportsToSol(prizePayouts[2]),
       houseFeeLamports: houseFee.toString(),
       houseFeeSol: lamportsToSol(houseFee),
       jackpotAddLamports: jackpotAdd.toString(),
@@ -1074,6 +1140,18 @@ async function buildSettleProviderRoundTransaction(payload) {
         jackpotVault: jackpotVault.toBase58(),
         winner: winnerEntry.player.toBase58(),
         winnerEntry: winnerEntry.address.toBase58(),
+        ...(winnerEntries[1]
+          ? {
+              winnerSecond: winnerEntries[1].player.toBase58(),
+              winnerSecondEntry: winnerEntries[1].address.toBase58(),
+            }
+          : {}),
+        ...(winnerEntries[2]
+          ? {
+              winnerThird: winnerEntries[2].player.toBase58(),
+              winnerThirdEntry: winnerEntries[2].address.toBase58(),
+            }
+          : {}),
         jackpotWinner: jackpotEntry.player.toBase58(),
         jackpotEntry: jackpotEntry.address.toBase58(),
         treasury: configAccount.treasury.toBase58(),
@@ -1178,7 +1256,20 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
       entrantCount: round.entrantCount,
       settled: round.settled,
       jackpotTriggered: round.jackpotTriggered,
+      winnerCount: numberFromAnchor(round.winnerCount ?? 0),
       winner: round.winner.toBase58(),
+      winnerSecond: round.winnerSecond?.toBase58?.() ?? DEFAULT_PUBLIC_KEY,
+      winnerThird: round.winnerThird?.toBase58?.() ?? DEFAULT_PUBLIC_KEY,
+      winners: [
+        round.winner,
+        round.winnerSecond,
+        round.winnerThird,
+      ]
+        .filter((winner) => winner && winner.toBase58() !== DEFAULT_PUBLIC_KEY)
+        .map((winner, index) => ({
+          rank: index + 1,
+          winner: winner.toBase58(),
+        })),
       jackpotWinner: round.jackpotWinner.toBase58(),
       randomnessCommitment: Buffer.from(round.randomnessCommitment).toString("hex"),
       randomness: Buffer.from(round.randomness).toString("hex"),
@@ -1519,7 +1610,7 @@ async function fetchEntriesForRound(program, roundAddress) {
 
 function buildStaticPools() {
   return ONCHAIN_POOLS.map((poolSpec) => {
-    const slug = poolSpec.label.toLowerCase();
+    const slug = poolSpec.slug;
     return poolPayloadFromStatic(STATIC_POOL_BY_SLUG.get(slug), poolSpec);
   });
 }
@@ -1527,7 +1618,7 @@ function buildStaticPools() {
 function poolPayloadFromStatic(staticPool, poolSpec) {
   const ticketPriceLamports = staticPool?.ticketPriceLamports ?? BigInt(poolSpec.ticketPriceLamports.toString());
   return {
-    id: staticPool?.id ?? poolSpec.label.toLowerCase(),
+    id: staticPool?.id ?? poolSpec.slug,
     label: staticPool?.label ?? poolSpec.label,
     source: "static",
     ticketPriceLamports: ticketPriceLamports.toString(),
@@ -1536,6 +1627,10 @@ function poolPayloadFromStatic(staticPool, poolSpec) {
     mainPrizeBps: Number(DEFAULT_MAIN_PRIZE_BPS),
     houseFeeBps: Number(DEFAULT_HOUSE_FEE_BPS),
     jackpotBps: Number(DEFAULT_JACKPOT_BPS),
+    winnerCount: Number(staticPool?.winnerCount ?? poolSpec.winnerCount),
+    prizeSplitBps: Array.from(staticPool?.prizeSplitBps ?? poolSpec.prizeSplitBps, Number),
+    maxTicketsPerEntry: Number(staticPool?.maxTicketsPerEntry ?? poolSpec.maxTicketsPerEntry),
+    jackpotMessage: "Random jackpot can trigger after any completed round.",
     recentRounds: [],
   };
 }
@@ -1696,8 +1791,109 @@ function deriveRoundRandomness(roundAddress, totalTickets, reveal) {
     .digest();
 }
 
-function randomMod(randomness, offset, modulo) {
-  return randomness.readBigUInt64LE(offset) % modulo;
+function buildSettlementPreview({
+  config,
+  poolAccount,
+  poolSpec,
+  roundAccount,
+  poolJackpotLamports,
+  entries,
+  randomness,
+}) {
+  const totalTickets = bigintFromAnchor(roundAccount.totalTickets);
+  const totalLamports = bigintFromAnchor(roundAccount.totalLamports);
+  const poolConfig = poolSettlementConfig(poolAccount, poolSpec);
+
+  if (Number(roundAccount.entrantCount) < poolConfig.winnerCount) {
+    throw httpError(
+      409,
+      "not_enough_entrants",
+      `${poolSpec.label} requires at least ${poolConfig.winnerCount} entrants before settlement`,
+    );
+  }
+
+  const winnerTickets = selectWinnerTickets(randomness, totalTickets, poolConfig.winnerCount);
+  const winnerEntries = winnerTickets
+    .slice(0, poolConfig.winnerCount)
+    .map((winnerTicket, index) => findEntryByTicket(entries, winnerTicket, `winner_${index + 1}`));
+  const distinctWinners = new Set(winnerEntries.map((entry) => entry.player.toBase58()));
+  if (distinctWinners.size !== winnerEntries.length) {
+    throw httpError(
+      409,
+      "winner_entries_not_distinct",
+      "Selected Premium winner tickets resolve to duplicate wallets",
+    );
+  }
+
+  const jackpotRoll = randomModDomain(
+    randomness,
+    "jackpot-roll",
+    0,
+    bigintFromAnchor(config.jackpotOddsDenominator),
+  );
+  const jackpotTriggered = jackpotRoll === 0n;
+  const jackpotTicket = randomModDomain(randomness, "jackpot-winner", 0, totalTickets);
+  const jackpotEntry = findEntryByTicket(entries, jackpotTicket, "jackpot");
+
+  const houseFee = bpsAmount(totalLamports, bigintFromAnchor(config.houseFeeBps));
+  const jackpotAdd = bpsAmount(totalLamports, bigintFromAnchor(config.jackpotBps));
+  const mainPrize = totalLamports - houseFee - jackpotAdd;
+  const prizePayouts = mainPrizePayouts(mainPrize, poolConfig);
+  const jackpotPayout = jackpotTriggered ? BigInt(poolJackpotLamports) + jackpotAdd : 0n;
+
+  return {
+    totalTickets,
+    totalLamports,
+    poolConfig,
+    winnerTickets,
+    winnerEntries,
+    jackpotRoll,
+    jackpotTriggered,
+    jackpotTicket,
+    jackpotEntry,
+    houseFee,
+    jackpotAdd,
+    mainPrize,
+    prizePayouts,
+    jackpotPayout,
+  };
+}
+
+function poolSettlementConfig(poolAccount, poolSpec) {
+  return {
+    winnerCount: numberFromAnchor(poolAccount.winnerCount ?? poolSpec.winnerCount),
+    prizeSplitBps: Array.from(
+      poolAccount.prizeSplitBps ?? poolSpec.prizeSplitBps,
+      numberFromAnchor,
+    ),
+    maxTicketsPerEntry: numberFromAnchor(
+      poolAccount.maxTicketsPerEntry ?? poolSpec.maxTicketsPerEntry,
+    ),
+  };
+}
+
+function remainingWinnerAccounts(winnerEntries) {
+  if (winnerEntries.length < 3) {
+    return [];
+  }
+
+  return [
+    { pubkey: winnerEntries[1].player, isWritable: true, isSigner: false },
+    { pubkey: winnerEntries[1].address, isWritable: false, isSigner: false },
+    { pubkey: winnerEntries[2].player, isWritable: true, isSigner: false },
+    { pubkey: winnerEntries[2].address, isWritable: false, isSigner: false },
+  ];
+}
+
+function winnerSummaries(winnerEntries, winnerTickets, prizePayouts) {
+  return winnerEntries.map((entry, index) => ({
+    rank: index + 1,
+    winner: entry.player.toBase58(),
+    winnerEntry: entry.address.toBase58(),
+    winningTicket: winnerTickets[index].toString(),
+    prizeLamports: prizePayouts[index].toString(),
+    prizeSol: lamportsToSol(prizePayouts[index]),
+  }));
 }
 
 function findEntryByTicket(entries, ticket, label) {
@@ -1756,9 +1952,14 @@ function getRefundState(round) {
 }
 
 function isRefundMode(round) {
+  const winnerSecond = round.winnerSecond?.toBase58?.() ?? DEFAULT_PUBLIC_KEY;
+  const winnerThird = round.winnerThird?.toBase58?.() ?? DEFAULT_PUBLIC_KEY;
   return round.settled &&
     !round.jackpotTriggered &&
+    numberFromAnchor(round.winnerCount ?? 0) === 0 &&
     round.winner.toBase58() === DEFAULT_PUBLIC_KEY &&
+    winnerSecond === DEFAULT_PUBLIC_KEY &&
+    winnerThird === DEFAULT_PUBLIC_KEY &&
     round.jackpotWinner.toBase58() === DEFAULT_PUBLIC_KEY &&
     Array.from(round.randomness).every((byte) => byte === 0);
 }

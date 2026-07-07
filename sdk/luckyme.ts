@@ -1139,106 +1139,141 @@ export type Luckyme = {
     },
     {
       "code": 6006,
+      "name": "invalidPool",
+      "msg": "Invalid pool"
+    },
+    {
+      "code": 6007,
       "name": "invalidTicketCount",
       "msg": "Invalid ticket count"
     },
     {
-      "code": 6007,
+      "code": 6008,
+      "name": "invalidWinnerConfig",
+      "msg": "Invalid winner configuration"
+    },
+    {
+      "code": 6009,
+      "name": "invalidPrizeSplit",
+      "msg": "Invalid prize split"
+    },
+    {
+      "code": 6010,
+      "name": "notEnoughEntrants",
+      "msg": "Not enough entrants for this pool winner count"
+    },
+    {
+      "code": 6011,
+      "name": "missingWinnerAccounts",
+      "msg": "Missing premium winner accounts"
+    },
+    {
+      "code": 6012,
+      "name": "duplicateWinner",
+      "msg": "Duplicate winner"
+    },
+    {
+      "code": 6013,
+      "name": "invalidWinnerAccount",
+      "msg": "Invalid winner account"
+    },
+    {
+      "code": 6014,
       "name": "paused",
       "msg": "Program is paused"
     },
     {
-      "code": 6008,
+      "code": 6015,
       "name": "roundClosed",
       "msg": "Round is closed"
     },
     {
-      "code": 6009,
+      "code": 6016,
       "name": "roundStillOpen",
       "msg": "Round is still open"
     },
     {
-      "code": 6010,
+      "code": 6017,
       "name": "roundSettled",
       "msg": "Round is already settled"
     },
     {
-      "code": 6011,
+      "code": 6018,
       "name": "emptyRound",
       "msg": "Round has no tickets"
     },
     {
-      "code": 6012,
+      "code": 6019,
       "name": "invalidRandomnessCommitment",
       "msg": "Invalid randomness commitment"
     },
     {
-      "code": 6013,
+      "code": 6020,
       "name": "invalidRandomnessReveal",
       "msg": "Invalid randomness reveal"
     },
     {
-      "code": 6014,
+      "code": 6021,
       "name": "wrongWinnerEntry",
       "msg": "Wrong winner entry was provided"
     },
     {
-      "code": 6015,
+      "code": 6022,
       "name": "wrongJackpotEntry",
       "msg": "Wrong jackpot entry was provided"
     },
     {
-      "code": 6016,
+      "code": 6023,
       "name": "winnerMismatch",
       "msg": "Winner account does not match entry"
     },
     {
-      "code": 6017,
+      "code": 6024,
       "name": "insufficientVaultFunds",
       "msg": "Vault does not have enough lamports"
     },
     {
-      "code": 6018,
+      "code": 6025,
       "name": "mathOverflow",
       "msg": "Math overflow"
     },
     {
-      "code": 6019,
+      "code": 6026,
       "name": "alreadyEnteredRound",
       "msg": "Wallet already entered this round"
     },
     {
-      "code": 6020,
+      "code": 6027,
       "name": "refundNotAvailable",
       "msg": "Refund is not available yet"
     },
     {
-      "code": 6021,
+      "code": 6028,
       "name": "nothingToRefund",
       "msg": "Entry has nothing to refund"
     },
     {
-      "code": 6022,
+      "code": 6029,
       "name": "roundHasEntries",
       "msg": "Round already has entries"
     },
     {
-      "code": 6023,
+      "code": 6030,
       "name": "invalidRandomnessProvider",
       "msg": "Invalid randomness provider"
     },
     {
-      "code": 6024,
+      "code": 6031,
       "name": "invalidRandomnessStatus",
       "msg": "Invalid randomness status"
     },
     {
-      "code": 6025,
+      "code": 6032,
       "name": "invalidRandomnessProviderAccount",
       "msg": "Invalid randomness provider account"
     },
     {
-      "code": 6026,
+      "code": 6033,
       "name": "randomnessNotFulfilled",
       "msg": "Provider randomness is not fulfilled"
     }
@@ -1455,6 +1490,23 @@ export type Luckyme = {
           },
           {
             "name": "jackpotLamports",
+            "type": "u64"
+          },
+          {
+            "name": "winnerCount",
+            "type": "u8"
+          },
+          {
+            "name": "prizeSplitBps",
+            "type": {
+              "array": [
+                "u16",
+                3
+              ]
+            }
+          },
+          {
+            "name": "maxTicketsPerEntry",
             "type": "u64"
           },
           {
@@ -1693,7 +1745,19 @@ export type Luckyme = {
             "type": "bool"
           },
           {
+            "name": "winnerCount",
+            "type": "u8"
+          },
+          {
             "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "winnerSecond",
+            "type": "pubkey"
+          },
+          {
+            "name": "winnerThird",
             "type": "pubkey"
           },
           {
@@ -1846,6 +1910,10 @@ export type Luckyme = {
             "type": "u64"
           },
           {
+            "name": "winnerCount",
+            "type": "u8"
+          },
+          {
             "name": "winner",
             "type": "pubkey"
           },
@@ -1854,11 +1922,47 @@ export type Luckyme = {
             "type": "pubkey"
           },
           {
+            "name": "winnerSecond",
+            "type": "pubkey"
+          },
+          {
+            "name": "winnerSecondEntry",
+            "type": "pubkey"
+          },
+          {
+            "name": "winnerThird",
+            "type": "pubkey"
+          },
+          {
+            "name": "winnerThirdEntry",
+            "type": "pubkey"
+          },
+          {
             "name": "winningTicket",
             "type": "u64"
           },
           {
+            "name": "winnerSecondTicket",
+            "type": "u64"
+          },
+          {
+            "name": "winnerThirdTicket",
+            "type": "u64"
+          },
+          {
             "name": "mainPrizeLamports",
+            "type": "u64"
+          },
+          {
+            "name": "firstPrizeLamports",
+            "type": "u64"
+          },
+          {
+            "name": "secondPrizeLamports",
+            "type": "u64"
+          },
+          {
+            "name": "thirdPrizeLamports",
             "type": "u64"
           },
           {

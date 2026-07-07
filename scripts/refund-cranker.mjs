@@ -14,7 +14,7 @@ const REFUND_SCAN_ROUNDS = Number(process.env.REFUND_SCAN_ROUNDS ?? 20);
 const DRY_RUN = process.env.DRY_RUN === "true";
 const POOL_FILTER = process.env.POOL?.toLowerCase();
 const ROUND_ID = process.env.ROUND_ID ? parsePositiveInteger(process.env.ROUND_ID, "ROUND_ID") : null;
-const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.label.toLowerCase(), pool]));
+const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.slug, pool]));
 
 if (POOL_FILTER && !POOL_BY_SLUG.has(POOL_FILTER)) {
   throw new Error(`Unknown POOL=${POOL_FILTER}. Use one of: ${[...POOL_BY_SLUG.keys()].join(", ")}`);

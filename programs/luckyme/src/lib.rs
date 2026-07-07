@@ -5,9 +5,13 @@ use solana_sha256_hasher::hashv;
 declare_id!("4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3");
 
 const BPS_DENOMINATOR: u64 = 10_000;
-const MAX_FEE_BPS: u16 = 500;
-const MAX_JACKPOT_BPS: u16 = 500;
+const BPS_DENOMINATOR_U16: u16 = 10_000;
+const MAX_FEE_BPS: u16 = 200;
+const MAX_JACKPOT_BPS: u16 = 300;
+const MAX_WINNERS: usize = 3;
 const MAX_TICKETS_PER_ENTRY: u64 = 1_000;
+const PREMIUM_POOL_ID: u8 = 4;
+const PREMIUM_MAX_TICKETS_PER_ENTRY: u64 = 1;
 #[cfg(not(feature = "test-short-timers"))]
 const MIN_ROUND_DURATION_SECS: i64 = 60;
 #[cfg(feature = "test-short-timers")]
@@ -73,6 +77,11 @@ pub mod luckyme {
         ticket_price_lamports: u64,
     ) -> Result<()> {
         require!(ticket_price_lamports > 0, LuckyMeError::InvalidTicketPrice);
+        let spec = pool_spec(pool_id)?;
+        require!(
+            ticket_price_lamports == spec.ticket_price_lamports,
+            LuckyMeError::InvalidTicketPrice
+        );
 
         let pool = &mut ctx.accounts.pool;
         pool.config = ctx.accounts.config.key();
@@ -80,6 +89,9 @@ pub mod luckyme {
         pool.ticket_price_lamports = ticket_price_lamports;
         pool.current_round = 0;
         pool.jackpot_lamports = 0;
+        pool.winner_count = spec.winner_count;
+        pool.prize_split_bps = spec.prize_split_bps;
+        pool.max_tickets_per_entry = spec.max_tickets_per_entry;
         pool.bump = ctx.bumps.pool;
         pool.vault_bump = ctx.bumps.pool_vault;
         pool.jackpot_bump = ctx.bumps.jackpot_vault;
@@ -123,7 +135,10 @@ pub mod luckyme {
         round.entrant_count = 0;
         round.settled = false;
         round.jackpot_triggered = false;
+        round.winner_count = 0;
         round.winner = Pubkey::default();
+        round.winner_second = Pubkey::default();
+        round.winner_third = Pubkey::default();
         round.jackpot_winner = Pubkey::default();
         round.randomness_commitment = randomness_commitment;
         round.randomness = [0; 32];
@@ -144,7 +159,7 @@ pub mod luckyme {
         require!(!ctx.accounts.config.paused, LuckyMeError::Paused);
         require!(ticket_count > 0, LuckyMeError::InvalidTicketCount);
         require!(
-            ticket_count <= MAX_TICKETS_PER_ENTRY,
+            ticket_count <= ctx.accounts.pool.max_tickets_per_entry,
             LuckyMeError::InvalidTicketCount
         );
 
@@ -231,7 +246,10 @@ pub mod luckyme {
         Ok(())
     }
 
-    pub fn settle_round(ctx: Context<SettleRound>, randomness_reveal: [u8; 32]) -> Result<()> {
+    pub fn settle_round<'info>(
+        ctx: Context<'info, SettleRound<'info>>,
+        randomness_reveal: [u8; 32],
+    ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         require!(
             now >= ctx.accounts.round.end_ts,
@@ -261,7 +279,15 @@ pub mod luckyme {
             &randomness_reveal,
         );
 
-        let winning_ticket = random_mod(&randomness, 0, ctx.accounts.round.total_tickets);
+        let winner_count = ctx.accounts.pool.winner_count;
+        require_valid_winner_count(winner_count)?;
+        require!(
+            ctx.accounts.round.entrant_count >= u32::from(winner_count),
+            LuckyMeError::NotEnoughEntrants
+        );
+        let winner_tickets =
+            select_winner_tickets(&randomness, ctx.accounts.round.total_tickets, winner_count)?;
+        let winning_ticket = winner_tickets[0];
         require!(
             entry_contains_ticket(&ctx.accounts.winner_entry, winning_ticket),
             LuckyMeError::WrongWinnerEntry
@@ -271,14 +297,49 @@ pub mod luckyme {
             LuckyMeError::WinnerMismatch
         );
 
-        let jackpot_roll = random_mod(
+        let mut winner_keys = [Pubkey::default(); MAX_WINNERS];
+        let mut winner_entry_keys = [Pubkey::default(); MAX_WINNERS];
+        winner_keys[0] = ctx.accounts.winner.key();
+        winner_entry_keys[0] = ctx.accounts.winner_entry.key();
+        let mut winner_second_info = None;
+        let mut winner_third_info = None;
+
+        if winner_count == 3 {
+            let second = validate_remaining_winner(
+                ctx.remaining_accounts,
+                0,
+                &ctx.accounts.round.key(),
+                winner_tickets[1],
+            )?;
+            let third = validate_remaining_winner(
+                ctx.remaining_accounts,
+                2,
+                &ctx.accounts.round.key(),
+                winner_tickets[2],
+            )?;
+            winner_keys[1] = second.winner;
+            winner_entry_keys[1] = second.entry;
+            winner_second_info = Some(second.winner_info);
+            winner_keys[2] = third.winner;
+            winner_entry_keys[2] = third.entry;
+            winner_third_info = Some(third.winner_info);
+            require_distinct_winners(&winner_keys, winner_count)?;
+        }
+
+        let jackpot_roll = random_mod_domain(
             &randomness,
-            8,
+            b"jackpot-roll",
+            0,
             u64::from(ctx.accounts.config.jackpot_odds_denominator),
         );
         let jackpot_triggered = jackpot_roll == 0;
 
-        let jackpot_ticket = random_mod(&randomness, 16, ctx.accounts.round.total_tickets);
+        let jackpot_ticket = random_mod_domain(
+            &randomness,
+            b"jackpot-winner",
+            0,
+            ctx.accounts.round.total_tickets,
+        );
         if jackpot_triggered {
             require!(
                 entry_contains_ticket(&ctx.accounts.jackpot_entry, jackpot_ticket),
@@ -290,11 +351,28 @@ pub mod luckyme {
             );
         }
 
+        let prize_payouts = main_prize_payouts(main_prize, &ctx.accounts.pool)?;
         transfer_lamports(
             &ctx.accounts.pool_vault.to_account_info(),
             &ctx.accounts.winner.to_account_info(),
-            main_prize,
+            prize_payouts[0],
         )?;
+        if winner_count == 3 {
+            transfer_lamports(
+                &ctx.accounts.pool_vault.to_account_info(),
+                winner_second_info
+                    .as_ref()
+                    .ok_or(LuckyMeError::MissingWinnerAccounts)?,
+                prize_payouts[1],
+            )?;
+            transfer_lamports(
+                &ctx.accounts.pool_vault.to_account_info(),
+                winner_third_info
+                    .as_ref()
+                    .ok_or(LuckyMeError::MissingWinnerAccounts)?,
+                prize_payouts[2],
+            )?;
+        }
         transfer_lamports(
             &ctx.accounts.pool_vault.to_account_info(),
             &ctx.accounts.treasury.to_account_info(),
@@ -326,7 +404,18 @@ pub mod luckyme {
         let round = &mut ctx.accounts.round;
         round.settled = true;
         round.jackpot_triggered = jackpot_triggered;
+        round.winner_count = winner_count;
         round.winner = ctx.accounts.winner.key();
+        round.winner_second = if winner_count == 3 {
+            winner_keys[1]
+        } else {
+            Pubkey::default()
+        };
+        round.winner_third = if winner_count == 3 {
+            winner_keys[2]
+        } else {
+            Pubkey::default()
+        };
         round.jackpot_winner = if jackpot_triggered {
             ctx.accounts.jackpot_winner.key()
         } else {
@@ -338,10 +427,20 @@ pub mod luckyme {
             pool: ctx.accounts.pool.key(),
             round: round.key(),
             round_id: round.round_id,
+            winner_count,
             winner: round.winner,
             winner_entry: ctx.accounts.winner_entry.key(),
+            winner_second: round.winner_second,
+            winner_second_entry: winner_entry_keys[1],
+            winner_third: round.winner_third,
+            winner_third_entry: winner_entry_keys[2],
             winning_ticket,
+            winner_second_ticket: winner_tickets[1],
+            winner_third_ticket: winner_tickets[2],
             main_prize_lamports: main_prize,
+            first_prize_lamports: prize_payouts[0],
+            second_prize_lamports: prize_payouts[1],
+            third_prize_lamports: prize_payouts[2],
             house_fee_lamports: house_fee,
             jackpot_add_lamports: jackpot_add,
             jackpot_triggered,
@@ -401,8 +500,8 @@ pub mod luckyme {
         Ok(())
     }
 
-    pub fn settle_round_with_provider_randomness(
-        ctx: Context<SettleRoundWithProviderRandomness>,
+    pub fn settle_round_with_provider_randomness<'info>(
+        ctx: Context<'info, SettleRoundWithProviderRandomness<'info>>,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         require!(
@@ -467,7 +566,15 @@ pub mod luckyme {
             .and_then(|v| v.checked_sub(jackpot_add))
             .ok_or(LuckyMeError::MathOverflow)?;
 
-        let winning_ticket = random_mod(&randomness, 0, ctx.accounts.round.total_tickets);
+        let winner_count = ctx.accounts.pool.winner_count;
+        require_valid_winner_count(winner_count)?;
+        require!(
+            ctx.accounts.round.entrant_count >= u32::from(winner_count),
+            LuckyMeError::NotEnoughEntrants
+        );
+        let winner_tickets =
+            select_winner_tickets(&randomness, ctx.accounts.round.total_tickets, winner_count)?;
+        let winning_ticket = winner_tickets[0];
         require!(
             entry_contains_ticket(&ctx.accounts.winner_entry, winning_ticket),
             LuckyMeError::WrongWinnerEntry
@@ -477,14 +584,49 @@ pub mod luckyme {
             LuckyMeError::WinnerMismatch
         );
 
-        let jackpot_roll = random_mod(
+        let mut winner_keys = [Pubkey::default(); MAX_WINNERS];
+        let mut winner_entry_keys = [Pubkey::default(); MAX_WINNERS];
+        winner_keys[0] = ctx.accounts.winner.key();
+        winner_entry_keys[0] = ctx.accounts.winner_entry.key();
+        let mut winner_second_info = None;
+        let mut winner_third_info = None;
+
+        if winner_count == 3 {
+            let second = validate_remaining_winner(
+                ctx.remaining_accounts,
+                0,
+                &ctx.accounts.round.key(),
+                winner_tickets[1],
+            )?;
+            let third = validate_remaining_winner(
+                ctx.remaining_accounts,
+                2,
+                &ctx.accounts.round.key(),
+                winner_tickets[2],
+            )?;
+            winner_keys[1] = second.winner;
+            winner_entry_keys[1] = second.entry;
+            winner_second_info = Some(second.winner_info);
+            winner_keys[2] = third.winner;
+            winner_entry_keys[2] = third.entry;
+            winner_third_info = Some(third.winner_info);
+            require_distinct_winners(&winner_keys, winner_count)?;
+        }
+
+        let jackpot_roll = random_mod_domain(
             &randomness,
-            8,
+            b"jackpot-roll",
+            0,
             u64::from(ctx.accounts.config.jackpot_odds_denominator),
         );
         let jackpot_triggered = jackpot_roll == 0;
 
-        let jackpot_ticket = random_mod(&randomness, 16, ctx.accounts.round.total_tickets);
+        let jackpot_ticket = random_mod_domain(
+            &randomness,
+            b"jackpot-winner",
+            0,
+            ctx.accounts.round.total_tickets,
+        );
         if jackpot_triggered {
             require!(
                 entry_contains_ticket(&ctx.accounts.jackpot_entry, jackpot_ticket),
@@ -508,11 +650,28 @@ pub mod luckyme {
             timestamp: now,
         });
 
+        let prize_payouts = main_prize_payouts(main_prize, &ctx.accounts.pool)?;
         transfer_lamports(
             &ctx.accounts.pool_vault.to_account_info(),
             &ctx.accounts.winner.to_account_info(),
-            main_prize,
+            prize_payouts[0],
         )?;
+        if winner_count == 3 {
+            transfer_lamports(
+                &ctx.accounts.pool_vault.to_account_info(),
+                winner_second_info
+                    .as_ref()
+                    .ok_or(LuckyMeError::MissingWinnerAccounts)?,
+                prize_payouts[1],
+            )?;
+            transfer_lamports(
+                &ctx.accounts.pool_vault.to_account_info(),
+                winner_third_info
+                    .as_ref()
+                    .ok_or(LuckyMeError::MissingWinnerAccounts)?,
+                prize_payouts[2],
+            )?;
+        }
         transfer_lamports(
             &ctx.accounts.pool_vault.to_account_info(),
             &ctx.accounts.treasury.to_account_info(),
@@ -544,7 +703,18 @@ pub mod luckyme {
         let round = &mut ctx.accounts.round;
         round.settled = true;
         round.jackpot_triggered = jackpot_triggered;
+        round.winner_count = winner_count;
         round.winner = ctx.accounts.winner.key();
+        round.winner_second = if winner_count == 3 {
+            winner_keys[1]
+        } else {
+            Pubkey::default()
+        };
+        round.winner_third = if winner_count == 3 {
+            winner_keys[2]
+        } else {
+            Pubkey::default()
+        };
         round.jackpot_winner = if jackpot_triggered {
             ctx.accounts.jackpot_winner.key()
         } else {
@@ -561,10 +731,20 @@ pub mod luckyme {
             pool: ctx.accounts.pool.key(),
             round: round.key(),
             round_id: round.round_id,
+            winner_count,
             winner: round.winner,
             winner_entry: ctx.accounts.winner_entry.key(),
+            winner_second: round.winner_second,
+            winner_second_entry: winner_entry_keys[1],
+            winner_third: round.winner_third,
+            winner_third_entry: winner_entry_keys[2],
             winning_ticket,
+            winner_second_ticket: winner_tickets[1],
+            winner_third_ticket: winner_tickets[2],
             main_prize_lamports: main_prize,
+            first_prize_lamports: prize_payouts[0],
+            second_prize_lamports: prize_payouts[1],
+            third_prize_lamports: prize_payouts[2],
             house_fee_lamports: house_fee,
             jackpot_add_lamports: jackpot_add,
             jackpot_triggered,
@@ -603,7 +783,10 @@ pub mod luckyme {
         let round = &mut ctx.accounts.round;
         round.settled = true;
         round.jackpot_triggered = false;
+        round.winner_count = 0;
         round.winner = Pubkey::default();
+        round.winner_second = Pubkey::default();
+        round.winner_third = Pubkey::default();
         round.jackpot_winner = Pubkey::default();
         round.randomness = [0; 32];
         round.total_lamports = round
@@ -655,7 +838,10 @@ pub mod luckyme {
         let round = &mut ctx.accounts.round;
         round.settled = true;
         round.jackpot_triggered = false;
+        round.winner_count = 0;
         round.winner = Pubkey::default();
+        round.winner_second = Pubkey::default();
+        round.winner_third = Pubkey::default();
         round.jackpot_winner = Pubkey::default();
         round.randomness = [0; 32];
 
@@ -729,10 +915,20 @@ pub struct RoundSettled {
     pub pool: Pubkey,
     pub round: Pubkey,
     pub round_id: u64,
+    pub winner_count: u8,
     pub winner: Pubkey,
     pub winner_entry: Pubkey,
+    pub winner_second: Pubkey,
+    pub winner_second_entry: Pubkey,
+    pub winner_third: Pubkey,
+    pub winner_third_entry: Pubkey,
     pub winning_ticket: u64,
+    pub winner_second_ticket: u64,
+    pub winner_third_ticket: u64,
     pub main_prize_lamports: u64,
+    pub first_prize_lamports: u64,
+    pub second_prize_lamports: u64,
+    pub third_prize_lamports: u64,
     pub house_fee_lamports: u64,
     pub jackpot_add_lamports: u64,
     pub jackpot_triggered: bool,
@@ -897,11 +1093,11 @@ pub struct SettleRound<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
     #[account(mut, has_one = config)]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
     #[account(mut, has_one = pool)]
-    pub round: Account<'info, Round>,
+    pub round: Box<Account<'info, Round>>,
     #[account(
         mut,
         seeds = [b"vault", pool.key().as_ref()],
@@ -919,11 +1115,11 @@ pub struct SettleRound<'info> {
     #[account(mut)]
     pub winner: SystemAccount<'info>,
     #[account(constraint = winner_entry.round == round.key())]
-    pub winner_entry: Account<'info, Entry>,
+    pub winner_entry: Box<Account<'info, Entry>>,
     #[account(mut)]
     pub jackpot_winner: SystemAccount<'info>,
     #[account(constraint = jackpot_entry.round == round.key())]
-    pub jackpot_entry: Account<'info, Entry>,
+    pub jackpot_entry: Box<Account<'info, Entry>>,
     #[account(mut, address = config.treasury)]
     pub treasury: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
@@ -955,18 +1151,18 @@ pub struct SettleRoundWithProviderRandomness<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
     #[account(mut, has_one = config)]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
     #[account(mut, has_one = pool)]
-    pub round: Account<'info, Round>,
+    pub round: Box<Account<'info, Round>>,
     #[account(
         mut,
         seeds = [b"round_randomness", round.key().as_ref()],
         bump = round_randomness.bump,
         constraint = round_randomness.round == round.key()
     )]
-    pub round_randomness: Account<'info, RoundRandomness>,
+    pub round_randomness: Box<Account<'info, RoundRandomness>>,
     /// CHECK: ORAO VRF request account. Owner, PDA, seed, and fulfilled data are verified in the handler.
     pub provider_randomness: UncheckedAccount<'info>,
     #[account(
@@ -986,11 +1182,11 @@ pub struct SettleRoundWithProviderRandomness<'info> {
     #[account(mut)]
     pub winner: SystemAccount<'info>,
     #[account(constraint = winner_entry.round == round.key())]
-    pub winner_entry: Account<'info, Entry>,
+    pub winner_entry: Box<Account<'info, Entry>>,
     #[account(mut)]
     pub jackpot_winner: SystemAccount<'info>,
     #[account(constraint = jackpot_entry.round == round.key())]
-    pub jackpot_entry: Account<'info, Entry>,
+    pub jackpot_entry: Box<Account<'info, Entry>>,
     #[account(mut, address = config.treasury)]
     pub treasury: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
@@ -1065,13 +1261,16 @@ pub struct Pool {
     pub ticket_price_lamports: u64,
     pub current_round: u64,
     pub jackpot_lamports: u64,
+    pub winner_count: u8,
+    pub prize_split_bps: [u16; MAX_WINNERS],
+    pub max_tickets_per_entry: u64,
     pub bump: u8,
     pub vault_bump: u8,
     pub jackpot_bump: u8,
 }
 
 impl Pool {
-    pub const LEN: usize = 32 + 1 + 8 + 8 + 8 + 1 + 1 + 1;
+    pub const LEN: usize = 32 + 1 + 8 + 8 + 8 + 1 + (2 * MAX_WINNERS) + 8 + 1 + 1 + 1;
 }
 
 #[account]
@@ -1086,7 +1285,10 @@ pub struct Round {
     pub entrant_count: u32,
     pub settled: bool,
     pub jackpot_triggered: bool,
+    pub winner_count: u8,
     pub winner: Pubkey,
+    pub winner_second: Pubkey,
+    pub winner_third: Pubkey,
     pub jackpot_winner: Pubkey,
     pub randomness_commitment: [u8; 32],
     pub randomness: [u8; 32],
@@ -1094,7 +1296,8 @@ pub struct Round {
 }
 
 impl Round {
-    pub const LEN: usize = 32 + 8 + 8 + 8 + 8 + 8 + 8 + 4 + 1 + 1 + 32 + 32 + 32 + 32 + 1;
+    pub const LEN: usize =
+        32 + 8 + 8 + 8 + 8 + 8 + 8 + 4 + 1 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 32 + 1;
 }
 
 #[account]
@@ -1144,11 +1347,178 @@ impl Entry {
     pub const LEN: usize = 32 + 32 + 8 + 8 + 8 + 1;
 }
 
+struct PoolSpec {
+    ticket_price_lamports: u64,
+    winner_count: u8,
+    prize_split_bps: [u16; MAX_WINNERS],
+    max_tickets_per_entry: u64,
+}
+
+struct RemainingWinner<'info> {
+    winner: Pubkey,
+    entry: Pubkey,
+    winner_info: AccountInfo<'info>,
+}
+
+fn pool_spec(pool_id: u8) -> Result<PoolSpec> {
+    match pool_id {
+        1 => Ok(PoolSpec {
+            ticket_price_lamports: 5_000_000,
+            winner_count: 1,
+            prize_split_bps: [BPS_DENOMINATOR_U16, 0, 0],
+            max_tickets_per_entry: MAX_TICKETS_PER_ENTRY,
+        }),
+        2 => Ok(PoolSpec {
+            ticket_price_lamports: 10_000_000,
+            winner_count: 1,
+            prize_split_bps: [BPS_DENOMINATOR_U16, 0, 0],
+            max_tickets_per_entry: MAX_TICKETS_PER_ENTRY,
+        }),
+        3 => Ok(PoolSpec {
+            ticket_price_lamports: 50_000_000,
+            winner_count: 1,
+            prize_split_bps: [BPS_DENOMINATOR_U16, 0, 0],
+            max_tickets_per_entry: MAX_TICKETS_PER_ENTRY,
+        }),
+        PREMIUM_POOL_ID => Ok(PoolSpec {
+            ticket_price_lamports: 100_000_000,
+            winner_count: 3,
+            prize_split_bps: [7_000, 2_000, 1_000],
+            max_tickets_per_entry: PREMIUM_MAX_TICKETS_PER_ENTRY,
+        }),
+        _ => err!(LuckyMeError::InvalidPool),
+    }
+}
+
 fn bps_amount(total: u64, bps: u16) -> Result<u64> {
     total
         .checked_mul(u64::from(bps))
         .and_then(|v| v.checked_div(BPS_DENOMINATOR))
         .ok_or(LuckyMeError::MathOverflow.into())
+}
+
+fn require_valid_winner_count(winner_count: u8) -> Result<()> {
+    require!(
+        winner_count == 1 || winner_count == MAX_WINNERS as u8,
+        LuckyMeError::InvalidWinnerConfig
+    );
+    Ok(())
+}
+
+fn require_distinct_winners(winner_keys: &[Pubkey; MAX_WINNERS], winner_count: u8) -> Result<()> {
+    let count = winner_count as usize;
+    for left in 0..count {
+        for right in (left + 1)..count {
+            require!(
+                winner_keys[left] != winner_keys[right],
+                LuckyMeError::DuplicateWinner
+            );
+        }
+    }
+    Ok(())
+}
+
+fn main_prize_payouts(main_prize: u64, pool: &Pool) -> Result<[u64; MAX_WINNERS]> {
+    require_valid_winner_count(pool.winner_count)?;
+
+    let mut split_sum = 0_u16;
+    for index in 0..pool.winner_count as usize {
+        split_sum = split_sum
+            .checked_add(pool.prize_split_bps[index])
+            .ok_or(LuckyMeError::MathOverflow)?;
+    }
+    require!(
+        split_sum == BPS_DENOMINATOR_U16,
+        LuckyMeError::InvalidPrizeSplit
+    );
+
+    let mut payouts = [0_u64; MAX_WINNERS];
+    let mut allocated = 0_u64;
+    for index in 1..pool.winner_count as usize {
+        payouts[index] = bps_amount(main_prize, pool.prize_split_bps[index])?;
+        allocated = allocated
+            .checked_add(payouts[index])
+            .ok_or(LuckyMeError::MathOverflow)?;
+    }
+    payouts[0] = main_prize
+        .checked_sub(allocated)
+        .ok_or(LuckyMeError::MathOverflow)?;
+    Ok(payouts)
+}
+
+fn select_winner_tickets(
+    randomness: &[u8; 32],
+    total_tickets: u64,
+    winner_count: u8,
+) -> Result<[u64; MAX_WINNERS]> {
+    require_valid_winner_count(winner_count)?;
+    require!(
+        total_tickets >= u64::from(winner_count),
+        LuckyMeError::NotEnoughEntrants
+    );
+
+    let first = random_mod_domain(randomness, b"main-winner", 0, total_tickets);
+    if winner_count == 1 {
+        return Ok([first, 0, 0]);
+    }
+
+    let second_raw = random_mod_domain(randomness, b"main-winner", 1, total_tickets - 1);
+    let second = ticket_from_available_index(second_raw, &[first, 0], 1);
+    let third_raw = random_mod_domain(randomness, b"main-winner", 2, total_tickets - 2);
+    let third = ticket_from_available_index(third_raw, &[first, second], 2);
+    Ok([first, second, third])
+}
+
+fn ticket_from_available_index(mut index: u64, excluded: &[u64; 2], excluded_len: usize) -> u64 {
+    let mut sorted = [0_u64; 2];
+    sorted[..excluded_len].copy_from_slice(&excluded[..excluded_len]);
+    if excluded_len == 2 && sorted[0] > sorted[1] {
+        sorted.swap(0, 1);
+    }
+
+    for excluded_ticket in sorted.iter().take(excluded_len) {
+        if index >= *excluded_ticket {
+            index += 1;
+        }
+    }
+    index
+}
+
+fn validate_remaining_winner<'info>(
+    remaining_accounts: &'info [AccountInfo<'info>],
+    start_index: usize,
+    round_key: &Pubkey,
+    winning_ticket: u64,
+) -> Result<RemainingWinner<'info>> {
+    require!(
+        remaining_accounts.len() >= start_index + 2,
+        LuckyMeError::MissingWinnerAccounts
+    );
+
+    let winner_info = remaining_accounts[start_index].clone();
+    require_system_wallet(&winner_info)?;
+    let entry_info = &remaining_accounts[start_index + 1];
+    let entry = Account::<Entry>::try_from(entry_info)?;
+    require!(entry.round == *round_key, LuckyMeError::WrongWinnerEntry);
+    require!(
+        entry_contains_ticket(&entry, winning_ticket),
+        LuckyMeError::WrongWinnerEntry
+    );
+    require!(entry.player == winner_info.key(), LuckyMeError::WinnerMismatch);
+
+    Ok(RemainingWinner {
+        winner: winner_info.key(),
+        entry: entry_info.key(),
+        winner_info,
+    })
+}
+
+fn require_system_wallet(account: &AccountInfo) -> Result<()> {
+    require!(
+        account.owner == &System::id() && !account.executable && account.data_is_empty(),
+        LuckyMeError::InvalidWinnerAccount
+    );
+    Ok(())
 }
 
 fn entry_contains_ticket(entry: &Entry, ticket: u64) -> bool {
@@ -1167,14 +1537,25 @@ fn refund_deadline(end_ts: i64) -> Result<i64> {
 fn round_is_refund_mode(round: &Round) -> bool {
     round.settled
         && !round.jackpot_triggered
+        && round.winner_count == 0
         && round.winner == Pubkey::default()
+        && round.winner_second == Pubkey::default()
+        && round.winner_third == Pubkey::default()
         && round.jackpot_winner == Pubkey::default()
         && round.randomness == [0; 32]
 }
 
-fn random_mod(randomness: &[u8; 32], offset: usize, modulo: u64) -> u64 {
+fn random_mod_domain(randomness: &[u8; 32], domain: &[u8], nonce: u8, modulo: u64) -> u64 {
+    let nonce_bytes = [nonce];
+    let hash = hashv(&[
+        b"luckyme-random-mod-v2",
+        randomness.as_ref(),
+        domain,
+        nonce_bytes.as_ref(),
+    ])
+    .to_bytes();
     let mut bytes = [0_u8; 8];
-    bytes.copy_from_slice(&randomness[offset..offset + 8]);
+    bytes.copy_from_slice(&hash[..8]);
     u64::from_le_bytes(bytes) % modulo
 }
 
@@ -1332,8 +1713,22 @@ pub enum LuckyMeError {
     InvalidRoundDuration,
     #[msg("Invalid ticket price")]
     InvalidTicketPrice,
+    #[msg("Invalid pool")]
+    InvalidPool,
     #[msg("Invalid ticket count")]
     InvalidTicketCount,
+    #[msg("Invalid winner configuration")]
+    InvalidWinnerConfig,
+    #[msg("Invalid prize split")]
+    InvalidPrizeSplit,
+    #[msg("Not enough entrants for this pool winner count")]
+    NotEnoughEntrants,
+    #[msg("Missing premium winner accounts")]
+    MissingWinnerAccounts,
+    #[msg("Duplicate winner")]
+    DuplicateWinner,
+    #[msg("Invalid winner account")]
+    InvalidWinnerAccount,
     #[msg("Program is paused")]
     Paused,
     #[msg("Round is closed")]
@@ -1403,7 +1798,10 @@ mod tests {
             entrant_count: 0,
             settled: true,
             jackpot_triggered: false,
+            winner_count: 0,
             winner: Pubkey::default(),
+            winner_second: Pubkey::default(),
+            winner_third: Pubkey::default(),
             jackpot_winner: Pubkey::default(),
             randomness_commitment: [1; 32],
             randomness: [0; 32],

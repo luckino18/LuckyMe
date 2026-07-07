@@ -4,21 +4,23 @@ import {
   SystemProgram,
   createClient,
   deriveConfig,
-  deriveEntry,
   deriveJackpotVault,
   derivePool,
   derivePoolVault,
   deriveProviderRoundRandomness,
   deriveRound,
   deriveRoundRandomnessAccount,
+  mainPrizePayouts,
   parseOraoRandomnessV2,
+  randomModDomain,
+  selectWinnerTickets,
 } from "./anchor-client.mjs";
 
 const DRY_RUN = process.env.DRY_RUN === "true" || process.argv.includes("--dry-run");
 const POOL = process.env.POOL?.toLowerCase() ?? "normal";
 const ROUND_ID = parsePositiveInteger(process.env.ROUND_ID, "ROUND_ID");
 const RANDOMNESS_MODE = process.env.LUCKYME_RANDOMNESS_MODE ?? "orao_vrf";
-const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.label.toLowerCase(), pool]));
+const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.slug, pool]));
 
 requireOraoMode();
 if (!POOL_BY_SLUG.has(POOL)) {
@@ -70,12 +72,28 @@ if (!parsed.seed.equals(Buffer.from(sidecar.randomnessSeed))) {
 
 const entries = await fetchEntriesForRound(program, round);
 const randomness = deriveProviderRoundRandomness(round, totalTickets, parsed.randomness);
-const winnerTicket = randomMod(randomness, 0, totalTickets);
-const jackpotRoll = randomMod(randomness, 8, BigInt(config.jackpotOddsDenominator.toString()));
+const poolConfig = poolSettlementConfig(poolAccount, poolSpec);
+if (Number(roundAccount.entrantCount) < poolConfig.winnerCount) {
+  throw new Error(`${poolSpec.label} requires at least ${poolConfig.winnerCount} entrants`);
+}
+const winnerTickets = selectWinnerTickets(randomness, totalTickets, poolConfig.winnerCount);
+const winnerEntries = winnerTickets
+  .slice(0, poolConfig.winnerCount)
+  .map((ticket, index) => findEntryByTicket(entries, ticket, `winner ${index + 1}`));
+const jackpotRoll = randomModDomain(
+  randomness,
+  "jackpot-roll",
+  0,
+  BigInt(config.jackpotOddsDenominator.toString()),
+);
 const jackpotTriggered = jackpotRoll === 0n;
-const jackpotTicket = randomMod(randomness, 16, totalTickets);
-const winnerEntry = findEntryByTicket(entries, winnerTicket, "winner");
+const jackpotTicket = randomModDomain(randomness, "jackpot-winner", 0, totalTickets);
 const jackpotEntry = findEntryByTicket(entries, jackpotTicket, "jackpot");
+const mainPrize = BigInt(roundAccount.totalLamports.toString())
+  - bpsAmount(roundAccount.totalLamports, config.houseFeeBps)
+  - bpsAmount(roundAccount.totalLamports, config.jackpotBps);
+const prizePayouts = mainPrizePayouts(mainPrize, poolConfig);
+const winnerEntry = winnerEntries[0];
 
 console.log(`Cluster: ${url}`);
 console.log(`Release mode: ${process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE"}`);
@@ -88,8 +106,12 @@ console.log(`ORAO request: ${sidecar.request.toBase58()}`);
 console.log(`ORAO randomness hash: ${parsed.randomnessHash.toString("hex")}`);
 console.log(`Derived randomness: ${randomness.toString("hex")}`);
 console.log(`Total tickets: ${totalTickets.toString()}`);
-console.log(`Winner ticket: ${winnerTicket.toString()}`);
-console.log(`Winner: ${winnerEntry.player.toBase58()}`);
+console.log(`Winner count: ${poolConfig.winnerCount}`);
+for (const [index, entry] of winnerEntries.entries()) {
+  console.log(
+    `Winner ${index + 1}: ${entry.player.toBase58()} ticket ${winnerTickets[index].toString()} prize ${prizePayouts[index].toString()} lamports`,
+  );
+}
 console.log(`Jackpot roll: ${jackpotRoll.toString()}`);
 console.log(`Jackpot triggered: ${jackpotTriggered ? "yes" : "no"}`);
 console.log(`Jackpot ticket: ${jackpotTicket.toString()}`);
@@ -119,6 +141,7 @@ const signature = await program.methods
     treasury: config.treasury,
     systemProgram: SystemProgram.programId,
   })
+  .remainingAccounts(remainingWinnerAccounts(winnerEntries))
   .rpc();
 
 console.log(`Settled provider round: ${signature}`);
@@ -150,10 +173,6 @@ async function fetchEntriesForRound(program, round) {
     );
 }
 
-function randomMod(randomness, offset, modulo) {
-  return randomness.readBigUInt64LE(offset) % modulo;
-}
-
 function findEntryByTicket(entries, ticket, label) {
   const entry = entries.find((item) =>
     ticket >= item.ticketStart && ticket < item.ticketEndExclusive,
@@ -162,6 +181,33 @@ function findEntryByTicket(entries, ticket, label) {
     throw new Error(`No ${label} entry contains ticket ${ticket.toString()}`);
   }
   return entry;
+}
+
+function poolSettlementConfig(poolAccount, poolSpec) {
+  return {
+    winnerCount: Number((poolAccount.winnerCount ?? poolSpec.winnerCount).toString()),
+    prizeSplitBps: Array.from(
+      poolAccount.prizeSplitBps ?? poolSpec.prizeSplitBps,
+      (value) => Number(value.toString()),
+    ),
+  };
+}
+
+function remainingWinnerAccounts(winnerEntries) {
+  if (winnerEntries.length < 3) {
+    return [];
+  }
+
+  return [
+    { pubkey: winnerEntries[1].player, isWritable: true, isSigner: false },
+    { pubkey: winnerEntries[1].address, isWritable: false, isSigner: false },
+    { pubkey: winnerEntries[2].player, isWritable: true, isSigner: false },
+    { pubkey: winnerEntries[2].address, isWritable: false, isSigner: false },
+  ];
+}
+
+function bpsAmount(totalLamports, bps) {
+  return (BigInt(totalLamports.toString()) * BigInt(bps.toString())) / 10_000n;
 }
 
 function requireOraoMode() {

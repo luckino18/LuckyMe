@@ -18,7 +18,7 @@ const DRY_RUN = process.env.DRY_RUN === "true" || process.argv.includes("--dry-r
 const POOL = process.env.POOL?.toLowerCase() ?? "normal";
 const ROUND_ID = parsePositiveInteger(process.env.ROUND_ID, "ROUND_ID");
 const RANDOMNESS_MODE = process.env.LUCKYME_RANDOMNESS_MODE ?? "orao_vrf";
-const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.label.toLowerCase(), pool]));
+const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.slug, pool]));
 
 requireOraoMode();
 if (!POOL_BY_SLUG.has(POOL)) {

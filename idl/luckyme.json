@@ -1133,106 +1133,141 @@
     },
     {
       "code": 6006,
+      "name": "InvalidPool",
+      "msg": "Invalid pool"
+    },
+    {
+      "code": 6007,
       "name": "InvalidTicketCount",
       "msg": "Invalid ticket count"
     },
     {
-      "code": 6007,
+      "code": 6008,
+      "name": "InvalidWinnerConfig",
+      "msg": "Invalid winner configuration"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidPrizeSplit",
+      "msg": "Invalid prize split"
+    },
+    {
+      "code": 6010,
+      "name": "NotEnoughEntrants",
+      "msg": "Not enough entrants for this pool winner count"
+    },
+    {
+      "code": 6011,
+      "name": "MissingWinnerAccounts",
+      "msg": "Missing premium winner accounts"
+    },
+    {
+      "code": 6012,
+      "name": "DuplicateWinner",
+      "msg": "Duplicate winner"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidWinnerAccount",
+      "msg": "Invalid winner account"
+    },
+    {
+      "code": 6014,
       "name": "Paused",
       "msg": "Program is paused"
     },
     {
-      "code": 6008,
+      "code": 6015,
       "name": "RoundClosed",
       "msg": "Round is closed"
     },
     {
-      "code": 6009,
+      "code": 6016,
       "name": "RoundStillOpen",
       "msg": "Round is still open"
     },
     {
-      "code": 6010,
+      "code": 6017,
       "name": "RoundSettled",
       "msg": "Round is already settled"
     },
     {
-      "code": 6011,
+      "code": 6018,
       "name": "EmptyRound",
       "msg": "Round has no tickets"
     },
     {
-      "code": 6012,
+      "code": 6019,
       "name": "InvalidRandomnessCommitment",
       "msg": "Invalid randomness commitment"
     },
     {
-      "code": 6013,
+      "code": 6020,
       "name": "InvalidRandomnessReveal",
       "msg": "Invalid randomness reveal"
     },
     {
-      "code": 6014,
+      "code": 6021,
       "name": "WrongWinnerEntry",
       "msg": "Wrong winner entry was provided"
     },
     {
-      "code": 6015,
+      "code": 6022,
       "name": "WrongJackpotEntry",
       "msg": "Wrong jackpot entry was provided"
     },
     {
-      "code": 6016,
+      "code": 6023,
       "name": "WinnerMismatch",
       "msg": "Winner account does not match entry"
     },
     {
-      "code": 6017,
+      "code": 6024,
       "name": "InsufficientVaultFunds",
       "msg": "Vault does not have enough lamports"
     },
     {
-      "code": 6018,
+      "code": 6025,
       "name": "MathOverflow",
       "msg": "Math overflow"
     },
     {
-      "code": 6019,
+      "code": 6026,
       "name": "AlreadyEnteredRound",
       "msg": "Wallet already entered this round"
     },
     {
-      "code": 6020,
+      "code": 6027,
       "name": "RefundNotAvailable",
       "msg": "Refund is not available yet"
     },
     {
-      "code": 6021,
+      "code": 6028,
       "name": "NothingToRefund",
       "msg": "Entry has nothing to refund"
     },
     {
-      "code": 6022,
+      "code": 6029,
       "name": "RoundHasEntries",
       "msg": "Round already has entries"
     },
     {
-      "code": 6023,
+      "code": 6030,
       "name": "InvalidRandomnessProvider",
       "msg": "Invalid randomness provider"
     },
     {
-      "code": 6024,
+      "code": 6031,
       "name": "InvalidRandomnessStatus",
       "msg": "Invalid randomness status"
     },
     {
-      "code": 6025,
+      "code": 6032,
       "name": "InvalidRandomnessProviderAccount",
       "msg": "Invalid randomness provider account"
     },
     {
-      "code": 6026,
+      "code": 6033,
       "name": "RandomnessNotFulfilled",
       "msg": "Provider randomness is not fulfilled"
     }
@@ -1449,6 +1484,23 @@
           },
           {
             "name": "jackpot_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "winner_count",
+            "type": "u8"
+          },
+          {
+            "name": "prize_split_bps",
+            "type": {
+              "array": [
+                "u16",
+                3
+              ]
+            }
+          },
+          {
+            "name": "max_tickets_per_entry",
             "type": "u64"
           },
           {
@@ -1687,7 +1739,19 @@
             "type": "bool"
           },
           {
+            "name": "winner_count",
+            "type": "u8"
+          },
+          {
             "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner_second",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner_third",
             "type": "pubkey"
           },
           {
@@ -1840,6 +1904,10 @@
             "type": "u64"
           },
           {
+            "name": "winner_count",
+            "type": "u8"
+          },
+          {
             "name": "winner",
             "type": "pubkey"
           },
@@ -1848,11 +1916,47 @@
             "type": "pubkey"
           },
           {
+            "name": "winner_second",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner_second_entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner_third",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner_third_entry",
+            "type": "pubkey"
+          },
+          {
             "name": "winning_ticket",
             "type": "u64"
           },
           {
+            "name": "winner_second_ticket",
+            "type": "u64"
+          },
+          {
+            "name": "winner_third_ticket",
+            "type": "u64"
+          },
+          {
             "name": "main_prize_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "first_prize_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "second_prize_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "third_prize_lamports",
             "type": "u64"
           },
           {

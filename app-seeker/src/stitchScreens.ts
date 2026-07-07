@@ -1,4 +1,3 @@
-// Generated mechanically from stitch_luckyme_premium_solana_interface.zip, then sanitized for LuckyMe production preview copy.
 export type StitchScreenId =
   | "home"
   | "pools"
@@ -9,18 +8,834 @@ export type StitchScreenId =
   | "syncing"
   | "success"
   | "unavailable"
-  | "welcome"
-;
+  | "welcome";
+
+type PoolTone = "green" | "cyan" | "gold" | "violet";
+
+type PoolSpec = {
+  id: string;
+  name: string;
+  marker: string;
+  entry: string;
+  prize: string;
+  winners: string;
+  limits: string;
+  note: string;
+  tone: PoolTone;
+};
+
+const POOLS: PoolSpec[] = [
+  {
+    id: "mini",
+    name: "Mini",
+    marker: "M",
+    entry: "0.005 SOL",
+    prize: "95% main prize",
+    winners: "1 winner",
+    limits: "1,000 tickets max",
+    note: "Low entry, same settlement rules.",
+    tone: "green",
+  },
+  {
+    id: "normal",
+    name: "Normal",
+    marker: "N",
+    entry: "0.01 SOL",
+    prize: "95% main prize",
+    winners: "1 winner",
+    limits: "1,000 tickets max",
+    note: "Balanced public pool.",
+    tone: "cyan",
+  },
+  {
+    id: "high",
+    name: "High",
+    marker: "H",
+    entry: "0.05 SOL",
+    prize: "95% main prize",
+    winners: "1 winner",
+    limits: "1,000 tickets max",
+    note: "Higher entry, single winner.",
+    tone: "violet",
+  },
+  {
+    id: "premium",
+    name: "Premium",
+    marker: "P",
+    entry: "0.1 SOL",
+    prize: "70 / 20 / 10 split",
+    winners: "3 winners",
+    limits: "1 ticket per wallet",
+    note: "Minimum 3 wallets required.",
+    tone: "gold",
+  },
+];
+
+const ECONOMICS = [
+  ["Main prize", "95%"],
+  ["Treasury", "2%"],
+  ["Jackpot", "3%"],
+  ["Round", "1 hour"],
+];
+
+const PROGRAM_ID = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
+const API_HOST = "api.lucky-me.app";
+
+function page(title: string, active: StitchScreenId, body: string) {
+  return String.raw`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>${title}</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #030604;
+      --bg-2: #07100c;
+      --panel: #101513;
+      --panel-2: #151b18;
+      --line: rgba(255, 255, 255, 0.11);
+      --line-strong: rgba(255, 255, 255, 0.18);
+      --text: #f2f6f3;
+      --muted: #a8b7af;
+      --soft: #728078;
+      --green: #43f09a;
+      --cyan: #6dd7ff;
+      --gold: #ffd166;
+      --violet: #d7b9ff;
+      --red: #ffb4ab;
+      --button: #43f09a;
+      --button-text: #032015;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      max-width: 100%;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(67, 240, 154, 0.13), transparent 32rem),
+        radial-gradient(circle at 92% 18%, rgba(255, 209, 102, 0.12), transparent 26rem),
+        linear-gradient(180deg, var(--bg-2), var(--bg));
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      letter-spacing: 0;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    button, a {
+      -webkit-tap-highlight-color: transparent;
+      color: inherit;
+      font: inherit;
+    }
+
+    button { cursor: pointer; }
+
+    .app {
+      width: 100%;
+      max-width: 760px;
+      min-height: 100dvh;
+      margin: 0 auto;
+      padding: calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 100px);
+      overflow-x: hidden;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 56px;
+      margin: -14px -16px 18px;
+      padding: calc(env(safe-area-inset-top) + 14px) 16px 10px;
+      background: rgba(3, 6, 4, 0.82);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .brand-mark, .icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(67, 240, 154, 0.12);
+      border: 1px solid rgba(67, 240, 154, 0.28);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .pill, .ghost-button {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 11px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 16px rgba(67, 240, 154, 0.72);
+    }
+
+    .stack { display: grid; gap: 16px; }
+    .compact-stack { display: grid; gap: 10px; }
+
+    .hero {
+      display: grid;
+      gap: 14px;
+      padding: 10px 0 4px;
+    }
+
+    .eyebrow {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      max-width: 11ch;
+      color: #ffffff;
+      font-size: 42px;
+      line-height: 1.04;
+      font-weight: 900;
+    }
+
+    h2 {
+      color: #ffffff;
+      font-size: 24px;
+      line-height: 1.16;
+      font-weight: 850;
+    }
+
+    h3 {
+      color: #ffffff;
+      font-size: 16px;
+      line-height: 1.25;
+      font-weight: 850;
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.48;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    .muted { color: var(--muted); }
+    .soft { color: var(--soft); }
+    .success { color: var(--green); }
+    .warning { color: var(--gold); }
+    .danger { color: var(--red); }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric, .panel, .pool-card, .list-row {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(16, 21, 19, 0.84);
+      box-shadow: 0 20px 52px rgba(0, 0, 0, 0.26);
+    }
+
+    .metric {
+      min-height: 82px;
+      padding: 14px;
+      display: grid;
+      align-content: space-between;
+      gap: 12px;
+    }
+
+    .metric span:first-child, .label {
+      color: var(--soft);
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      color: #ffffff;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .panel { padding: 16px; }
+
+    .section-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 4px 0 -4px;
+    }
+
+    .pool-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .pool-card {
+      position: relative;
+      overflow: hidden;
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .pool-card:before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: var(--accent);
+    }
+
+    .tone-green { --accent: var(--green); }
+    .tone-cyan { --accent: var(--cyan); }
+    .tone-gold { --accent: var(--gold); }
+    .tone-violet { --accent: var(--violet); }
+
+    .pool-head, .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .row > *, .list-row > * {
+      min-width: 0;
+    }
+
+    .row-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .pool-title {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .entry {
+      color: #ffffff;
+      font-size: 20px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .status-code {
+      flex: 0 1 32%;
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1.1;
+      text-align: right;
+      text-transform: uppercase;
+      overflow-wrap: anywhere;
+    }
+
+    .pool-facts {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .fact {
+      min-height: 60px;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .fact .label {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .fact strong {
+      display: block;
+      color: #ffffff;
+      font-size: 13px;
+      line-height: 1.18;
+      overflow-wrap: anywhere;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .primary-button, .secondary-button, .nav-item {
+      border: 0;
+      text-decoration: none;
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+
+    .primary-button, .secondary-button {
+      min-height: 48px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 16px;
+      font-size: 15px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .primary-button {
+      color: var(--button-text);
+      background: var(--button);
+      box-shadow: 0 12px 30px rgba(67, 240, 154, 0.2);
+    }
+
+    .secondary-button {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--line);
+    }
+
+    .primary-button:active, .secondary-button:active, .nav-item:active {
+      transform: scale(0.98);
+      opacity: 0.78;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .list-row {
+      padding: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .list-row strong {
+      flex: 0 0 auto;
+      max-width: 38%;
+      color: #ffffff;
+      font-size: 15px;
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      z-index: 30;
+      left: max(12px, env(safe-area-inset-left));
+      right: max(12px, env(safe-area-inset-right));
+      bottom: max(12px, env(safe-area-inset-bottom));
+      max-width: 728px;
+      height: 72px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 4px;
+      padding: 7px;
+      border-radius: 8px;
+      border: 1px solid var(--line-strong);
+      background: rgba(10, 14, 12, 0.92);
+      backdrop-filter: blur(22px);
+      box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.32);
+    }
+
+    .nav-item {
+      min-width: 0;
+      min-height: 58px;
+      display: grid;
+      place-items: center;
+      gap: 2px;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--soft);
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .nav-item .nav-icon {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      color: currentColor;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .nav-item.active {
+      color: var(--green);
+      background: rgba(67, 240, 154, 0.1);
+      box-shadow: inset 0 0 0 1px rgba(67, 240, 154, 0.16);
+    }
+
+    .notice {
+      border-color: rgba(255, 209, 102, 0.26);
+      background: rgba(255, 209, 102, 0.08);
+    }
+
+    .wallet-native-space {
+      min-height: 250px;
+    }
+
+    .danger-panel {
+      border-color: rgba(255, 180, 171, 0.28);
+      background: rgba(255, 180, 171, 0.07);
+    }
+
+    @media (min-width: 640px) {
+      .pool-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      h1 { font-size: 48px; }
+    }
+
+    @media (max-width: 390px) {
+      .app { padding-left: 12px; padding-right: 12px; }
+      .topbar { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; }
+      .pill { display: none; }
+      .pool-facts { grid-template-columns: 1fr; }
+      .action-row { grid-template-columns: 1fr; }
+      .primary-button, .secondary-button { width: 100%; }
+      h1 { font-size: 36px; }
+    }
+
+    @media (max-width: 430px) {
+      .hero p { max-width: 34ch; }
+      .list-row { align-items: flex-start; }
+      .list-row strong { max-width: 34%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    ${topbar()}
+    ${body}
+  </div>
+  ${bottomNav(active)}
+</body>
+</html>`;
+}
+
+function topbar() {
+  return String.raw`<header class="topbar">
+  <div class="brand"><span class="brand-mark">L</span><span>LuckyMe</span></div>
+  <div class="top-actions">
+    <div class="pill"><span class="status-dot"></span><span>Mainnet</span></div>
+    <button class="ghost-button">Wallet</button>
+  </div>
+</header>`;
+}
+
+function bottomNav(active: StitchScreenId) {
+  const items: Array<[StitchScreenId, string, string]> = [
+    ["home", "H", "Home"],
+    ["pools", "P", "Pools"],
+    ["activity", "A", "Activity"],
+    ["wallet", "W", "Wallet"],
+    ["settings", "S", "Settings"],
+  ];
+
+  return String.raw`<nav class="bottom-nav" aria-label="Primary">
+  ${items.map(([screen, icon, label]) => String.raw`<button class="nav-item ${active === screen ? "active" : ""}">
+    <span class="nav-icon">${icon}</span>
+    <span>${label}</span>
+  </button>`).join("\n  ")}
+</nav>`;
+}
+
+function metrics() {
+  return String.raw`<section class="metric-grid">
+  ${ECONOMICS.map(([label, value]) => String.raw`<div class="metric">
+    <span>${label}</span>
+    <strong>${value}</strong>
+  </div>`).join("\n  ")}
+</section>`;
+}
+
+function poolCard(pool: PoolSpec) {
+  return String.raw`<article class="pool-card tone-${pool.tone}">
+  <div class="pool-head">
+    <div class="row-left">
+      <span class="icon">${pool.marker}</span>
+      <div class="pool-title">
+        <h3>${pool.name}</h3>
+        <p class="soft">${pool.note}</p>
+      </div>
+    </div>
+    <div class="entry mono">${pool.entry}</div>
+  </div>
+  <div class="pool-facts">
+    <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
+    <div class="fact"><span class="label">Winners</span><strong>${pool.winners}</strong></div>
+    <div class="fact"><span class="label">Limit</span><strong>${pool.limits}</strong></div>
+  </div>
+  <div class="action-row">
+    <p class="soft">Round, ticket count, and vault amount load from verified chain state.</p>
+    <button class="primary-button">Join ${pool.name}</button>
+  </div>
+</article>`;
+}
+
+function homeBody() {
+  return String.raw`<main class="stack">
+  <section class="hero">
+    <p class="eyebrow">Solana mainnet pools</p>
+    <h1>LuckyMe rounds</h1>
+    <p>Four entry levels, external wallet custody, ORAO VRF settlement, and no visible fallback pools while chain state is unavailable.</p>
+  </section>
+  ${metrics()}
+  <section class="panel">
+    <div class="row">
+      <div>
+        <span class="label">On-chain pool status</span>
+        <h2>Pending</h2>
+        <p class="muted">Live values appear only after backend state confirms the deployed program.</p>
+      </div>
+      <span class="status-code mono">MAINNET</span>
+    </div>
+  </section>
+  <section class="pool-grid">
+    ${POOLS.map(poolCard).join("\n    ")}
+  </section>
+  <section class="panel notice">
+    <div class="row">
+      <div>
+        <span class="label">Jackpot reserve</span>
+        <h2>Pending</h2>
+        <p>Random jackpot can trigger after any completed round.</p>
+      </div>
+      <span class="entry mono">3%</span>
+    </div>
+  </section>
+</main>`;
+}
+
+function poolsBody() {
+  return String.raw`<main class="stack">
+  <section class="section-header">
+    <div>
+      <span class="label">Pool board</span>
+      <h2>Entries and payout rules</h2>
+    </div>
+    <span class="pill">Mainnet</span>
+  </section>
+  <section class="pool-grid two">
+    ${POOLS.map(poolCard).join("\n    ")}
+  </section>
+</main>`;
+}
+
+function activityBody() {
+  return String.raw`<main class="stack">
+  <section class="hero">
+    <p class="eyebrow">Activity</p>
+    <h1>Round ledger</h1>
+    <p>Settlement rows stay pending until the backend reads confirmed program state.</p>
+  </section>
+  <section class="list">
+    ${[
+      ["Latest settlement", "Pending"],
+      ["Open rounds", "Pending"],
+      ["Jackpot reserve", "Pending"],
+      ["Randomness provider", "ORAO VRF"],
+    ].map(([label, value]) => String.raw`<div class="list-row">
+      <div><span class="label">${label}</span><p class="soft">Loaded from verified state</p></div>
+      <strong class="mono">${value}</strong>
+    </div>`).join("\n    ")}
+  </section>
+</main>`;
+}
+
+function walletBody() {
+  return String.raw`<main class="stack">
+  <section class="hero">
+    <p class="eyebrow">Wallet</p>
+    <h1>External custody</h1>
+    <p>LuckyMe never stores seed phrases or private keys. The wallet signs player actions.</p>
+  </section>
+  <section class="panel">
+    <div class="compact-stack">
+      <div class="row"><span class="label">Connection</span><strong class="mono">Mobile Wallet Adapter</strong></div>
+      <div class="row"><span class="label">Network</span><strong class="mono">solana:mainnet</strong></div>
+      <div class="row"><span class="label">App custody</span><strong class="mono success">None</strong></div>
+    </div>
+  </section>
+  <div class="wallet-native-space" aria-hidden="true"></div>
+</main>`;
+}
+
+function settingsBody() {
+  return String.raw`<main class="stack">
+  <section class="hero">
+    <p class="eyebrow">Settings</p>
+    <h1>Release config</h1>
+    <p>Mainnet release values are embedded at build time and checked before store submission.</p>
+  </section>
+  <section class="list">
+    <div class="list-row"><div><span class="label">Program</span><p class="mono soft">${PROGRAM_ID}</p></div><strong class="success">Set</strong></div>
+    <div class="list-row"><div><span class="label">Backend</span><p class="mono soft">${API_HOST}</p></div><strong class="success">HTTPS</strong></div>
+    <div class="list-row"><div><span class="label">Randomness</span><p class="soft">ORAO VRF</p></div><strong class="success">Set</strong></div>
+  </section>
+  <section class="panel">
+    <div class="compact-stack">
+      <button class="secondary-button">Terms</button>
+      <button class="secondary-button">Privacy</button>
+      <button class="secondary-button">Support</button>
+    </div>
+  </section>
+</main>`;
+}
+
+function reviewBody() {
+  return String.raw`<main class="stack">
+  <section class="hero">
+    <p class="eyebrow">Review</p>
+    <h1>Entry request</h1>
+    <p>Pool selection and amount are finalized from live state before wallet approval.</p>
+  </section>
+  <section class="panel">
+    <div class="compact-stack">
+      <div class="row"><span class="label">Pool</span><strong class="mono">Pending</strong></div>
+      <div class="row"><span class="label">Entry</span><strong class="mono">Pending</strong></div>
+      <div class="row"><span class="label">Network</span><strong class="mono">Mainnet</strong></div>
+      <div class="row"><span class="label">Signer</span><strong class="mono">External wallet</strong></div>
+    </div>
+  </section>
+  <button class="primary-button">Confirm in Wallet</button>
+  <button class="secondary-button">Back to Pools</button>
+</main>`;
+}
+
+function syncingBody() {
+  return String.raw`<main class="stack">
+  <section class="hero">
+    <p class="eyebrow">Wallet request</p>
+    <h1>Pending approval</h1>
+    <p>The app waits for wallet approval and backend confirmation before showing final state.</p>
+  </section>
+  <section class="list">
+    <div class="list-row"><div><span class="label">Unsigned transaction</span><p class="soft">Prepared by app client</p></div><strong class="warning">Pending</strong></div>
+    <div class="list-row"><div><span class="label">Wallet signature</span><p class="soft">External wallet only</p></div><strong class="warning">Pending</strong></div>
+    <div class="list-row"><div><span class="label">Backend confirmation</span><p class="soft">Required before status changes</p></div><strong class="warning">Pending</strong></div>
+  </section>
+  <button class="secondary-button">Complete</button>
+</main>`;
+}
+
+function successBody() {
+  return String.raw`<main class="stack">
+  <section class="hero">
+    <p class="eyebrow">Status</p>
+    <h1>Entry pending</h1>
+    <p>Final entry state appears after confirmed chain data is available.</p>
+  </section>
+  <section class="panel notice">
+    <div class="row">
+      <div>
+        <span class="label">Confirmation</span>
+        <h2>Pending</h2>
+        <p class="muted">No final balance or payout state is shown before backend confirmation.</p>
+      </div>
+      <span class="entry mono">WAIT</span>
+    </div>
+  </section>
+  <button class="primary-button">Done</button>
+</main>`;
+}
+
+function unavailableBody() {
+  return String.raw`<main class="stack" style="min-height: calc(100dvh - 180px); justify-content: center;">
+  <section class="panel danger-panel" style="text-align: center;">
+    <div class="icon" style="margin: 0 auto 14px; width: 54px; height: 54px;">!</div>
+    <span class="label">Solana mainnet status</span>
+    <h1 style="max-width: none; margin-top: 8px;">On-chain syncing</h1>
+    <p style="margin-top: 12px;">Live pools are unavailable until the production program is deployed and backend state is confirmed.</p>
+    <button class="primary-button" style="width: 100%; margin-top: 18px;">Retry Connection</button>
+    <button class="secondary-button" style="width: 100%; margin-top: 10px;">Settings</button>
+  </section>
+  <section class="panel">
+    <div class="row">
+      <div>
+        <span class="label">Safety state</span>
+        <h2>No fallback pools</h2>
+        <p class="muted">The app does not display playable pool data while chain state is unavailable.</p>
+      </div>
+      <strong class="warning">Pending</strong>
+    </div>
+  </section>
+</main>`;
+}
 
 export const STITCH_SCREENS: Record<StitchScreenId, string> = {
-  "home": "<!DOCTYPE html>\n\n<html class=\"dark\" lang=\"en\"><head>\n<meta charset=\"utf-8\"/>\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>\n<title>LuckyMe | Premium Solana Pools</title>\n<script src=\"https://cdn.tailwindcss.com?plugins=forms,container-queries\"></script>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;family=Geist:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap\" rel=\"stylesheet\"/>\n<style>\n        body {\n            background-color: #000000;\n            color: #e1e3e4;\n            -webkit-font-smoothing: antialiased;\n            overflow-x: hidden;\n            min-height: 100dvh;\n        }\n        .glass-panel {\n            background: rgba(255, 255, 255, 0.03);\n            backdrop-filter: blur(24px);\n            border: 1px solid rgba(255, 255, 255, 0.08);\n        }\n        .glass-panel-heavy {\n            background: rgba(255, 255, 255, 0.06);\n            backdrop-filter: blur(40px);\n            border: 1px solid rgba(255, 255, 255, 0.15);\n        }\n        .primary-gradient {\n            background: linear-gradient(135deg, #9945ff 0%, #d8b9ff 100%);\n        }\n        .material-symbols-outlined {\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\n        }\n        .tabular-nums {\n            font-variant-numeric: tabular-nums;\n        }\n    </style>\n<script id=\"tailwind-config\">\n        tailwind.config = {\n          darkMode: \"class\",\n          theme: {\n            extend: {\n              \"colors\": {\n                      \"surface-container-highest\": \"#323536\",\n                      \"on-secondary\": \"#00391f\",\n                      \"background\": \"#111415\",\n                      \"surface-bright\": \"#373a3b\",\n                      \"primary-fixed\": \"#eddcff\",\n                      \"on-error-container\": \"#ffdad6\",\n                      \"surface-glass\": \"rgba(255, 255, 255, 0.03)\",\n                      \"surface-container-high\": \"#282a2b\",\n                      \"error-container\": \"#93000a\",\n                      \"surface\": \"#111415\",\n                      \"inverse-on-surface\": \"#2e3132\",\n                      \"outline\": \"#978da1\",\n                      \"on-primary-fixed-variant\": \"#6300bb\",\n                      \"on-tertiary-fixed\": \"#1b1b1b\",\n                      \"on-secondary-container\": \"#00653b\",\n                      \"accent-green-glow\": \"#00e38b\",\n                      \"on-surface-variant\": \"#cec2d8\",\n                      \"on-primary-container\": \"#ffffff\",\n                      \"primary\": \"#d8b9ff\",\n                      \"secondary-fixed\": \"#56ffa8\",\n                      \"accent-purple-light\": \"#d8b9ff\",\n                      \"on-background\": \"#e1e3e4\",\n                      \"surface-main\": \"#000000\",\n                      \"surface-variant\": \"#323536\",\n                      \"on-primary\": \"#450086\",\n                      \"on-tertiary-fixed-variant\": \"#474747\",\n                      \"secondary-container\": \"#00ec91\",\n                      \"outline-variant\": \"#4c4355\",\n                      \"on-secondary-fixed\": \"#002110\",\n                      \"tertiary-fixed-dim\": \"#c6c6c6\",\n                      \"error\": \"#ffb4ab\",\n                      \"tertiary-container\": \"#767676\",\n                      \"primary-fixed-dim\": \"#d8b9ff\",\n                      \"on-surface\": \"#e1e3e4\",\n                      \"on-primary-fixed\": \"#290055\",\n                      \"on-error\": \"#690005\",\n                      \"surface-dim\": \"#111415\",\n                      \"inverse-primary\": \"#7f21e5\",\n                      \"on-tertiary-container\": \"#ffffff\",\n                      \"on-tertiary\": \"#303030\",\n                      \"surface-tint\": \"#d8b9ff\",\n                      \"tertiary-fixed\": \"#e2e2e2\",\n                      \"surface-container-low\": \"#191c1d\",\n                      \"tertiary\": \"#c6c6c6\",\n                      \"surface-container-lowest\": \"#0c0f10\",\n                      \"inverse-surface\": \"#e1e3e4\",\n                      \"primary-container\": \"#9945ff\",\n                      \"secondary-fixed-dim\": \"#00e38b\",\n                      \"on-secondary-fixed-variant\": \"#00522f\",\n                      \"surface-container\": \"#1d2021\",\n                      \"secondary\": \"#a0ffc3\",\n                      \"surface-glass-heavy\": \"rgba(255, 255, 255, 0.06)\"\n              },\n              \"borderRadius\": {\n                      \"DEFAULT\": \"0.25rem\",\n                      \"lg\": \"0.5rem\",\n                      \"xl\": \"0.75rem\",\n                      \"full\": \"9999px\"\n              },\n              \"spacing\": {\n                      \"gutter\": \"16px\",\n                      \"container-padding\": \"24px\",\n                      \"stack-lg\": \"32px\",\n                      \"unit\": \"8px\",\n                      \"stack-sm\": \"8px\",\n                      \"stack-md\": \"16px\",\n                      \"section-gap\": \"48px\"\n              },\n              \"fontFamily\": {\n                      \"display-lg-mobile\": [\"Inter\"],\n                      \"body-lg\": [\"Inter\"],\n                      \"headline-md\": [\"Inter\"],\n                      \"body-md\": [\"Inter\"],\n                      \"currency-xl\": [\"Geist\"],\n                      \"label-mono\": [\"Geist\"],\n                      \"display-lg\": [\"Inter\"],\n                      \"caption-caps\": [\"Geist\"]\n              },\n              \"fontSize\": {\n                      \"display-lg-mobile\": [\"36px\", {\"lineHeight\": \"42px\", \"letterSpacing\": \"-0.03em\", \"fontWeight\": \"700\"}],\n                      \"body-lg\": [\"18px\", {\"lineHeight\": \"28px\", \"fontWeight\": \"400\"}],\n                      \"headline-md\": [\"24px\", {\"lineHeight\": \"32px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"600\"}],\n                      \"body-md\": [\"16px\", {\"lineHeight\": \"24px\", \"fontWeight\": \"400\"}],\n                      \"currency-xl\": [\"40px\", {\"lineHeight\": \"48px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"700\"}],\n                      \"label-mono\": [\"14px\", {\"lineHeight\": \"20px\", \"letterSpacing\": \"0.05em\", \"fontWeight\": \"500\"}],\n                      \"display-lg\": [\"48px\", {\"lineHeight\": \"56px\", \"letterSpacing\": \"-0.04em\", \"fontWeight\": \"700\"}],\n                      \"caption-caps\": [\"10px\", {\"lineHeight\": \"12px\", \"letterSpacing\": \"0.1em\", \"fontWeight\": \"700\"}]\n              }\n            },\n          },\n        }\n    </script>\n</head>\n<body class=\"bg-surface-main text-on-surface\">\n<!-- TopAppBar -->\n<nav class=\"fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding py-stack-sm bg-surface-main/80 backdrop-blur-md border-b border-white/10 h-16\">\n<div class=\"flex items-center gap-2\">\n<span class=\"font-display-lg-mobile text-display-lg-mobile tracking-tighter text-accent-purple-light\">LuckyMe</span>\n</div>\n<div class=\"flex items-center gap-2\">\n<!-- Premium Network Chip -->\n<div class=\"flex items-center gap-1.5 px-2.5 py-1 glass-panel-heavy rounded-full border border-secondary-fixed-dim/20\">\n<div class=\"w-1.5 h-1.5 rounded-full bg-secondary-fixed-dim animate-pulse\"></div>\n<span class=\"font-caption-caps text-caption-caps text-secondary-fixed-dim\">MAINNET</span>\n</div>\n<!-- Premium Wallet Chip -->\n<button class=\"flex items-center gap-2 px-3 py-1.5 glass-panel rounded-lg hover:opacity-80 transition-opacity active:scale-95\">\n<span class=\"material-symbols-outlined text-[18px] text-primary\" data-icon=\"account_balance_wallet\">account_balance_wallet</span>\n<span class=\"font-label-mono text-label-mono\">Wallet</span>\n</button>\n</div>\n</nav>\n<main class=\"pt-24 pb-32 px-container-padding max-w-[1200px] mx-auto\">\n<!-- Hero Section -->\n<section class=\"relative py-12 flex flex-col items-center text-center\">\n<div class=\"absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-primary-container/10 blur-[140px] rounded-full -z-10\"></div>\n<p class=\"font-caption-caps text-caption-caps text-on-surface-variant/50 uppercase tracking-[0.25em] mb-4\">On-Chain Pool Status</p>\n<div class=\"flex flex-col items-center gap-1\">\n<h2 class=\"font-currency-xl text-display-lg-mobile md:text-display-lg text-white tabular-nums\">Pending</h2>\n<p class=\"font-headline-md text-headline-md text-on-surface-variant/70 tabular-nums\">Loaded from verified mainnet state</p>\n</div>\n<!-- Trust Rail -->\n<div class=\"flex flex-wrap justify-center items-center gap-8 mt-12\">\n<div class=\"flex items-center gap-2 opacity-50\">\n<span class=\"material-symbols-outlined text-[20px]\" data-icon=\"public\">public</span>\n<span class=\"font-caption-caps text-caption-caps tracking-widest\">MAINNET</span>\n</div>\n<div class=\"flex items-center gap-2 text-secondary-fixed\">\n<span class=\"material-symbols-outlined text-[20px] fill-1\" data-icon=\"security\" style=\"font-variation-settings: 'FILL' 1\">security</span>\n<span class=\"font-caption-caps text-caption-caps tracking-widest\">ORAO VRF</span>\n</div>\n<div class=\"flex items-center gap-2 text-secondary-fixed\">\n<span class=\"material-symbols-outlined text-[20px] fill-1\" data-icon=\"verified\" style=\"font-variation-settings: 'FILL' 1\">verified</span>\n<span class=\"font-caption-caps text-caption-caps tracking-widest\">PROGRAM VERIFIED</span>\n</div>\n</div>\n</section>\n<!-- Active Pools -->\n<section class=\"mt-stack-lg\">\n<div class=\"flex justify-between items-end mb-8\">\n<div>\n<h3 class=\"font-headline-md text-headline-md text-white\">Active Pools</h3>\n<p class=\"text-on-surface-variant/60 font-body-md text-body-md\">Live round data loads from the backend.</p>\n</div>\n</div>\n<div class=\"grid grid-cols-1 md:grid-cols-3 gap-6\">\n<!-- Mini Pool Card -->\n<div class=\"glass-panel rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden group hover:border-primary/30 transition-all border border-white/5\">\n<div class=\"flex justify-between items-start\">\n<div>\n<span class=\"font-caption-caps text-[10px] bg-primary/10 text-primary-fixed px-2 py-0.5 rounded-full block w-fit mb-1\">MINI POOL</span>\n<span class=\"font-label-mono text-[11px] text-on-surface-variant/40\">On-chain ID pending</span>\n</div>\n<div class=\"text-right\">\n<p class=\"font-label-mono text-label-mono text-white tabular-nums\">0.005 SOL</p>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40\">ENTRY FEE</p>\n</div>\n</div>\n<div>\n<p class=\"font-caption-caps text-[10px] text-on-surface-variant/60 tracking-widest mb-1 uppercase\">Pool Value</p>\n<p class=\"font-currency-xl text-[32px] text-white tabular-nums\">Pending</p>\n</div>\n<div class=\"space-y-3\">\n<div class=\"w-full bg-white/5 h-1.5 rounded-full overflow-hidden\">\n<div class=\"h-full primary-gradient\" style=\"width: 65%;\"></div>\n</div>\n<div class=\"grid grid-cols-2 gap-4\">\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Remaining</p>\n<p class=\"font-label-mono text-white tabular-nums\">--</p>\n</div>\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Total Tickets</p>\n<p class=\"font-label-mono text-white tabular-nums\">--</p>\n</div>\n</div>\n</div>\n<div class=\"pt-4 border-t border-white/5 flex items-center justify-between\">\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Win Chance</p>\n<p class=\"font-label-mono text-secondary-fixed-dim tabular-nums\">--</p>\n</div>\n<button class=\"primary-gradient text-on-primary font-bold px-5 py-2.5 rounded-lg shadow-lg active:scale-90 transition-transform duration-100\">Join</button>\n</div>\n</div>\n<!-- Normal Pool Card -->\n<div class=\"glass-panel-heavy rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden group hover:border-primary/40 transition-all ring-1 ring-primary-container/20\">\n<div class=\"flex justify-between items-start\">\n<div>\n<span class=\"font-caption-caps text-[10px] bg-primary/20 text-primary-fixed px-2 py-0.5 rounded-full block w-fit mb-1\">NORMAL POOL</span>\n<span class=\"font-label-mono text-[11px] text-on-surface-variant/40\">On-chain ID pending</span>\n</div>\n<div class=\"text-right\">\n<p class=\"font-label-mono text-label-mono text-white tabular-nums\">0.01 SOL</p>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40\">ENTRY FEE</p>\n</div>\n</div>\n<div>\n<p class=\"font-caption-caps text-[10px] text-on-surface-variant/60 tracking-widest mb-1 uppercase\">Pool Value</p>\n<p class=\"font-currency-xl text-[32px] text-white tabular-nums\">Pending</p>\n</div>\n<div class=\"space-y-3\">\n<div class=\"w-full bg-white/5 h-1.5 rounded-full overflow-hidden\">\n<div class=\"h-full primary-gradient\" style=\"width: 42%;\"></div>\n</div>\n<div class=\"grid grid-cols-2 gap-4\">\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Remaining</p>\n<p class=\"font-label-mono text-white tabular-nums\">--</p>\n</div>\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Total Tickets</p>\n<p class=\"font-label-mono text-white tabular-nums\">--</p>\n</div>\n</div>\n</div>\n<div class=\"pt-4 border-t border-white/5 flex items-center justify-between\">\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Win Chance</p>\n<p class=\"font-label-mono text-on-surface-variant/30 tabular-nums\">--</p>\n</div>\n<button class=\"primary-gradient text-on-primary font-bold px-5 py-2.5 rounded-lg shadow-lg active:scale-90 transition-transform duration-100\">Join</button>\n</div>\n</div>\n<!-- High Roller Pool Card -->\n<div class=\"glass-panel rounded-xl p-6 flex flex-col gap-6 relative overflow-hidden group hover:border-primary/30 transition-all border border-white/5\">\n<div class=\"flex justify-between items-start\">\n<div>\n<span class=\"font-caption-caps text-[10px] bg-accent-purple-light/10 text-accent-purple-light px-2 py-0.5 rounded-full block w-fit mb-1\">HIGH ROLLER</span>\n<span class=\"font-label-mono text-[11px] text-on-surface-variant/40\">On-chain ID pending</span>\n</div>\n<div class=\"text-right\">\n<p class=\"font-label-mono text-label-mono text-white tabular-nums\">0.1 SOL</p>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40\">ENTRY FEE</p>\n</div>\n</div>\n<div>\n<p class=\"font-caption-caps text-[10px] text-on-surface-variant/60 tracking-widest mb-1 uppercase\">Pool Value</p>\n<p class=\"font-currency-xl text-[32px] text-white tabular-nums\">Pending</p>\n</div>\n<div class=\"space-y-3\">\n<div class=\"w-full bg-white/5 h-1.5 rounded-full overflow-hidden\">\n<div class=\"h-full primary-gradient\" style=\"width: 88%;\"></div>\n</div>\n<div class=\"grid grid-cols-2 gap-4\">\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Remaining</p>\n<p class=\"font-label-mono text-white tabular-nums text-secondary-fixed\">--</p>\n</div>\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Total Tickets</p>\n<p class=\"font-label-mono text-white tabular-nums\">--</p>\n</div>\n</div>\n</div>\n<div class=\"pt-4 border-t border-white/5 flex items-center justify-between\">\n<div>\n<p class=\"font-caption-caps text-[9px] text-on-surface-variant/40 uppercase\">Win Chance</p>\n<p class=\"font-label-mono text-on-surface-variant/30 tabular-nums\">--</p>\n</div>\n<button class=\"primary-gradient text-on-primary font-bold px-5 py-2.5 rounded-lg shadow-lg active:scale-90 transition-transform duration-100\">Join</button>\n</div>\n</div>\n</div>\n</section>\n<!-- Stats Grid -->\n<section class=\"mt-12 grid grid-cols-1 md:grid-cols-4 gap-4\">\n<div class=\"glass-panel p-6 rounded-xl md:col-span-2 flex flex-col justify-between min-h-[160px] border border-white/5\">\n<p class=\"font-caption-caps text-caption-caps text-on-surface-variant/40 uppercase tracking-widest\">Total Payouts (24h)</p>\n<div class=\"mt-4\">\n<p class=\"font-currency-xl text-currency-xl text-secondary-fixed tabular-nums\">Pending</p>\n<p class=\"text-on-surface-variant/60 text-body-md font-body-md\">Loaded from program events</p>\n</div>\n</div>\n<div class=\"glass-panel p-6 rounded-xl md:col-span-1 flex flex-col justify-between border border-white/5\">\n<p class=\"font-caption-caps text-caption-caps text-on-surface-variant/40 uppercase tracking-widest\">Wallet Status</p>\n<div class=\"mt-4\">\n<p class=\"font-headline-md text-headline-md text-white tabular-nums\">External</p>\n<p class=\"text-accent-green-glow font-caption-caps text-[10px]\">NO INTERNAL CUSTODY</p>\n</div>\n</div>\n<div class=\"glass-panel p-6 rounded-xl md:col-span-1 flex flex-col justify-between border border-white/5\">\n<p class=\"font-caption-caps text-caption-caps text-on-surface-variant/40 uppercase tracking-widest\">Last Settlement</p>\n<div class=\"mt-4\">\n<p class=\"font-label-mono text-label-mono text-primary-fixed\">Pending</p>\n<p class=\"text-white font-bold tabular-nums\">Loaded on-chain</p>\n</div>\n</div>\n</section>\n</main>\n<!-- BottomNavBar -->\n<nav class=\"fixed bottom-0 left-0 right-0 m-gutter z-50 overflow-hidden bg-surface-container-high/80 backdrop-blur-xl border border-white/10 rounded-xl h-16 w-[calc(100%-32px)] mx-auto flex justify-around items-center shadow-[0_0_20px_rgba(153,69,255,0.1)]\">\n<a class=\"flex flex-col items-center justify-center text-secondary-fixed bg-white/5 rounded-lg py-1 px-4 shadow-[0_0_15px_rgba(0,227,139,0.2)] active:scale-90 transition-transform duration-100\" href=\"#\">\n<span class=\"material-symbols-outlined\" data-icon=\"home\" style=\"font-variation-settings: 'FILL' 1;\">home</span>\n<span class=\"font-caption-caps text-caption-caps\">Home</span>\n</a>\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-on-surface transition-colors active:scale-90 duration-100\" href=\"#\">\n<span class=\"material-symbols-outlined\" data-icon=\"reorder\">reorder</span>\n<span class=\"font-caption-caps text-caption-caps\">Pools</span>\n</a>\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-on-surface transition-colors active:scale-90 duration-100\" href=\"#\">\n<span class=\"material-symbols-outlined\" data-icon=\"analytics\">analytics</span>\n<span class=\"font-caption-caps text-caption-caps\">Activity</span>\n</a>\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-on-surface transition-colors active:scale-90 duration-100\" href=\"#\">\n<span class=\"material-symbols-outlined\" data-icon=\"account_balance_wallet\">account_balance_wallet</span>\n<span class=\"font-caption-caps text-caption-caps\">Wallet</span>\n</a>\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-on-surface transition-colors active:scale-90 duration-100\" href=\"#\">\n<span class=\"material-symbols-outlined\" data-icon=\"settings\">settings</span>\n<span class=\"font-caption-caps text-caption-caps\">Settings</span>\n</a>\n</nav>\n<script>\n        // Simple scale interactions\n        document.querySelectorAll('button, a').forEach(el => {\n            el.addEventListener('mousedown', () => el.style.transform = 'scale(0.95)');\n            el.addEventListener('mouseup', () => el.style.transform = '');\n            el.addEventListener('mouseleave', () => el.style.transform = '');\n        });\n    </script>\n</body></html>",
-  "pools": "<!DOCTYPE html>\n\n<html class=\"dark\" lang=\"en\"><head>\n<meta charset=\"utf-8\"/>\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>\n<script src=\"https://cdn.tailwindcss.com?plugins=forms,container-queries\"></script>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Geist:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap\" rel=\"stylesheet\"/>\n<style>\n        .material-symbols-outlined {\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\n        }\n        .glass-panel {\n            background: rgba(255, 255, 255, 0.03);\n            backdrop-filter: blur(20px);\n            border: 1px solid rgba(255, 255, 255, 0.12);\n        }\n        .glass-panel-heavy {\n            background: rgba(255, 255, 255, 0.06);\n            backdrop-filter: blur(40px);\n            border: 1px solid rgba(255, 255, 255, 0.2);\n        }\n        .liquid-progress {\n            background: conic-gradient(from 0deg, #d8b9ff, #00ec91, #d8b9ff);\n            mask: radial-gradient(transparent 62%, black 63%);\n            -webkit-mask: radial-gradient(transparent 62%, black 63%);\n        }\n        .glow-cyan {\n            box-shadow: 0 0 20px rgba(0, 236, 145, 0.2);\n        }\n        .glow-purple {\n            box-shadow: 0 0 20px rgba(216, 185, 255, 0.2);\n        }\n        @keyframes liquid-drift {\n            0% { transform: translateY(0) scale(1); }\n            50% { transform: translateY(-5px) scale(1.05); }\n            100% { transform: translateY(0) scale(1); }\n        }\n        .animate-liquid {\n            animation: liquid-drift 4s ease-in-out infinite;\n        }\n    </style>\n<script id=\"tailwind-config\">\n        tailwind.config = {\n            darkMode: \"class\",\n            theme: {\n                extend: {\n                    \"colors\": {\n                        \"surface-container-highest\": \"#323536\",\n                        \"on-secondary\": \"#00391f\",\n                        \"background\": \"#111415\",\n                        \"surface-bright\": \"#373a3b\",\n                        \"primary-fixed\": \"#eddcff\",\n                        \"on-error-container\": \"#ffdad6\",\n                        \"surface-glass\": \"rgba(255, 255, 255, 0.03)\",\n                        \"surface-container-high\": \"#282a2b\",\n                        \"error-container\": \"#93000a\",\n                        \"surface\": \"#111415\",\n                        \"inverse-on-surface\": \"#2e3132\",\n                        \"outline\": \"#978da1\",\n                        \"on-primary-fixed-variant\": \"#6300bb\",\n                        \"on-tertiary-fixed\": \"#1b1b1b\",\n                        \"on-secondary-container\": \"#00653b\",\n                        \"accent-green-glow\": \"#00e38b\",\n                        \"on-surface-variant\": \"#cec2d8\",\n                        \"on-primary-container\": \"#ffffff\",\n                        \"primary\": \"#d8b9ff\",\n                        \"secondary-fixed\": \"#56ffa8\",\n                        \"accent-purple-light\": \"#d8b9ff\",\n                        \"on-background\": \"#e1e3e4\",\n                        \"surface-main\": \"#000000\",\n                        \"surface-variant\": \"#323536\",\n                        \"on-primary\": \"#450086\",\n                        \"on-tertiary-fixed-variant\": \"#474747\",\n                        \"secondary-container\": \"#00ec91\",\n                        \"outline-variant\": \"#4c4355\",\n                        \"on-secondary-fixed\": \"#002110\",\n                        \"tertiary-fixed-dim\": \"#c6c6c6\",\n                        \"error\": \"#ffb4ab\",\n                        \"tertiary-container\": \"#767676\",\n                        \"primary-fixed-dim\": \"#d8b9ff\",\n                        \"on-surface\": \"#e1e3e4\",\n                        \"on-primary-fixed\": \"#290055\",\n                        \"on-error\": \"#690005\",\n                        \"surface-dim\": \"#111415\",\n                        \"inverse-primary\": \"#7f21e5\",\n                        \"on-tertiary-container\": \"#ffffff\",\n                        \"on-tertiary\": \"#303030\",\n                        \"surface-tint\": \"#d8b9ff\",\n                        \"tertiary-fixed\": \"#e2e2e2\",\n                        \"surface-container-low\": \"#191c1d\",\n                        \"tertiary\": \"#c6c6c6\",\n                        \"surface-container-lowest\": \"#0c0f10\",\n                        \"inverse-surface\": \"#e1e3e4\",\n                        \"primary-container\": \"#9945ff\",\n                        \"secondary-fixed-dim\": \"#00e38b\",\n                        \"on-secondary-fixed-variant\": \"#00522f\",\n                        \"surface-container\": \"#1d2021\",\n                        \"secondary\": \"#a0ffc3\",\n                        \"surface-glass-heavy\": \"rgba(255, 255, 255, 0.06)\"\n                    },\n                    \"borderRadius\": {\n                        \"DEFAULT\": \"0.25rem\",\n                        \"lg\": \"0.5rem\",\n                        \"xl\": \"0.75rem\",\n                        \"full\": \"9999px\"\n                    },\n                    \"spacing\": {\n                        \"gutter\": \"16px\",\n                        \"container-padding\": \"24px\",\n                        \"stack-lg\": \"32px\",\n                        \"unit\": \"8px\",\n                        \"stack-sm\": \"8px\",\n                        \"stack-md\": \"16px\",\n                        \"section-gap\": \"48px\"\n                    },\n                    \"fontFamily\": {\n                        \"display-lg-mobile\": [\"Inter\"],\n                        \"body-lg\": [\"Inter\"],\n                        \"headline-md\": [\"Inter\"],\n                        \"body-md\": [\"Inter\"],\n                        \"currency-xl\": [\"Geist\"],\n                        \"label-mono\": [\"Geist\"],\n                        \"display-lg\": [\"Inter\"],\n                        \"caption-caps\": [\"Geist\"]\n                    },\n                    \"fontSize\": {\n                        \"display-lg-mobile\": [\"36px\", {\"lineHeight\": \"42px\", \"letterSpacing\": \"-0.03em\", \"fontWeight\": \"700\"}],\n                        \"body-lg\": [\"18px\", {\"lineHeight\": \"28px\", \"fontWeight\": \"400\"}],\n                        \"headline-md\": [\"24px\", {\"lineHeight\": \"32px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"600\"}],\n                        \"body-md\": [\"16px\", {\"lineHeight\": \"24px\", \"fontWeight\": \"400\"}],\n                        \"currency-xl\": [\"40px\", {\"lineHeight\": \"48px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"700\"}],\n                        \"label-mono\": [\"14px\", {\"lineHeight\": \"20px\", \"letterSpacing\": \"0.05em\", \"fontWeight\": \"500\"}],\n                        \"display-lg\": [\"48px\", {\"lineHeight\": \"56px\", \"letterSpacing\": \"-0.04em\", \"fontWeight\": \"700\"}],\n                        \"caption-caps\": [\"10px\", {\"lineHeight\": \"12px\", \"letterSpacing\": \"0.1em\", \"fontWeight\": \"700\"}]\n                    }\n                }\n            }\n        }\n    </script>\n<style>\n        body {\n            min-height: max(884px, 100dvh);\n        }\n    </style>\n</head>\n<body class=\"bg-background text-on-background font-body-md selection:bg-primary/30\">\n<!-- Top Navigation Bar -->\n<header class=\"fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding h-16 bg-background/80 backdrop-blur-xl border-b border-white/10\">\n<button class=\"flex items-center text-primary hover:opacity-80 transition-opacity active:scale-95 duration-100\" onclick=\"window.history.back()\">\n<span class=\"material-symbols-outlined text-[28px]\">chevron_left</span>\n<span class=\"font-headline-md text-headline-md tracking-tighter -ml-1\">Pool Details</span>\n</button>\n<div class=\"px-3 py-1 rounded-full glass-panel flex items-center gap-2 border-white/10\">\n<div class=\"w-1.5 h-1.5 rounded-full bg-secondary glow-cyan\"></div>\n<span class=\"font-label-mono text-label-mono text-on-surface-variant\">Wallet</span>\n</div>\n</header>\n<main class=\"pt-24 pb-32 px-container-padding max-w-lg mx-auto overflow-x-hidden\">\n<!-- Header: Prize Amount -->\n<div class=\"flex flex-col items-center text-center mb-stack-lg\">\n<span class=\"font-label-mono text-label-mono text-secondary mb-1 uppercase tracking-widest\">Total Prize Pool</span>\n<h1 class=\"font-currency-xl text-currency-xl text-on-surface flex items-center gap-2\">\n                Pending <span class=\"text-primary\">SOL</span>\n</h1>\n</div>\n<!-- Progress Meter Section -->\n<div class=\"relative flex justify-center items-center mb-stack-lg\">\n<!-- Atmospheric Glow -->\n<div class=\"absolute w-48 h-48 bg-primary/10 rounded-full blur-[80px]\"></div>\n<!-- Circular Meter -->\n<div class=\"relative w-72 h-72 flex flex-col items-center justify-center\">\n<!-- Outer Liquid Ring -->\n<div class=\"absolute inset-0 rounded-full liquid-progress opacity-80 transition-transform duration-1000 ease-in-out ring-animate\"></div>\n<!-- Inner Glass Orb -->\n<div class=\"relative w-[85%] h-[85%] rounded-full glass-panel-heavy flex flex-col items-center justify-center shadow-2xl overflow-hidden border-white/20\">\n<div class=\"absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none\"></div>\n<span class=\"font-label-mono text-label-mono text-on-surface-variant/70 z-10\">Time Remaining</span>\n<span class=\"font-currency-xl text-currency-xl text-on-surface z-10 tabular-nums py-1\" id=\"countdown\">--</span>\n<div class=\"flex items-center gap-1.5 text-secondary font-label-mono text-label-mono z-10\">\n<span class=\"material-symbols-outlined text-[14px]\">timer</span>\n<span class=\"uppercase tracking-widest text-[10px]\">Live Round</span>\n</div>\n</div>\n</div>\n</div>\n<!-- Round Info Bento Section -->\n<div class=\"grid grid-cols-2 gap-4 mb-stack-lg\">\n<div class=\"glass-panel p-5 rounded-2xl flex flex-col gap-1 border-white/5\">\n<span class=\"font-label-mono text-[12px] uppercase tracking-wider text-on-surface-variant/50\">Tickets Sold</span>\n<span class=\"font-headline-md text-headline-md text-on-surface\">--</span>\n</div>\n<div class=\"glass-panel p-5 rounded-2xl flex flex-col gap-1 border-primary/20 glow-purple\">\n<span class=\"font-label-mono text-[12px] uppercase tracking-wider text-on-surface-variant/50\">Your Odds</span>\n<span class=\"font-headline-md text-headline-md text-primary\">--</span>\n</div>\n</div>\n<!-- Transparency Section -->\n<section class=\"space-y-4\">\n<div class=\"flex items-center justify-between\">\n<h3 class=\"font-headline-md text-headline-md text-on-surface\">Transparency</h3>\n<span class=\"material-symbols-outlined text-secondary\" style=\"font-variation-settings: 'FILL' 1;\">verified_user</span>\n</div>\n<div class=\"glass-panel rounded-2xl overflow-hidden border-white/5\">\n<div class=\"p-4 border-b border-white/5 flex items-center justify-between\">\n<span class=\"font-body-md text-on-surface-variant\">Program ID</span>\n<div class=\"flex items-center gap-2\">\n<span class=\"font-label-mono text-primary\">4bnd...krA3</span>\n<span class=\"material-symbols-outlined text-[18px] cursor-pointer hover:text-white transition-colors\">content_copy</span>\n</div>\n</div>\n<a class=\"p-4 border-b border-white/5 flex items-center justify-between hover:bg-white/5 transition-colors group\" href=\"#\">\n<span class=\"font-body-md text-on-surface-variant\">Solana Explorer</span>\n<span class=\"material-symbols-outlined text-[18px] text-on-surface-variant group-hover:text-secondary transition-colors\">open_in_new</span>\n</a>\n<div class=\"p-4 space-y-4\">\n<span class=\"font-body-md text-on-surface-variant\">Fee Split</span>\n<div class=\"space-y-3\">\n<div class=\"flex justify-between items-center\">\n<div class=\"flex items-center gap-2\">\n<div class=\"w-2 h-2 rounded-full bg-primary\"></div>\n<span class=\"font-label-mono\">Prize Pool</span>\n</div>\n<span class=\"font-label-mono text-on-surface\">98%</span>\n</div>\n<div class=\"w-full h-1.5 bg-white/5 rounded-full overflow-hidden\">\n<div class=\"h-full bg-primary rounded-full shadow-[0_0_8px_rgba(216,185,255,0.5)]\" style=\"width: 98%\"></div>\n</div>\n<div class=\"grid grid-cols-2 gap-4 pt-1\">\n<div class=\"flex justify-between items-center bg-white/5 rounded-lg px-3 py-1.5\">\n<span class=\"font-label-mono text-[12px] text-on-surface-variant/60 uppercase\">Treasury</span>\n<span class=\"font-label-mono\">1%</span>\n</div>\n<div class=\"flex justify-between items-center bg-white/5 rounded-lg px-3 py-1.5\">\n<span class=\"font-label-mono text-[12px] text-on-surface-variant/60 uppercase\">Jackpot</span>\n<span class=\"font-label-mono\">1%</span>\n</div>\n</div>\n</div>\n</div>\n</div>\n<p class=\"font-label-mono text-[12px] text-on-surface-variant/40 text-center px-4 leading-relaxed\">\n                Powered by Solana Program Library. All entries are final and recorded on-chain.\n            </p>\n</section>\n</main>\n<!-- Fixed Bottom CTA -->\n<div class=\"fixed bottom-0 left-0 w-full p-container-padding z-50\">\n<div class=\"max-w-lg mx-auto\">\n<div class=\"glass-panel-heavy p-2 rounded-[24px] border-white/20 shadow-2xl\">\n<button class=\"w-full h-16 bg-gradient-to-r from-primary-container via-[#b27dff] to-secondary-container rounded-[20px] flex items-center justify-center gap-4 active:scale-[0.98] transition-all duration-150 shadow-[0_8px_24px_rgba(153,69,255,0.4)] group\">\n<span class=\"font-headline-md text-headline-md text-on-primary-container\">Join Pool</span>\n<div class=\"w-[1.5px] h-8 bg-white/20\"></div>\n<span class=\"font-headline-md text-headline-md text-on-primary-container\">0.01 SOL</span>\n</button>\n</div>\n</div>\n</div>\n<!-- Micro-interaction: Countdown Timer and Rotation -->\n<script>\n        const timerElement = document.getElementById('countdown');\n        let totalSeconds = 4 * 60 + 12;\n\n        function updateTimer() {\n            const minutes = Math.floor(totalSeconds / 60);\n            const seconds = totalSeconds % 60;\n            timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;\n            if (totalSeconds > 0) {\n                totalSeconds--;\n            } else {\n                totalSeconds = 4 * 60 + 12; // Loop for demo\n            }\n        }\n\n        setInterval(updateTimer, 1000);\n\n        // Circular rotation animation logic\n        const ring = document.querySelector('.liquid-progress');\n        let rotation = 0;\n        function rotateRing() {\n            rotation += 0.4; // Slightly slower, smoother rotation\n            ring.style.transform = `rotate(${rotation}deg)`;\n            requestAnimationFrame(rotateRing);\n        }\n        rotateRing();\n    </script>\n</body></html>",
-  "activity": "<!DOCTYPE html>\n\n<html class=\"dark\" lang=\"en\"><head>\n<meta charset=\"utf-8\"/>\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>\n<title>LuckyMe | Activity</title>\n<script src=\"https://cdn.tailwindcss.com?plugins=forms,container-queries\"></script>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Geist:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap\" rel=\"stylesheet\"/>\n<style>\n        .glass-panel {\n            background: rgba(255, 255, 255, 0.03);\n            backdrop-filter: blur(20px);\n            -webkit-backdrop-filter: blur(20px);\n            border: 1px solid rgba(255, 255, 255, 0.08);\n        }\n        .glass-card {\n            background: rgba(255, 255, 255, 0.04);\n            backdrop-filter: blur(12px);\n            -webkit-backdrop-filter: blur(12px);\n            border: 1px solid rgba(255, 255, 255, 0.1);\n        }\n        .primary-gradient {\n            background: linear-gradient(135deg, #9945ff 0%, #d8b9ff 100%);\n        }\n        body {\n            background-color: #0c0f10;\n            color: #e1e3e4;\n            overflow-x: hidden;\n        }\n        .no-scrollbar::-webkit-scrollbar {\n            display: none;\n        }\n        .material-symbols-outlined {\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\n        }\n        .status-success {\n            background: rgba(16, 185, 129, 0.1);\n            color: #10b981;\n            border: 1px solid rgba(16, 185, 129, 0.2);\n        }\n        .status-error {\n            background: rgba(239, 68, 68, 0.1);\n            color: #ef4444;\n            border: 1px solid rgba(239, 68, 68, 0.2);\n        }\n        .cyan-glow {\n            color: #00f2ff;\n            text-shadow: 0 0 8px rgba(0, 242, 255, 0.3);\n        }\n    </style>\n<script id=\"tailwind-config\">\n        tailwind.config = {\n          darkMode: \"class\",\n          theme: {\n            extend: {\n              \"colors\": {\n                      \"on-tertiary-fixed-variant\": \"#474747\",\n                      \"surface-container\": \"#1d2021\",\n                      \"on-secondary-fixed-variant\": \"#00522f\",\n                      \"outline-variant\": \"#4c4355\",\n                      \"on-error\": \"#690005\",\n                      \"on-secondary\": \"#00391f\",\n                      \"inverse-on-surface\": \"#2e3132\",\n                      \"inverse-primary\": \"#7f21e5\",\n                      \"tertiary-fixed-dim\": \"#c6c6c6\",\n                      \"on-tertiary\": \"#303030\",\n                      \"on-tertiary-container\": \"#ffffff\",\n                      \"background\": \"#111415\",\n                      \"on-background\": \"#e1e3e4\",\n                      \"on-surface\": \"#e1e3e4\",\n                      \"primary\": \"#d8b9ff\",\n                      \"on-primary-fixed-variant\": \"#6300bb\",\n                      \"surface\": \"#111415\",\n                      \"on-primary\": \"#450086\",\n                      \"tertiary-fixed\": \"#e2e2e2\",\n                      \"primary-container\": \"#9945ff\",\n                      \"tertiary\": \"#c6c6c6\",\n                      \"surface-container-lowest\": \"#0c0f10\",\n                      \"surface-container-highest\": \"#323536\",\n                      \"error-container\": \"#93000a\",\n                      \"secondary-fixed\": \"#56ffa8\",\n                      \"on-secondary-container\": \"#00653b\",\n                      \"outline\": \"#978da1\",\n                      \"surface-container-low\": \"#191c1d\",\n                      \"tertiary-container\": \"#767676\",\n                      \"inverse-surface\": \"#e1e3e4\",\n                      \"primary-fixed\": \"#eddcff\",\n                      \"on-primary-fixed\": \"#290055\",\n                      \"error\": \"#ffb4ab\",\n                      \"on-tertiary-fixed\": \"#1b1b1b\",\n                      \"on-error-container\": \"#ffdad6\",\n                      \"surface-variant\": \"#323536\",\n                      \"secondary\": \"#a0ffc3\",\n                      \"secondary-fixed-dim\": \"#00e38b\",\n                      \"surface-dim\": \"#111415\",\n                      \"secondary-container\": \"#00ec91\",\n                      \"surface-container-high\": \"#282a2b\",\n                      \"surface-bright\": \"#373a3b\",\n                      \"on-primary-container\": \"#ffffff\",\n                      \"primary-fixed-dim\": \"#d8b9ff\",\n                      \"on-secondary-fixed\": \"#002110\",\n                      \"surface-tint\": \"#d8b9ff\",\n                      \"on-surface-variant\": \"#cec2d8\"\n              },\n              \"borderRadius\": {\n                      \"DEFAULT\": \"0.25rem\",\n                      \"lg\": \"0.5rem\",\n                      \"xl\": \"0.75rem\",\n                      \"full\": \"9999px\"\n              },\n              \"spacing\": {\n                      \"unit\": \"8px\",\n                      \"stack-lg\": \"32px\",\n                      \"stack-md\": \"16px\",\n                      \"gutter\": \"16px\",\n                      \"container-padding\": \"24px\",\n                      \"stack-sm\": \"8px\"\n              },\n              \"fontFamily\": {\n                      \"label-mono\": [\"Geist\"],\n                      \"currency-xl\": [\"Geist\"],\n                      \"headline-md\": [\"Inter\"],\n                      \"body-lg\": [\"Inter\"],\n                      \"display-lg-mobile\": [\"Inter\"],\n                      \"display-lg\": [\"Inter\"],\n                      \"body-md\": [\"Inter\"]\n              },\n              \"fontSize\": {\n                      \"label-mono\": [\"14px\", {\"lineHeight\": \"20px\", \"letterSpacing\": \"0.05em\", \"fontWeight\": \"500\"}],\n                      \"currency-xl\": [\"40px\", {\"lineHeight\": \"48px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"700\"}],\n                      \"headline-md\": [\"24px\", {\"lineHeight\": \"32px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"600\"}],\n                      \"body-lg\": [\"18px\", {\"lineHeight\": \"28px\", \"fontWeight\": \"400\"}],\n                      \"display-lg-mobile\": [\"36px\", {\"lineHeight\": \"42px\", \"letterSpacing\": \"-0.03em\", \"fontWeight\": \"700\"}],\n                      \"display-lg\": [\"48px\", {\"lineHeight\": \"56px\", \"letterSpacing\": \"-0.04em\", \"fontWeight\": \"700\"}],\n                      \"body-md\": [\"16px\", {\"lineHeight\": \"24px\", \"fontWeight\": \"400\"}]\n              }\n            },\n          },\n        }\n      </script>\n</head>\n<body class=\"bg-background text-on-background font-body-md text-body-md antialiased\">\n<!-- Top App Bar -->\n<header class=\"fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding h-16 bg-background/80 backdrop-blur-xl border-b border-white/5\">\n<div class=\"flex items-center gap-2\">\n<span class=\"material-symbols-outlined text-primary text-headline-md\" style=\"font-variation-settings: 'FILL' 1;\">token</span>\n<span class=\"font-headline-md text-headline-md text-primary tracking-tighter\">LuckyMe</span>\n</div>\n<div class=\"glass-panel px-3 py-1 rounded-full flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer border-white/10\">\n<div class=\"w-1.5 h-1.5 rounded-full bg-secondary-fixed shadow-[0_0_8px_rgba(86,255,168,0.6)]\"></div>\n<span class=\"font-label-mono text-label-mono text-on-surface-variant\">Wallet</span>\n</div>\n</header>\n<!-- Content Canvas -->\n<main class=\"pt-24 pb-32 px-container-padding max-w-xl mx-auto min-h-screen\">\n<!-- Header Section -->\n<section class=\"mb-stack-lg\">\n<h1 class=\"font-display-lg-mobile text-display-lg-mobile md:font-display-lg md:text-display-lg text-on-surface mb-2\">Activity</h1>\n<p class=\"text-on-surface-variant/70 font-body-md\">Your confirmed wallet activity appears here.</p>\n</section>\n<!-- Filter Chips -->\n<div class=\"flex gap-2 mb-stack-md overflow-x-auto no-scrollbar pb-2\">\n<button class=\"px-6 py-2 rounded-full font-label-mono text-label-mono bg-primary text-on-primary shadow-[0_4px_12px_rgba(216,185,255,0.3)] transition-all active:scale-95\">All</button>\n<button class=\"px-6 py-2 rounded-full font-label-mono text-label-mono glass-panel border-white/10 text-on-surface-variant hover:bg-white/5 transition-all active:scale-95\">Wins</button>\n<button class=\"px-6 py-2 rounded-full font-label-mono text-label-mono glass-panel border-white/10 text-on-surface-variant hover:bg-white/5 transition-all active:scale-95\">Entries</button>\n</div>\n<!-- Activity List -->\n<div class=\"space-y-4\">\n<!-- Item 1: Joined Pool -->\n<div class=\"glass-card rounded-xl p-4 flex flex-col gap-4 transition-transform active:scale-[0.98]\">\n<div class=\"flex justify-between items-start\">\n<div class=\"flex items-center gap-4\">\n<div class=\"w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20\">\n<span class=\"material-symbols-outlined text-[28px]\">add_circle</span>\n</div>\n<div>\n<p class=\"font-headline-md text-body-lg text-on-surface\">No confirmed entry</p>\n<span class=\"inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-bold tracking-widest uppercase status-success\">PENDING</span>\n</div>\n</div>\n<div class=\"text-right\">\n<p class=\"font-label-mono text-body-lg font-bold text-on-surface\">Pending</p>\n<p class=\"text-[12px] text-on-surface-variant/50 mt-0.5\">--</p>\n</div>\n</div>\n<div class=\"flex justify-between items-center border-t border-white/5 pt-3\">\n<div class=\"flex items-center gap-1.5 opacity-60\">\n<span class=\"material-symbols-outlined text-[14px]\">verified</span>\n<span class=\"text-[12px] font-label-mono\">Pending</span>\n</div>\n<a class=\"cyan-glow font-label-mono text-[13px] flex items-center gap-1 hover:brightness-110 transition-all\" href=\"#\">\n                        View <span class=\"material-symbols-outlined text-[16px]\">open_in_new</span>\n</a>\n</div>\n</div>\n<!-- Item 2: Won Pool -->\n<div class=\"glass-card rounded-xl p-4 flex flex-col gap-4 relative overflow-hidden transition-transform active:scale-[0.98]\">\n<div class=\"absolute top-0 right-0 w-32 h-32 bg-secondary/5 blur-3xl pointer-events-none\"></div>\n<div class=\"flex justify-between items-start relative z-10\">\n<div class=\"flex items-center gap-4\">\n<div class=\"w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary border border-secondary/20\">\n<span class=\"material-symbols-outlined text-[28px]\">emoji_events</span>\n</div>\n<div>\n<p class=\"font-headline-md text-body-lg text-on-surface\">No confirmed win</p>\n<span class=\"inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-bold tracking-widest uppercase status-success\">PENDING</span>\n</div>\n</div>\n<div class=\"text-right\">\n<p class=\"font-label-mono text-body-lg font-bold text-secondary\">Pending</p>\n<p class=\"text-[12px] text-on-surface-variant/50 mt-0.5\">--</p>\n</div>\n</div>\n<div class=\"flex justify-between items-center border-t border-white/5 pt-3 relative z-10\">\n<div class=\"flex items-center gap-1.5 opacity-60\">\n<span class=\"material-symbols-outlined text-[14px]\">verified</span>\n<span class=\"text-[12px] font-label-mono\">Pending</span>\n</div>\n<a class=\"cyan-glow font-label-mono text-[13px] flex items-center gap-1 hover:brightness-110 transition-all\" href=\"#\">\n                        View <span class=\"material-symbols-outlined text-[16px]\">open_in_new</span>\n</a>\n</div>\n</div>\n<!-- Item 3: Error -->\n<div class=\"glass-card rounded-xl p-4 flex flex-col gap-4 transition-transform active:scale-[0.98]\">\n<div class=\"flex justify-between items-start\">\n<div class=\"flex items-center gap-4\">\n<div class=\"w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20\">\n<span class=\"material-symbols-outlined text-[28px]\">pending</span>\n</div>\n<div>\n<p class=\"font-headline-md text-body-lg text-on-surface\">Wallet Event</p>\n<span class=\"inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-bold tracking-widest uppercase status-error\">PENDING</span>\n</div>\n</div>\n<div class=\"text-right\">\n<p class=\"font-label-mono text-body-lg font-bold text-on-surface-variant/40\">Pending</p>\n<p class=\"text-[12px] text-on-surface-variant/50 mt-0.5\">--</p>\n</div>\n</div>\n<div class=\"flex justify-between items-center border-t border-white/5 pt-3\">\n<div class=\"flex items-center gap-1.5\">\n<span class=\"text-[12px] text-on-surface-variant/70 font-body-md font-medium italic\">Wallet status pending</span>\n</div>\n<a class=\"cyan-glow font-label-mono text-[13px] flex items-center gap-1 hover:brightness-110 transition-all\" href=\"#\">\n                        View <span class=\"material-symbols-outlined text-[16px]\">open_in_new</span>\n</a>\n</div>\n</div>\n<!-- Item 4: Joined Pool (Previous) -->\n<div class=\"glass-card rounded-xl p-4 flex flex-col gap-4 transition-transform active:scale-[0.98] opacity-80\">\n<div class=\"flex justify-between items-start\">\n<div class=\"flex items-center gap-4\">\n<div class=\"w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20\">\n<span class=\"material-symbols-outlined text-[28px]\">add_circle</span>\n</div>\n<div>\n<p class=\"font-headline-md text-body-lg text-on-surface\">No confirmed entry</p>\n<span class=\"inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-bold tracking-widest uppercase status-success\">PENDING</span>\n</div>\n</div>\n<div class=\"text-right\">\n<p class=\"font-label-mono text-body-lg font-bold text-on-surface\">Pending</p>\n<p class=\"text-[12px] text-on-surface-variant/50 mt-0.5\">--</p>\n</div>\n</div>\n<div class=\"flex justify-between items-center border-t border-white/5 pt-3\">\n<div class=\"flex items-center gap-1.5 opacity-60\">\n<span class=\"material-symbols-outlined text-[14px]\">verified</span>\n<span class=\"text-[12px] font-label-mono\">Pending</span>\n</div>\n<a class=\"cyan-glow font-label-mono text-[13px] flex items-center gap-1 hover:brightness-110 transition-all\" href=\"#\">\n                        View <span class=\"material-symbols-outlined text-[16px]\">open_in_new</span>\n</a>\n</div>\n</div>\n</div>\n<!-- Atmospheric Background Element -->\n<div class=\"fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[140px] pointer-events-none -z-10\"></div>\n</main>\n<!-- Bottom Navigation Bar -->\n<nav class=\"fixed bottom-6 left-4 right-4 z-50 flex justify-around items-center h-16 px-2 bg-surface-container/30 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.5)]\">\n<!-- Home -->\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/60 py-1 px-3 hover:text-primary/80 transition-all active:scale-90 duration-200\" href=\"#\">\n<span class=\"material-symbols-outlined\">home</span>\n<span class=\"font-label-mono text-[10px] mt-1\">Home</span>\n</a>\n<!-- Pools -->\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/60 py-1 px-3 hover:text-primary/80 transition-all active:scale-90 duration-200\" href=\"#\">\n<span class=\"material-symbols-outlined\">rebase</span>\n<span class=\"font-label-mono text-[10px] mt-1\">Pools</span>\n</a>\n<!-- Activity (ACTIVE) -->\n<a class=\"flex flex-col items-center justify-center text-primary bg-primary/10 rounded-xl py-1 px-4 shadow-[0_0_20px_rgba(216,185,255,0.2)] active:scale-95 duration-200\" href=\"#\">\n<span class=\"material-symbols-outlined\" style=\"font-variation-settings: 'FILL' 1;\">history</span>\n<span class=\"font-label-mono text-[10px] mt-1\">Activity</span>\n</a>\n<!-- Wallet -->\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/60 py-1 px-3 hover:text-primary/80 transition-all active:scale-90 duration-200\" href=\"#\">\n<span class=\"material-symbols-outlined\">account_balance_wallet</span>\n<span class=\"font-label-mono text-[10px] mt-1\">Wallet</span>\n</a>\n<!-- Settings -->\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/60 py-1 px-3 hover:text-primary/80 transition-all active:scale-90 duration-200\" href=\"#\">\n<span class=\"material-symbols-outlined\">settings</span>\n<span class=\"font-label-mono text-[10px] mt-1\">Settings</span>\n</a>\n</nav>\n<script>\n        const filterButtons = document.querySelectorAll('.flex.gap-2 button');\n        filterButtons.forEach(btn => {\n            btn.addEventListener('click', () => {\n                filterButtons.forEach(b => {\n                    b.classList.remove('bg-primary', 'text-on-primary', 'shadow-[0_4px_12px_rgba(216,185,255,0.3)]');\n                    b.classList.add('glass-panel', 'text-on-surface-variant');\n                });\n                btn.classList.add('bg-primary', 'text-on-primary', 'shadow-[0_4px_12px_rgba(216,185,255,0.3)]');\n                btn.classList.remove('glass-panel', 'text-on-surface-variant');\n            });\n        });\n        \n        document.addEventListener('mousemove', (e) => {\n            const glow = document.querySelector('.bg-primary\\\\/5.rounded-full.blur-\\\\[140px\\\\]');\n            if (glow) {\n                const moveX = (e.clientX - window.innerWidth / 2) * 0.03;\n                const moveY = (e.clientY - window.innerHeight / 2) * 0.03;\n                glow.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;\n            }\n        });\n    </script>\n</body></html>",
-  "wallet": "<!DOCTYPE html>\n<html class=\"dark\" lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\" />\n<title>LuckyMe Wallet</title>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Geist:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap\" rel=\"stylesheet\" />\n<style>\n  :root { color-scheme: dark; }\n  * { box-sizing: border-box; }\n  html, body { width: 100%; overflow-x: hidden; }\n  body {\n    min-height: 100dvh;\n    margin: 0;\n    background: #0c0f10;\n    color: #e1e3e4;\n    font-family: Inter, system-ui, sans-serif;\n    -webkit-font-smoothing: antialiased;\n  }\n  body::before {\n    content: \"\";\n    position: fixed;\n    inset: 0;\n    pointer-events: none;\n    background:\n      radial-gradient(circle at 18% 10%, rgba(216,185,255,0.10), transparent 28%),\n      radial-gradient(circle at 86% 18%, rgba(0,236,145,0.07), transparent 30%),\n      linear-gradient(180deg, rgba(255,255,255,0.04), transparent 36%);\n  }\n  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }\n  .topbar {\n    position: fixed;\n    z-index: 20;\n    top: 0;\n    left: 0;\n    right: 0;\n    height: 76px;\n    padding: 18px 24px;\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    gap: 12px;\n    min-width: 0;\n    background: rgba(12,15,16,0.86);\n    border-bottom: 1px solid rgba(255,255,255,0.08);\n    backdrop-filter: blur(24px);\n  }\n  .brand {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    min-width: 0;\n    flex-shrink: 1;\n    color: #d8b9ff;\n    font-size: 28px;\n    line-height: 1;\n    font-weight: 800;\n  }\n  .brand-icon { font-size: 28px; }\n  .chip {\n    min-height: 40px;\n    max-width: 46vw;\n    padding: 0 16px;\n    display: inline-flex;\n    align-items: center;\n    gap: 8px;\n    flex-shrink: 1;\n    overflow: hidden;\n    white-space: nowrap;\n    border-radius: 999px;\n    color: #cec2d8;\n    font-family: Geist, monospace;\n    font-size: 14px;\n    border: 1px solid rgba(255,255,255,0.12);\n    background: rgba(255,255,255,0.05);\n  }\n  .chip span:last-child { overflow: hidden; text-overflow: ellipsis; }\n  .chip-primary { color: #d8b9ff; border-color: rgba(216,185,255,0.28); }\n  .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 999px; background: #00ec91; box-shadow: 0 0 14px rgba(0,236,145,0.9); }\n  main { position: relative; z-index: 1; width: 100%; max-width: 720px; margin: 0 auto; padding: 104px 24px 116px; }\n  .stack { display: grid; gap: 18px; }\n  .hero-card, .panel {\n    width: 100%;\n    border: 1px solid rgba(255,255,255,0.11);\n    background: rgba(255,255,255,0.045);\n    border-radius: 28px;\n    backdrop-filter: blur(24px);\n    box-shadow: 0 24px 60px rgba(0,0,0,0.28);\n  }\n  .hero-card { padding: 30px; overflow: hidden; }\n  .hero-card.compact { padding: 26px; }\n  .panel { padding: 22px; overflow: hidden; }\n  .kicker {\n    margin: 0 0 12px;\n    color: rgba(206,194,216,0.62);\n    font-family: Geist, monospace;\n    font-size: 11px;\n    letter-spacing: 0.14em;\n    text-transform: uppercase;\n  }\n  h1, h2, p { margin: 0; overflow-wrap: anywhere; }\n  h1 { color: #fff; font-size: 36px; line-height: 1.08; font-weight: 800; }\n  h2 { color: #fff; font-size: 22px; line-height: 1.18; font-weight: 700; }\n  p { color: #cec2d8; font-size: 16px; line-height: 1.55; }\n  .muted { color: rgba(206,194,216,0.68); }\n  .row { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; }\n  .row-left { display: flex; align-items: center; gap: 14px; min-width: 0; }\n  .icon-box {\n    width: 46px;\n    height: 46px;\n    flex: 0 0 auto;\n    display: grid;\n    place-items: center;\n    border-radius: 16px;\n    color: #d8b9ff;\n    background: rgba(216,185,255,0.11);\n    border: 1px solid rgba(216,185,255,0.16);\n  }\n  .value { color: #fff; font-family: Geist, monospace; font-size: 14px; text-align: right; }\n  .success { color: #56ffa8; }\n  .warning { color: #fbbf24; }\n  .divider { height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0; }\n  .primary-button, .secondary-button {\n    width: 100%;\n    min-height: 56px;\n    border: 0;\n    border-radius: 18px;\n    font: 700 16px Inter, system-ui, sans-serif;\n  }\n  .primary-button { color: #240052; background: linear-gradient(135deg, #9945ff, #d8b9ff); box-shadow: 0 18px 38px rgba(153,69,255,0.24); }\n  .secondary-button { color: #d8b9ff; background: rgba(216,185,255,0.08); border: 1px solid rgba(216,185,255,0.18); }\n  .bottom-nav {\n    position: fixed;\n    z-index: 20;\n    left: 16px;\n    right: 16px;\n    bottom: 18px;\n    height: 70px;\n    display: grid;\n    grid-template-columns: repeat(5, 1fr);\n    align-items: center;\n    padding: 8px;\n    border-radius: 22px;\n    border: 1px solid rgba(255,255,255,0.12);\n    background: rgba(29,32,33,0.82);\n    backdrop-filter: blur(28px);\n  }\n  .nav-item {\n    min-width: 0;\n    height: 54px;\n    display: grid;\n    place-items: center;\n    gap: 2px;\n    border: 0;\n    border-radius: 16px;\n    color: rgba(206,194,216,0.62);\n    background: transparent;\n    font: 500 11px Geist, monospace;\n  }\n  .nav-item .material-symbols-outlined { font-size: 25px; }\n  .nav-item.active { color: #d8b9ff; background: rgba(216,185,255,0.11); box-shadow: inset 0 0 0 1px rgba(216,185,255,0.16); }\n  @media (max-width: 420px) {\n    .brand { font-size: 24px; }\n    .topbar { padding-left: 18px; padding-right: 18px; }\n    main { padding-left: 18px; padding-right: 18px; }\n    h1 { font-size: 32px; }\n    .chip { padding: 0 12px; }\n    .hero-card > .row { align-items: flex-start; }\n    .hero-card > .row > .icon-box { display: none; }\n  }\n</style>\n</head>\n<body>\n<header class=\"topbar\">\n  <div class=\"brand\"><span class=\"material-symbols-outlined brand-icon\">token</span><span>LuckyMe</span></div>\n  <div class=\"chip chip-primary\"><span class=\"material-symbols-outlined\">account_balance_wallet</span><span>External</span></div>\n</header>\n<main class=\"stack\">\n  <section class=\"hero-card\">\n    <p class=\"kicker\">Wallet Connection</p>\n    <div class=\"row\">\n      <div>\n        <h1>External Solana Wallet</h1>\n        <p class=\"muted\" style=\"margin-top: 12px;\">No internal balance, custody, or transfer controls are shown in LuckyMe.</p>\n      </div>\n      <div class=\"icon-box\" style=\"width: 68px; height: 68px; border-radius: 22px;\"><span class=\"material-symbols-outlined\" style=\"font-size: 34px;\">account_balance_wallet</span></div>\n    </div>\n  </section>\n  <section class=\"panel stack\">\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">verified_user</span></div><div><h2>Mainnet Chain</h2><p class=\"muted\">solana:mainnet</p></div></div>\n      <span class=\"value success\">Required</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">key</span></div><div><h2>Signing</h2><p class=\"muted\">Player transactions stay in the connected wallet.</p></div></div>\n      <span class=\"value\">External</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">lock</span></div><div><h2>Custody</h2><p class=\"muted\">LuckyMe never stores private keys or recovery phrases.</p></div></div>\n      <span class=\"value success\">Non-custodial</span>\n    </div>\n  </section>\n  <section class=\"panel\">\n    <p class=\"kicker\">Live Wallet State</p>\n    <h2>External wallet review required.</h2>\n    <p class=\"muted\" style=\"margin-top: 10px;\">LuckyMe only prepares game entries for wallet-side approval.</p>\n  </section>\n</main>\n<nav class=\"bottom-nav\">\n  <button class=\"nav-item \"><span class=\"material-symbols-outlined\">home</span><span>Home</span></button>\n  <button class=\"nav-item \"><span class=\"material-symbols-outlined\">rebase</span><span>Pools</span></button>\n  <button class=\"nav-item \"><span class=\"material-symbols-outlined\">history</span><span>Activity</span></button>\n  <button class=\"nav-item active\"><span class=\"material-symbols-outlined\">account_balance_wallet</span><span>Wallet</span></button>\n  <button class=\"nav-item \"><span class=\"material-symbols-outlined\">settings</span><span>Settings</span></button>\n</nav>\n</body>\n</html>",
-  "settings": "<!DOCTYPE html>\n<html class=\"dark\" lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\" />\n<title>LuckyMe Settings</title>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Geist:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap\" rel=\"stylesheet\" />\n<style>\n  :root { color-scheme: dark; }\n  * { box-sizing: border-box; }\n  html, body { width: 100%; overflow-x: hidden; }\n  body {\n    min-height: 100dvh;\n    margin: 0;\n    background: #0c0f10;\n    color: #e1e3e4;\n    font-family: Inter, system-ui, sans-serif;\n    -webkit-font-smoothing: antialiased;\n  }\n  body::before {\n    content: \"\";\n    position: fixed;\n    inset: 0;\n    pointer-events: none;\n    background:\n      radial-gradient(circle at 18% 10%, rgba(216,185,255,0.10), transparent 28%),\n      radial-gradient(circle at 86% 18%, rgba(0,236,145,0.07), transparent 30%),\n      linear-gradient(180deg, rgba(255,255,255,0.04), transparent 36%);\n  }\n  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }\n  .topbar {\n    position: fixed;\n    z-index: 20;\n    top: 0;\n    left: 0;\n    right: 0;\n    height: 76px;\n    padding: 18px 24px;\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    gap: 12px;\n    min-width: 0;\n    background: rgba(12,15,16,0.86);\n    border-bottom: 1px solid rgba(255,255,255,0.08);\n    backdrop-filter: blur(24px);\n  }\n  .brand {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    min-width: 0;\n    flex-shrink: 1;\n    color: #d8b9ff;\n    font-size: 28px;\n    line-height: 1;\n    font-weight: 800;\n  }\n  .brand-icon { font-size: 28px; }\n  .chip {\n    min-height: 40px;\n    max-width: 46vw;\n    padding: 0 16px;\n    display: inline-flex;\n    align-items: center;\n    gap: 8px;\n    flex-shrink: 1;\n    overflow: hidden;\n    white-space: nowrap;\n    border-radius: 999px;\n    color: #cec2d8;\n    font-family: Geist, monospace;\n    font-size: 14px;\n    border: 1px solid rgba(255,255,255,0.12);\n    background: rgba(255,255,255,0.05);\n  }\n  .chip span:last-child { overflow: hidden; text-overflow: ellipsis; }\n  .chip-primary { color: #d8b9ff; border-color: rgba(216,185,255,0.28); }\n  .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 999px; background: #00ec91; box-shadow: 0 0 14px rgba(0,236,145,0.9); }\n  main { position: relative; z-index: 1; width: 100%; max-width: 720px; margin: 0 auto; padding: 104px 24px 116px; }\n  .stack { display: grid; gap: 18px; }\n  .hero-card, .panel {\n    width: 100%;\n    border: 1px solid rgba(255,255,255,0.11);\n    background: rgba(255,255,255,0.045);\n    border-radius: 28px;\n    backdrop-filter: blur(24px);\n    box-shadow: 0 24px 60px rgba(0,0,0,0.28);\n  }\n  .hero-card { padding: 30px; overflow: hidden; }\n  .hero-card.compact { padding: 26px; }\n  .panel { padding: 22px; overflow: hidden; }\n  .kicker {\n    margin: 0 0 12px;\n    color: rgba(206,194,216,0.62);\n    font-family: Geist, monospace;\n    font-size: 11px;\n    letter-spacing: 0.14em;\n    text-transform: uppercase;\n  }\n  h1, h2, p { margin: 0; overflow-wrap: anywhere; }\n  h1 { color: #fff; font-size: 36px; line-height: 1.08; font-weight: 800; }\n  h2 { color: #fff; font-size: 22px; line-height: 1.18; font-weight: 700; }\n  p { color: #cec2d8; font-size: 16px; line-height: 1.55; }\n  .muted { color: rgba(206,194,216,0.68); }\n  .row { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; }\n  .row-left { display: flex; align-items: center; gap: 14px; min-width: 0; }\n  .icon-box {\n    width: 46px;\n    height: 46px;\n    flex: 0 0 auto;\n    display: grid;\n    place-items: center;\n    border-radius: 16px;\n    color: #d8b9ff;\n    background: rgba(216,185,255,0.11);\n    border: 1px solid rgba(216,185,255,0.16);\n  }\n  .value { color: #fff; font-family: Geist, monospace; font-size: 14px; text-align: right; }\n  .success { color: #56ffa8; }\n  .warning { color: #fbbf24; }\n  .divider { height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0; }\n  .primary-button, .secondary-button {\n    width: 100%;\n    min-height: 56px;\n    border: 0;\n    border-radius: 18px;\n    font: 700 16px Inter, system-ui, sans-serif;\n  }\n  .primary-button { color: #240052; background: linear-gradient(135deg, #9945ff, #d8b9ff); box-shadow: 0 18px 38px rgba(153,69,255,0.24); }\n  .secondary-button { color: #d8b9ff; background: rgba(216,185,255,0.08); border: 1px solid rgba(216,185,255,0.18); }\n  .bottom-nav {\n    position: fixed;\n    z-index: 20;\n    left: 16px;\n    right: 16px;\n    bottom: 18px;\n    height: 70px;\n    display: grid;\n    grid-template-columns: repeat(5, 1fr);\n    align-items: center;\n    padding: 8px;\n    border-radius: 22px;\n    border: 1px solid rgba(255,255,255,0.12);\n    background: rgba(29,32,33,0.82);\n    backdrop-filter: blur(28px);\n  }\n  .nav-item {\n    min-width: 0;\n    height: 54px;\n    display: grid;\n    place-items: center;\n    gap: 2px;\n    border: 0;\n    border-radius: 16px;\n    color: rgba(206,194,216,0.62);\n    background: transparent;\n    font: 500 11px Geist, monospace;\n  }\n  .nav-item .material-symbols-outlined { font-size: 25px; }\n  .nav-item.active { color: #d8b9ff; background: rgba(216,185,255,0.11); box-shadow: inset 0 0 0 1px rgba(216,185,255,0.16); }\n  @media (max-width: 420px) {\n    .brand { font-size: 24px; }\n    .topbar { padding-left: 18px; padding-right: 18px; }\n    main { padding-left: 18px; padding-right: 18px; }\n    h1 { font-size: 32px; }\n    .chip { padding: 0 12px; }\n    .hero-card > .row { align-items: flex-start; }\n    .hero-card > .row > .icon-box { display: none; }\n  }\n</style>\n</head>\n<body>\n<header class=\"topbar\">\n  <div class=\"brand\"><span class=\"material-symbols-outlined brand-icon\">token</span><span>LuckyMe</span></div>\n  <div class=\"chip\"><span class=\"status-dot\"></span><span>Mainnet</span></div>\n</header>\n<main class=\"stack\">\n  <section class=\"hero-card compact\">\n    <p class=\"kicker\">Settings</p>\n    <h1>LuckyMe</h1>\n    <p class=\"muted\" style=\"margin-top: 10px;\">Mainnet release configuration</p>\n  </section>\n  <section class=\"panel stack\">\n    <p class=\"kicker\">Preferences</p>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">notifications</span></div><h2>Notifications</h2></div>\n      <span class=\"material-symbols-outlined muted\">chevron_right</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">security</span></div><h2>Security</h2></div>\n      <span class=\"value success\">Strong</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">language</span></div><h2>Language</h2></div>\n      <span class=\"value\">English</span>\n    </div>\n  </section>\n  <section class=\"panel stack\">\n    <p class=\"kicker\">Wallet & Network</p>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">account_balance_wallet</span></div><h2>Wallet</h2></div>\n      <span class=\"value\">External</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">public</span></div><h2>Network</h2></div>\n      <span class=\"value success\">Mainnet</span>\n    </div>\n  </section>\n  <section class=\"panel stack\">\n    <p class=\"kicker\">Support & Legal</p>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">help_center</span></div><h2>Help Center</h2></div>\n      <span class=\"material-symbols-outlined muted\">open_in_new</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">description</span></div><h2>Terms & Privacy</h2></div>\n      <span class=\"material-symbols-outlined muted\">chevron_right</span>\n    </div>\n  </section>\n  <p class=\"muted\" style=\"text-align: center; font-family: Geist, monospace; font-size: 13px;\">v1.0.0 Mainnet</p>\n</main>\n<nav class=\"bottom-nav\">\n  <button class=\"nav-item \"><span class=\"material-symbols-outlined\">home</span><span>Home</span></button>\n  <button class=\"nav-item \"><span class=\"material-symbols-outlined\">rebase</span><span>Pools</span></button>\n  <button class=\"nav-item \"><span class=\"material-symbols-outlined\">history</span><span>Activity</span></button>\n  <button class=\"nav-item \"><span class=\"material-symbols-outlined\">account_balance_wallet</span><span>Wallet</span></button>\n  <button class=\"nav-item active\"><span class=\"material-symbols-outlined\">settings</span><span>Settings</span></button>\n</nav>\n</body>\n</html>",
-  "review": "<!DOCTYPE html>\n\n<html class=\"dark\" lang=\"en\"><head>\n<meta charset=\"utf-8\"/>\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>\n<title>LuckyMe - Review Transaction</title>\n<script src=\"https://cdn.tailwindcss.com?plugins=forms,container-queries\"></script>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;family=Geist:wght@400;500;700&amp;display=swap\" rel=\"stylesheet\"/>\n<link href=\"https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap\" rel=\"stylesheet\"/>\n<style>\n    /* Custom Backdrop Blur for Level 2 Modals */\n    .modal-backdrop {\n      backdrop-filter: blur(40px);\n      background-color: rgba(0, 0, 0, 0.7);\n    }\n    \n    /* Premium iOS Style Glass Sheet */\n    .glass-sheet {\n      background: #000000;\n      border-top: 1px solid rgba(255, 255, 255, 0.15);\n      backdrop-filter: blur(50px);\n    }\n\n    .glass-card {\n      background: rgba(255, 255, 255, 0.03);\n      border: 1px solid rgba(255, 255, 255, 0.08);\n    }\n\n    .primary-gradient-btn {\n      background: linear-gradient(135deg, #9945ff 0%, #d8b9ff 100%);\n    }\n\n    /* Tabular Numbers */\n    .tabular-nums {\n      font-variant-numeric: tabular-nums;\n    }\n\n    /* Material Symbol helper */\n    .material-symbols-outlined {\n      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\n      vertical-align: middle;\n    }\n  </style>\n<!-- Tailwind Config Verbatim -->\n<script id=\"tailwind-config\">\n    tailwind.config = {\n      darkMode: \"class\",\n      theme: {\n        extend: {\n          \"colors\": {\n                  \"on-tertiary-fixed-variant\": \"#474747\",\n                  \"surface-container\": \"#1d2021\",\n                  \"on-secondary-fixed-variant\": \"#00522f\",\n                  \"outline-variant\": \"#4c4355\",\n                  \"on-error\": \"#690005\",\n                  \"on-secondary\": \"#00391f\",\n                  \"inverse-on-surface\": \"#2e3132\",\n                  \"inverse-primary\": \"#7f21e5\",\n                  \"tertiary-fixed-dim\": \"#c6c6c6\",\n                  \"on-tertiary\": \"#303030\",\n                  \"on-tertiary-container\": \"#ffffff\",\n                  \"background\": \"#111415\",\n                  \"on-background\": \"#e1e3e4\",\n                  \"on-surface\": \"#e1e3e4\",\n                  \"primary\": \"#d8b9ff\",\n                  \"on-primary-fixed-variant\": \"#6300bb\",\n                  \"surface\": \"#111415\",\n                  \"on-primary\": \"#450086\",\n                  \"tertiary-fixed\": \"#e2e2e2\",\n                  \"primary-container\": \"#9945ff\",\n                  \"tertiary\": \"#c6c6c6\",\n                  \"surface-container-lowest\": \"#0c0f10\",\n                  \"surface-container-highest\": \"#323536\",\n                  \"error-container\": \"#93000a\",\n                  \"secondary-fixed\": \"#56ffa8\",\n                  \"on-secondary-container\": \"#00653b\",\n                  \"outline\": \"#978da1\",\n                  \"surface-container-low\": \"#191c1d\",\n                  \"tertiary-container\": \"#767676\",\n                  \"inverse-surface\": \"#e1e3e4\",\n                  \"primary-fixed\": \"#eddcff\",\n                  \"on-primary-fixed\": \"#290055\",\n                  \"error\": \"#ffb4ab\",\n                  \"on-tertiary-fixed\": \"#1b1b1b\",\n                  \"on-error-container\": \"#ffdad6\",\n                  \"surface-variant\": \"#323536\",\n                  \"secondary\": \"#a0ffc3\",\n                  \"secondary-fixed-dim\": \"#00e38b\",\n                  \"surface-dim\": \"#111415\",\n                  \"secondary-container\": \"#00ec91\",\n                  \"surface-container-high\": \"#282a2b\",\n                  \"surface-bright\": \"#373a3b\",\n                  \"on-primary-container\": \"#ffffff\",\n                  \"primary-fixed-dim\": \"#d8b9ff\",\n                  \"on-secondary-fixed\": \"#002110\",\n                  \"surface-tint\": \"#d8b9ff\",\n                  \"on-surface-variant\": \"#cec2d8\"\n          },\n          \"borderRadius\": {\n                  \"DEFAULT\": \"0.25rem\",\n                  \"lg\": \"0.5rem\",\n                  \"xl\": \"0.75rem\",\n                  \"full\": \"9999px\"\n          },\n          \"spacing\": {\n                  \"unit\": \"8px\",\n                  \"stack-lg\": \"32px\",\n                  \"stack-md\": \"16px\",\n                  \"gutter\": \"16px\",\n                  \"container-padding\": \"24px\",\n                  \"stack-sm\": \"8px\"\n          },\n          \"fontFamily\": {\n                  \"label-mono\": [\"Geist\"],\n                  \"currency-xl\": [\"Geist\"],\n                  \"headline-md\": [\"Inter\"],\n                  \"body-lg\": [\"Inter\"],\n                  \"display-lg-mobile\": [\"Inter\"],\n                  \"display-lg\": [\"Inter\"],\n                  \"body-md\": [\"Inter\"]\n          },\n          \"fontSize\": {\n                  \"label-mono\": [\"14px\", {\"lineHeight\": \"20px\", \"letterSpacing\": \"0.05em\", \"fontWeight\": \"500\"}],\n                  \"currency-xl\": [\"40px\", {\"lineHeight\": \"48px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"700\"}],\n                  \"headline-md\": [\"24px\", {\"lineHeight\": \"32px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"600\"}],\n                  \"body-lg\": [\"18px\", {\"lineHeight\": \"28px\", \"fontWeight\": \"400\"}],\n                  \"display-lg-mobile\": [\"36px\", {\"lineHeight\": \"42px\", \"letterSpacing\": \"-0.03em\", \"fontWeight\": \"700\"}],\n                  \"display-lg\": [\"48px\", {\"lineHeight\": \"56px\", \"letterSpacing\": \"-0.04em\", \"fontWeight\": \"700\"}],\n                  \"body-md\": [\"16px\", {\"lineHeight\": \"24px\", \"fontWeight\": \"400\"}]\n          }\n        },\n      },\n    }\n  </script>\n</head>\n<body class=\"bg-background text-on-background font-body-md text-body-md overflow-hidden selection:bg-primary/30\">\n<!-- Background Ambient Page (Inactive) -->\n<main class=\"relative z-10 min-h-screen flex flex-col p-container-padding opacity-20 pointer-events-none\">\n<header class=\"fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding h-16 bg-background/80 border-b border-white/5\">\n<div class=\"flex items-center gap-2\">\n<span class=\"material-symbols-outlined text-primary font-headline-md\">token</span>\n<span class=\"font-headline-md text-headline-md text-primary tracking-tighter\">LuckyMe</span>\n</div>\n</header>\n<div class=\"mt-20 space-y-stack-lg\">\n<div class=\"glass-card p-6 rounded-xl\">\n<h2 class=\"font-headline-md text-headline-md\">Normal Pool</h2>\n</div>\n</div>\n</main>\n<!-- iOS-style Bottom Sheet -->\n<div class=\"fixed inset-0 z-50 flex items-end justify-center sm:pb-8\" id=\"modal-container\">\n<!-- Backdrop -->\n<div class=\"absolute inset-0 modal-backdrop transition-opacity duration-500\" onclick=\"closeModal()\"></div>\n<!-- Modal Content -->\n<div class=\"relative w-full max-w-lg glass-sheet rounded-t-[32px] sm:rounded-[32px] overflow-hidden shadow-2xl transition-transform duration-500 translate-y-0 animate-in slide-in-from-bottom-full\">\n<!-- iOS Center Handle -->\n<div class=\"flex justify-center pt-3 pb-1\">\n<div class=\"w-9 h-1.5 bg-white/20 rounded-full\"></div>\n</div>\n<!-- Header Section -->\n<div class=\"px-container-padding pt-4 pb-6 flex justify-between items-start\">\n<div class=\"space-y-1\">\n<h1 class=\"font-headline-md text-headline-md text-white\">Review Transaction</h1>\n<div class=\"flex items-center gap-3\">\n<div class=\"flex items-center gap-1.5 px-2 py-0.5 rounded bg-secondary/10 border border-secondary/10\">\n<span class=\"material-symbols-outlined text-[14px] text-secondary\">verified</span>\n<span class=\"text-secondary font-label-mono text-[11px] font-semibold\">Solana Mainnet</span>\n</div>\n<span class=\"w-1 h-1 rounded-full bg-white/20\"></span>\n<span class=\"text-secondary-fixed-dim text-xs font-medium tracking-tight\">Wallet Simulation Required</span>\n</div>\n</div>\n<button class=\"w-9 h-9 flex items-center justify-center rounded-full bg-white/5 text-on-surface-variant hover:bg-white/10 active:scale-90 transition-all\" onclick=\"closeModal()\">\n<span class=\"material-symbols-outlined\">close</span>\n</button>\n</div>\n<!-- Transaction Summary Canvas -->\n<div class=\"px-container-padding space-y-5\">\n<!-- Primary Action Card -->\n<div class=\"glass-card p-5 rounded-2xl space-y-5\">\n<div class=\"flex justify-between items-center\">\n<span class=\"text-on-surface-variant/70 text-sm font-medium\">Action</span>\n<span class=\"text-white font-bold text-lg\">Buy tickets</span>\n</div>\n<div class=\"h-px bg-white/5\"></div>\n<div class=\"space-y-4\">\n<div class=\"flex justify-between items-center\">\n<span class=\"text-on-surface-variant/70 text-sm font-medium\">Destination</span>\n<span class=\"text-white/90 font-semibold\">Normal Pool</span>\n</div>\n<div class=\"flex justify-between items-center\">\n<span class=\"text-on-surface-variant/70 text-sm font-medium\">Network</span>\n<span class=\"text-white/90 font-semibold\">Solana</span>\n</div>\n<div class=\"flex justify-between items-center\">\n<span class=\"text-on-surface-variant/70 text-sm font-medium\">Est. Fee</span>\n<span class=\"text-on-surface-variant tabular-nums font-label-mono text-sm\">Estimated by wallet</span>\n</div>\n</div>\n<div class=\"pt-2\">\n<div class=\"flex justify-between items-end border-t border-white/5 pt-5\">\n<span class=\"text-on-surface-variant/70 text-sm font-semibold uppercase tracking-wider mb-2\">Total Amount</span>\n<div class=\"text-right\">\n<span class=\"text-primary font-currency-xl text-3xl tabular-nums leading-none\">Calculated in wallet</span>\n</div>\n</div>\n</div>\n</div>\n<!-- Safety Footer Note -->\n<div class=\"flex items-center gap-3 px-2 py-1\">\n<span class=\"material-symbols-outlined text-on-surface-variant/40 text-xl\">shield</span>\n<p class=\"text-xs text-on-surface-variant/60 leading-tight\">\n<span class=\"text-on-surface-variant/80 font-medium\">LuckyMe never signs for you.</span> Your wallet approves the final transaction.\n        </p>\n</div>\n<!-- Connection Visualization -->\n<div class=\"relative h-20 w-full rounded-2xl bg-white/[0.02] flex items-center justify-center overflow-hidden border border-white/5\">\n<div class=\"flex items-center gap-8\">\n<div class=\"w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center\">\n<span class=\"material-symbols-outlined text-primary text-xl\">wallet</span>\n</div>\n<div class=\"flex gap-1\">\n<span class=\"w-1.5 h-1.5 rounded-full bg-white/10 animate-pulse\"></span>\n<span class=\"w-1.5 h-1.5 rounded-full bg-white/10 animate-pulse [animation-delay:200ms]\"></span>\n<span class=\"w-1.5 h-1.5 rounded-full bg-white/10 animate-pulse [animation-delay:400ms]\"></span>\n</div>\n<div class=\"w-10 h-10 rounded-xl bg-secondary/10 border border-secondary/20 flex items-center justify-center\">\n<span class=\"material-symbols-outlined text-secondary text-xl\">account_balance</span>\n</div>\n</div>\n</div>\n</div>\n<!-- Action Buttons -->\n<div class=\"p-container-padding pt-8 pb-10 space-y-3\">\n<button class=\"w-full h-15 py-4 primary-gradient-btn text-on-primary font-bold rounded-2xl text-lg shadow-[0_12px_40px_-12px_rgba(153,69,255,0.5)] active:scale-[0.98] transition-all flex items-center justify-center gap-2 group\">\n<span>Sign in Wallet</span>\n<span class=\"material-symbols-outlined group-hover:translate-x-1 transition-transform\">arrow_forward</span>\n</button>\n<button class=\"w-full h-14 text-on-surface-variant font-semibold rounded-2xl hover:bg-white/5 active:bg-white/10 transition-colors\" onclick=\"closeModal()\">\n        Cancel\n      </button>\n</div>\n</div>\n</div>\n<script>\n  function closeModal() {\n    const container = document.getElementById('modal-container');\n    const modal = container.querySelector('.glass-sheet');\n    const backdrop = container.querySelector('.modal-backdrop');\n    \n    modal.style.transform = 'translateY(100%)';\n    backdrop.style.opacity = '0';\n    \n    setTimeout(() => {\n      container.style.display = 'none';\n      document.querySelector('main').style.opacity = '1';\n      document.querySelector('main').style.pointerEvents = 'auto';\n    }, 500);\n  }\n\n  // Micro-interaction for primary button haptics simulation\n  const btn = document.querySelector('.primary-gradient-btn');\n  if (btn) {\n    btn.addEventListener('mousedown', () => btn.classList.add('brightness-110'));\n    btn.addEventListener('mouseup', () => btn.classList.remove('brightness-110'));\n  }\n</script>\n</body></html>",
-  "syncing": "<!DOCTYPE html>\n\n<html class=\"dark\" lang=\"en\"><head>\n<meta charset=\"utf-8\"/>\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>\n<title>LuckyMe | Syncing Transaction</title>\n<script src=\"https://cdn.tailwindcss.com?plugins=forms,container-queries\"></script>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Geist:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap\" rel=\"stylesheet\"/>\n<style>\n    .material-symbols-outlined {\n      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\n    }\n    \n    body {\n      background-color: #000000;\n      color: #e1e3e4;\n      overflow: hidden;\n      margin: 0;\n      padding: 0;\n    }\n\n    /* Glass Overlay Effect */\n    .glass-overlay {\n      position: fixed;\n      inset: 0;\n      background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.02) 0%, transparent 80%);\n      pointer-events: none;\n      z-index: 1;\n    }\n\n    /* Electric Cyan Progress Ring */\n    .progress-ring-track {\n      stroke: rgba(0, 227, 139, 0.05);\n      stroke-width: 4;\n    }\n\n    .progress-ring-active {\n      stroke: #00e38b; /* secondary-fixed-dim / electric cyan */\n      stroke-width: 4;\n      stroke-dasharray: 600;\n      stroke-dashoffset: 600;\n      animation: progress-spin 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;\n      filter: drop-shadow(0 0 12px rgba(0, 227, 139, 0.6));\n    }\n\n    @keyframes progress-spin {\n      0% { stroke-dashoffset: 600; transform: rotate(0deg); }\n      50% { stroke-dashoffset: 150; }\n      100% { stroke-dashoffset: 600; transform: rotate(360deg); }\n    }\n\n    .glow-sphere {\n      position: relative;\n      width: 240px;\n      height: 240px;\n      border-radius: 50%;\n      background: radial-gradient(circle at center, rgba(0, 227, 139, 0.08), transparent 70%);\n      display: flex;\n      align-items: center;\n      justify-content: center;\n    }\n\n    .inner-pulse {\n      position: absolute;\n      width: 100%;\n      height: 100%;\n      border-radius: 50%;\n      background: radial-gradient(circle, rgba(0, 227, 139, 0.15) 0%, transparent 70%);\n      animation: pulse-glow 3s ease-in-out infinite;\n    }\n\n    @keyframes pulse-glow {\n      0%, 100% { transform: scale(0.8); opacity: 0.2; }\n      50% { transform: scale(1.1); opacity: 0.5; }\n    }\n\n    /* Ambient Background */\n    .ambient-bg {\n      position: fixed;\n      inset: 0;\n      z-index: -1;\n      background: #000000;\n    }\n\n    .float-orb {\n      position: absolute;\n      width: 500px;\n      height: 500px;\n      border-radius: 50%;\n      filter: blur(120px);\n      opacity: 0.08;\n      pointer-events: none;\n    }\n  </style>\n<script id=\"tailwind-config\">\n    tailwind.config = {\n      darkMode: \"class\",\n      theme: {\n        extend: {\n          \"colors\": {\n            \"on-tertiary-fixed-variant\": \"#474747\",\n            \"surface-container\": \"#1d2021\",\n            \"on-secondary-fixed-variant\": \"#00522f\",\n            \"outline-variant\": \"#4c4355\",\n            \"on-error\": \"#690005\",\n            \"on-secondary\": \"#00391f\",\n            \"inverse-on-surface\": \"#2e3132\",\n            \"inverse-primary\": \"#7f21e5\",\n            \"tertiary-fixed-dim\": \"#c6c6c6\",\n            \"on-tertiary\": \"#303030\",\n            \"on-tertiary-container\": \"#ffffff\",\n            \"background\": \"#000000\",\n            \"on-background\": \"#ffffff\",\n            \"on-surface\": \"#ffffff\",\n            \"primary\": \"#d8b9ff\",\n            \"on-primary-fixed-variant\": \"#6300bb\",\n            \"surface\": \"#111415\",\n            \"on-primary\": \"#450086\",\n            \"tertiary-fixed\": \"#e2e2e2\",\n            \"primary-container\": \"#9945ff\",\n            \"tertiary\": \"#c6c6c6\",\n            \"surface-container-lowest\": \"#0c0f10\",\n            \"surface-container-highest\": \"#323536\",\n            \"error-container\": \"#93000a\",\n            \"secondary-fixed\": \"#56ffa8\",\n            \"on-secondary-container\": \"#00653b\",\n            \"outline\": \"#978da1\",\n            \"surface-container-low\": \"#191c1d\",\n            \"tertiary-container\": \"#767676\",\n            \"inverse-surface\": \"#e1e3e4\",\n            \"primary-fixed\": \"#eddcff\",\n            \"on-primary-fixed\": \"#290055\",\n            \"error\": \"#ffb4ab\",\n            \"on-tertiary-fixed\": \"#1b1b1b\",\n            \"on-error-container\": \"#ffdad6\",\n            \"surface-variant\": \"#323536\",\n            \"secondary\": \"#00e38b\",\n            \"secondary-fixed-dim\": \"#00e38b\",\n            \"surface-dim\": \"#111415\",\n            \"secondary-container\": \"#00ec91\",\n            \"surface-container-high\": \"#282a2b\",\n            \"surface-bright\": \"#373a3b\",\n            \"on-primary-container\": \"#ffffff\",\n            \"primary-fixed-dim\": \"#d8b9ff\",\n            \"on-secondary-fixed\": \"#002110\",\n            \"surface-tint\": \"#d8b9ff\",\n            \"on-surface-variant\": \"#cec2d8\"\n          },\n          \"borderRadius\": {\n            \"DEFAULT\": \"0.25rem\",\n            \"lg\": \"0.5rem\",\n            \"xl\": \"0.75rem\",\n            \"full\": \"9999px\"\n          },\n          \"spacing\": {\n            \"unit\": \"8px\",\n            \"stack-lg\": \"32px\",\n            \"stack-md\": \"16px\",\n            \"gutter\": \"16px\",\n            \"container-padding\": \"24px\",\n            \"stack-sm\": \"8px\"\n          },\n          \"fontFamily\": {\n            \"label-mono\": [\"Geist\"],\n            \"currency-xl\": [\"Geist\"],\n            \"headline-md\": [\"Inter\"],\n            \"body-lg\": [\"Inter\"],\n            \"display-lg-mobile\": [\"Inter\"],\n            \"display-lg\": [\"Inter\"],\n            \"body-md\": [\"Inter\"]\n          },\n          \"fontSize\": {\n            \"label-mono\": [\"14px\", { \"lineHeight\": \"20px\", \"letterSpacing\": \"0.05em\", \"fontWeight\": \"500\" }],\n            \"currency-xl\": [\"40px\", { \"lineHeight\": \"48px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"700\" }],\n            \"headline-md\": [\"24px\", { \"lineHeight\": \"32px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"600\" }],\n            \"body-lg\": [\"18px\", { \"lineHeight\": \"28px\", \"fontWeight\": \"400\" }],\n            \"display-lg-mobile\": [\"36px\", { \"lineHeight\": \"42px\", \"letterSpacing\": \"-0.03em\", \"fontWeight\": \"700\" }],\n            \"display-lg\": [\"48px\", { \"lineHeight\": \"56px\", \"letterSpacing\": \"-0.04em\", \"fontWeight\": \"700\" }],\n            \"body-md\": [\"16px\", { \"lineHeight\": \"24px\", \"fontWeight\": \"400\" }]\n          }\n        },\n      },\n    }\n  </script>\n</head>\n<body class=\"flex flex-col min-h-screen\">\n<div class=\"ambient-bg\">\n<div class=\"float-orb bg-primary/20 left-[-10%] top-[-10%]\"></div>\n<div class=\"float-orb bg-secondary/20 right-[-10%] bottom-[-10%]\"></div>\n</div>\n<div class=\"glass-overlay\"></div>\n<!-- Header -->\n<header class=\"fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding h-16 bg-black/40 backdrop-blur-xl border-b border-white/5\">\n<div class=\"flex items-center gap-2\">\n<span class=\"material-symbols-outlined text-primary text-[28px]\" style=\"font-variation-settings: 'FILL' 1;\">token</span>\n<h1 class=\"font-headline-md text-headline-md text-white tracking-tighter\">LuckyMe</h1>\n</div>\n<div class=\"flex items-center gap-4\">\n<div class=\"px-4 py-1.5 rounded-full border border-white/10 bg-white/5 flex items-center gap-2\">\n<div class=\"w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_8px_#00e38b]\"></div>\n<span class=\"font-label-mono text-label-mono text-on-surface-variant\">Wallet</span>\n</div>\n</div>\n</header>\n<!-- Main Canvas -->\n<main class=\"flex-grow flex flex-col items-center justify-center relative px-container-padding z-10\">\n<!-- Central Syncing Animation Cluster -->\n<div class=\"flex flex-col items-center gap-12\">\n<!-- Progress Ring Container -->\n<div class=\"relative flex items-center justify-center\">\n<!-- SVG Ring -->\n<svg class=\"absolute w-[300px] h-[300px] origin-center z-10\">\n<circle class=\"progress-ring-track\" cx=\"150\" cy=\"150\" fill=\"none\" r=\"120\"></circle>\n<circle class=\"progress-ring-active\" cx=\"150\" cy=\"150\" fill=\"none\" r=\"120\" stroke-linecap=\"round\"></circle>\n</svg>\n<div class=\"glow-sphere\">\n<div class=\"inner-pulse\"></div>\n<span class=\"material-symbols-outlined text-secondary text-[56px] relative z-20\" style=\"font-variation-settings: 'wght' 200;\">sync</span>\n</div>\n</div>\n<!-- Status Text Cluster -->\n<div class=\"text-center space-y-4 max-w-xs mx-auto\">\n<h2 class=\"font-headline-md text-headline-md text-white\">Building unsigned transaction...</h2>\n<p class=\"font-body-md text-body-md text-on-surface-variant/70\">Syncing live round state with Solana Mainnet</p>\n</div>\n</div>\n<!-- Bottom Metrics & Status -->\n<div class=\"absolute bottom-32 w-full max-w-sm px-container-padding flex flex-col items-center gap-6\">\n<!-- Live Participant Metric -->\n<div class=\"flex flex-col items-center gap-1\">\n<span class=\"font-label-mono text-[12px] uppercase tracking-[0.2em] text-on-surface-variant/40\">Live Participants</span>\n<span class=\"font-currency-xl text-currency-xl text-secondary\" id=\"participant-count\">Pending</span>\n</div>\n<!-- Status Chip -->\n<div class=\"flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md\">\n<span class=\"material-symbols-outlined text-[16px] text-secondary\">verified_user</span>\n<span class=\"font-label-mono text-[11px] uppercase tracking-widest text-on-surface-variant/80\">Secured by Solana VM</span>\n</div>\n</div>\n</main>\n<!-- Bottom Navigation Bar -->\n<nav class=\"fixed bottom-6 left-6 right-6 z-50 flex justify-around items-center h-16 px-2 bg-surface-container/30 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl\">\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/50 py-1 px-3 hover:text-primary transition-all\" href=\"#\">\n<span class=\"material-symbols-outlined\">home</span>\n<span class=\"font-label-mono text-[10px]\">Home</span>\n</a>\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/50 py-1 px-3 hover:text-primary transition-all\" href=\"#\">\n<span class=\"material-symbols-outlined\">rebase</span>\n<span class=\"font-label-mono text-[10px]\">Pools</span>\n</a>\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/50 py-1 px-3 hover:text-primary transition-all\" href=\"#\">\n<span class=\"material-symbols-outlined\">history</span>\n<span class=\"font-label-mono text-[10px]\">Activity</span>\n</a>\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/50 py-1 px-3 hover:text-primary transition-all\" href=\"#\">\n<span class=\"material-symbols-outlined\">account_balance_wallet</span>\n<span class=\"font-label-mono text-[10px]\">Wallet</span>\n</a>\n<a class=\"flex flex-col items-center justify-center text-on-surface-variant/50 py-1 px-3 hover:text-primary transition-all\" href=\"#\">\n<span class=\"material-symbols-outlined\">settings</span>\n<span class=\"font-label-mono text-[10px]\">Settings</span>\n</a>\n</nav>\n<script>\n    // Live counter micro-interaction\n    const countEl = document.getElementById('participant-count');\n    let currentCount = 1402;\n\n    function updateCount() {\n      const change = Math.floor(Math.random() * 3) - 1; // -1 to +1\n      currentCount += change;\n      countEl.innerText = currentCount.toLocaleString();\n      \n      // Flash effect\n      countEl.style.transition = 'text-shadow 0.3s ease';\n      countEl.style.textShadow = '0 0 15px rgba(0, 227, 139, 0.4)';\n      setTimeout(() => {\n        countEl.style.textShadow = 'none';\n      }, 300);\n\n      setTimeout(updateCount, 1500 + Math.random() * 2000);\n    }\n\n    // Initialize simulation\n    setTimeout(updateCount, 2000);\n\n    // Initial load animation\n    document.addEventListener('DOMContentLoaded', () => {\n      const elements = document.querySelectorAll('main > div, main > .absolute');\n      elements.forEach((el, i) => {\n        el.style.opacity = '0';\n        el.style.transform = 'translateY(20px)';\n        el.style.transition = 'opacity 1s cubic-bezier(0.2, 1, 0.2, 1), transform 1s cubic-bezier(0.2, 1, 0.2, 1)';\n        el.style.transitionDelay = `${i * 0.15}s`;\n        \n        requestAnimationFrame(() => {\n          el.style.opacity = '1';\n          el.style.transform = 'translateY(0)';\n        });\n      });\n    });\n  </script>\n</body></html>",
-  "success": "<!DOCTYPE html>\n\n<html class=\"dark\" lang=\"en\"><head>\n<meta charset=\"utf-8\"/>\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>\n<title>LuckyMe - Confirmation</title>\n<script src=\"https://cdn.tailwindcss.com?plugins=forms,container-queries\"></script>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Geist:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap\" rel=\"stylesheet\"/>\n<link href=\"https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap\" rel=\"stylesheet\"/>\n<link href=\"https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Inter:wght@100..900&display=swap\" rel=\"stylesheet\"/>\n<script id=\"tailwind-config\">\n        tailwind.config = {\n            darkMode: \"class\",\n            theme: {\n                extend: {\n                    \"colors\": {\n                        \"on-tertiary-fixed-variant\": \"#474747\",\n                        \"surface-container\": \"#1d2021\",\n                        \"on-secondary-fixed-variant\": \"#00522f\",\n                        \"outline-variant\": \"#4c4355\",\n                        \"on-error\": \"#690005\",\n                        \"on-secondary\": \"#00391f\",\n                        \"inverse-on-surface\": \"#2e3132\",\n                        \"inverse-primary\": \"#7f21e5\",\n                        \"tertiary-fixed-dim\": \"#c6c6c6\",\n                        \"on-tertiary\": \"#303030\",\n                        \"on-tertiary-container\": \"#ffffff\",\n                        \"background\": \"#111415\",\n                        \"on-background\": \"#e1e3e4\",\n                        \"on-surface\": \"#e1e3e4\",\n                        \"primary\": \"#d8b9ff\",\n                        \"on-primary-fixed-variant\": \"#6300bb\",\n                        \"surface\": \"#111415\",\n                        \"on-primary\": \"#450086\",\n                        \"tertiary-fixed\": \"#e2e2e2\",\n                        \"primary-container\": \"#9945ff\",\n                        \"tertiary\": \"#c6c6c6\",\n                        \"surface-container-lowest\": \"#0c0f10\",\n                        \"surface-container-highest\": \"#323536\",\n                        \"error-container\": \"#93000a\",\n                        \"secondary-fixed\": \"#56ffa8\",\n                        \"on-secondary-container\": \"#00653b\",\n                        \"outline\": \"#978da1\",\n                        \"surface-container-low\": \"#191c1d\",\n                        \"tertiary-container\": \"#767676\",\n                        \"inverse-surface\": \"#e1e3e4\",\n                        \"primary-fixed\": \"#eddcff\",\n                        \"on-primary-fixed\": \"#290055\",\n                        \"error\": \"#ffb4ab\",\n                        \"on-tertiary-fixed\": \"#1b1b1b\",\n                        \"on-error-container\": \"#ffdad6\",\n                        \"surface-variant\": \"#323536\",\n                        \"secondary\": \"#a0ffc3\",\n                        \"secondary-fixed-dim\": \"#00e38b\",\n                        \"surface-dim\": \"#111415\",\n                        \"secondary-container\": \"#00ec91\",\n                        \"surface-container-high\": \"#282a2b\",\n                        \"surface-bright\": \"#373a3b\",\n                        \"on-primary-container\": \"#ffffff\",\n                        \"primary-fixed-dim\": \"#d8b9ff\",\n                        \"on-secondary-fixed\": \"#002110\",\n                        \"surface-tint\": \"#d8b9ff\",\n                        \"on-surface-variant\": \"#cec2d8\"\n                    },\n                    \"borderRadius\": {\n                        \"DEFAULT\": \"0.25rem\",\n                        \"lg\": \"0.5rem\",\n                        \"xl\": \"0.75rem\",\n                        \"full\": \"9999px\"\n                    },\n                    \"spacing\": {\n                        \"unit\": \"8px\",\n                        \"stack-lg\": \"32px\",\n                        \"stack-md\": \"16px\",\n                        \"gutter\": \"16px\",\n                        \"container-padding\": \"24px\",\n                        \"stack-sm\": \"8px\"\n                    },\n                    \"fontFamily\": {\n                        \"label-mono\": [\"Geist\"],\n                        \"currency-xl\": [\"Geist\"],\n                        \"headline-md\": [\"Inter\"],\n                        \"body-lg\": [\"Inter\"],\n                        \"display-lg-mobile\": [\"Inter\"],\n                        \"display-lg\": [\"Inter\"],\n                        \"body-md\": [\"Inter\"]\n                    },\n                    \"fontSize\": {\n                        \"label-mono\": [\"14px\", { \"lineHeight\": \"20px\", \"letterSpacing\": \"0.05em\", \"fontWeight\": \"500\" }],\n                        \"currency-xl\": [\"40px\", { \"lineHeight\": \"48px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"700\" }],\n                        \"headline-md\": [\"24px\", { \"lineHeight\": \"32px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"600\" }],\n                        \"body-lg\": [\"18px\", { \"lineHeight\": \"28px\", \"fontWeight\": \"400\" }],\n                        \"display-lg-mobile\": [\"36px\", { \"lineHeight\": \"42px\", \"letterSpacing\": \"-0.03em\", \"fontWeight\": \"700\" }],\n                        \"display-lg\": [\"48px\", { \"lineHeight\": \"56px\", \"letterSpacing\": \"-0.04em\", \"fontWeight\": \"700\" }],\n                        \"body-md\": [\"16px\", { \"lineHeight\": \"24px\", \"fontWeight\": \"400\" }]\n                    }\n                },\n            },\n        }\n    </script>\n<style>\n        .material-symbols-outlined {\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\n        }\n        .glass-card {\n            background: rgba(255, 255, 255, 0.03);\n            backdrop-filter: blur(20px);\n            border: 1px solid rgba(255, 255, 255, 0.12);\n        }\n        .emerald-glow {\n            filter: drop-shadow(0 0 12px rgba(86, 255, 168, 0.4));\n        }\n        @keyframes scale-in {\n            0% { transform: scale(0.9); opacity: 0; }\n            100% { transform: scale(1); opacity: 1; }\n        }\n        @keyframes draw-check {\n            0% { stroke-dashoffset: 48; }\n            100% { stroke-dashoffset: 0; }\n        }\n        .animate-check {\n            stroke-dasharray: 48;\n            stroke-dashoffset: 48;\n            animation: draw-check 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;\n            animation-delay: 0.2s;\n        }\n        .success-bg-glow {\n            background: radial-gradient(circle at center, rgba(0, 236, 145, 0.1) 0%, transparent 70%);\n        }\n        .confetti-particle {\n            position: absolute;\n            width: 4px;\n            height: 4px;\n            background: #56ffa8;\n            border-radius: 50%;\n            pointer-events: none;\n        }\n    </style>\n<style>\n    body {\n      min-height: max(884px, 100dvh);\n    }\n  </style>\n  </head>\n<body class=\"bg-background text-on-background font-body-md min-h-screen flex flex-col overflow-hidden\">\n<!-- Top App Bar (Shared Component Strategy) -->\n<header class=\"fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding h-16 bg-background/80 backdrop-blur-xl border-b border-white/10\">\n<div class=\"flex items-center gap-2\">\n<span class=\"material-symbols-outlined text-primary\" data-icon=\"token\">token</span>\n<span class=\"font-headline-md text-headline-md text-primary tracking-tighter\">LuckyMe</span>\n</div>\n<div class=\"flex items-center gap-3\">\n<div class=\"px-3 py-1 rounded-full border border-white/10 flex items-center gap-2 bg-surface-container-low\">\n<span class=\"w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_8px_#56ffa8]\"></span>\n<span class=\"font-label-mono text-label-mono text-on-surface-variant\">Wallet</span>\n</div>\n</div>\n</header>\n<!-- Main Success Content -->\n<main class=\"flex-1 flex flex-items-center justify-center relative p-container-padding pt-24 pb-32\">\n<!-- Subtle Atmospheric Background -->\n<div class=\"absolute inset-0 success-bg-glow pointer-events-none\"></div>\n<div class=\"absolute inset-0 overflow-hidden pointer-events-none\" id=\"confetti-container\"></div>\n<div class=\"w-full max-w-md mx-auto flex flex-col items-center text-center space-y-stack-lg\" style=\"animation: scale-in 0.5s ease-out;\">\n<!-- Icon Section -->\n<div class=\"relative\">\n<div class=\"w-24 h-24 rounded-full glass-card flex items-center justify-center emerald-glow\">\n<svg fill=\"none\" height=\"48\" viewbox=\"0 0 48 48\" width=\"48\" xmlns=\"http://www.w3.org/2000/svg\">\n<path class=\"animate-check\" d=\"M10 24L20 34L38 14\" stroke=\"#56ffa8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"4\"></path>\n</svg>\n</div>\n<!-- Success Pulse Rings -->\n<div class=\"absolute inset-0 rounded-full border border-secondary/20 animate-ping opacity-20\"></div>\n</div>\n<!-- Title & Details -->\n<div class=\"space-y-stack-sm\">\n<h1 class=\"font-headline-md text-headline-md text-on-background tracking-tight\">Transaction Confirmed</h1>\n<p class=\"font-body-lg text-body-lg text-on-surface-variant\">Wallet-confirmed entry is recorded on-chain.</p>\n</div>\n<!-- Transaction Info Card -->\n<div class=\"glass-card w-full rounded-xl p-gutter space-y-4 text-left\">\n<div class=\"flex justify-between items-center border-b border-white/5 pb-3\">\n<span class=\"font-label-mono text-label-mono text-on-surface-variant/60\">STATUS</span>\n<span class=\"font-label-mono text-label-mono text-secondary flex items-center gap-1\">\n<span class=\"material-symbols-outlined text-[16px]\" data-icon=\"verified\" style=\"font-variation-settings: 'FILL' 1;\">verified</span>\n                        CONFIRMED\n                    </span>\n</div>\n<div class=\"flex justify-between items-center\">\n<span class=\"font-label-mono text-label-mono text-on-surface-variant/60\">TRANSACTION</span>\n<button class=\"font-label-mono text-label-mono text-primary flex items-center gap-1 hover:opacity-80 transition-opacity\">\n                        View in wallet\n                        <span class=\"material-symbols-outlined text-[16px]\" data-icon=\"content_copy\">content_copy</span>\n</button>\n</div>\n</div>\n<!-- Trust Rail -->\n<div class=\"flex items-center gap-2 opacity-40\">\n<span class=\"material-symbols-outlined text-[14px]\" data-icon=\"shield\">shield</span>\n<span class=\"font-label-mono text-label-mono uppercase\">Verified by Solana Mainnet</span>\n</div>\n<!-- Actions -->\n<div class=\"w-full space-y-stack-md pt-4\">\n<button class=\"w-full h-14 bg-primary-container text-on-primary-container font-headline-md text-[18px] rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-[0_0_20px_rgba(153,69,255,0.3)]\">\n                    Done\n                </button>\n<div class=\"grid grid-cols-2 gap-gutter\">\n<button class=\"glass-card h-12 rounded-lg font-label-mono text-label-mono text-on-surface hover:bg-white/5 transition-colors flex items-center justify-center gap-2\">\n<span class=\"material-symbols-outlined text-[18px]\" data-icon=\"open_in_new\">open_in_new</span>\n                        View on Explorer\n                    </button>\n<button class=\"glass-card h-12 rounded-lg font-label-mono text-label-mono text-on-surface hover:bg-white/5 transition-colors flex items-center justify-center gap-2\">\n<span class=\"material-symbols-outlined text-[18px]\" data-icon=\"share\">share</span>\n                        Share\n                    </button>\n</div>\n</div>\n</div>\n</main>\n<!-- Bottom Navigation (Shared Component Logic - Suppression logic: Hidden on success screens) -->\n<!-- The user context is a Success screen (transactional confirmation), therefore we suppress the navigation shell as per \"Shell Visibility & Relevance (THE FILTER)\" rules. -->\n<script>\n        // Restrained Celebration Effect\n        function createConfetti() {\n            const container = document.getElementById('confetti-container');\n            const colors = ['#56ffa8', '#a0ffc3', '#00ec91', '#d8b9ff'];\n            \n            for (let i = 0; i < 40; i++) {\n                const particle = document.createElement('div');\n                particle.className = 'confetti-particle';\n                \n                const startX = window.innerWidth / 2;\n                const startY = window.innerHeight / 2.5;\n                \n                particle.style.left = startX + 'px';\n                particle.style.top = startY + 'px';\n                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];\n                particle.style.opacity = Math.random();\n                \n                container.appendChild(particle);\n                \n                const angle = Math.random() * Math.PI * 2;\n                const velocity = 2 + Math.random() * 6;\n                const tx = Math.cos(angle) * (50 + Math.random() * 150);\n                const ty = Math.sin(angle) * (50 + Math.random() * 150);\n                \n                particle.animate([\n                    { transform: 'translate(0, 0) scale(1)', opacity: 1 },\n                    { transform: `translate(${tx}px, ${ty}px) scale(0)`, opacity: 0 }\n                ], {\n                    duration: 1000 + Math.random() * 1000,\n                    easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',\n                    fill: 'forwards'\n                });\n                \n                setTimeout(() => particle.remove(), 2000);\n            }\n        }\n\n        // Trigger celebration on load\n        window.addEventListener('DOMContentLoaded', () => {\n            setTimeout(createConfetti, 400);\n        });\n\n        // Copy transaction interaction\n        document.querySelector('button.text-primary').addEventListener('click', function() {\n            const originalText = this.innerHTML;\n            this.innerHTML = 'Copied! <span class=\"material-symbols-outlined text-[16px]\" data-icon=\"check\">check</span>';\n            setTimeout(() => {\n                this.innerHTML = originalText;\n            }, 2000);\n        });\n    </script>\n</body></html>",
-  "unavailable": "<!DOCTYPE html>\n<html class=\"dark\" lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\" />\n<title>LuckyMe On-Chain Syncing</title>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Geist:wght@400;500;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap\" rel=\"stylesheet\" />\n<style>\n  :root { color-scheme: dark; }\n  * { box-sizing: border-box; }\n  html, body { width: 100%; overflow-x: hidden; }\n  body {\n    min-height: 100dvh;\n    margin: 0;\n    background: #0c0f10;\n    color: #e1e3e4;\n    font-family: Inter, system-ui, sans-serif;\n    -webkit-font-smoothing: antialiased;\n  }\n  body::before {\n    content: \"\";\n    position: fixed;\n    inset: 0;\n    pointer-events: none;\n    background:\n      radial-gradient(circle at 18% 10%, rgba(216,185,255,0.10), transparent 28%),\n      radial-gradient(circle at 86% 18%, rgba(0,236,145,0.07), transparent 30%),\n      linear-gradient(180deg, rgba(255,255,255,0.04), transparent 36%);\n  }\n  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }\n  .topbar {\n    position: fixed;\n    z-index: 20;\n    top: 0;\n    left: 0;\n    right: 0;\n    height: 76px;\n    padding: 18px 24px;\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    gap: 12px;\n    min-width: 0;\n    background: rgba(12,15,16,0.86);\n    border-bottom: 1px solid rgba(255,255,255,0.08);\n    backdrop-filter: blur(24px);\n  }\n  .brand {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    min-width: 0;\n    flex-shrink: 1;\n    color: #d8b9ff;\n    font-size: 28px;\n    line-height: 1;\n    font-weight: 800;\n  }\n  .brand-icon { font-size: 28px; }\n  .chip {\n    min-height: 40px;\n    max-width: 46vw;\n    padding: 0 16px;\n    display: inline-flex;\n    align-items: center;\n    gap: 8px;\n    flex-shrink: 1;\n    overflow: hidden;\n    white-space: nowrap;\n    border-radius: 999px;\n    color: #cec2d8;\n    font-family: Geist, monospace;\n    font-size: 14px;\n    border: 1px solid rgba(255,255,255,0.12);\n    background: rgba(255,255,255,0.05);\n  }\n  .chip span:last-child { overflow: hidden; text-overflow: ellipsis; }\n  .chip-primary { color: #d8b9ff; border-color: rgba(216,185,255,0.28); }\n  .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 999px; background: #00ec91; box-shadow: 0 0 14px rgba(0,236,145,0.9); }\n  main { position: relative; z-index: 1; width: 100%; max-width: 720px; margin: 0 auto; padding: 104px 24px 116px; }\n  .stack { display: grid; gap: 18px; }\n  .hero-card, .panel {\n    width: 100%;\n    border: 1px solid rgba(255,255,255,0.11);\n    background: rgba(255,255,255,0.045);\n    border-radius: 28px;\n    backdrop-filter: blur(24px);\n    box-shadow: 0 24px 60px rgba(0,0,0,0.28);\n  }\n  .hero-card { padding: 30px; overflow: hidden; }\n  .hero-card.compact { padding: 26px; }\n  .panel { padding: 22px; overflow: hidden; }\n  .kicker {\n    margin: 0 0 12px;\n    color: rgba(206,194,216,0.62);\n    font-family: Geist, monospace;\n    font-size: 11px;\n    letter-spacing: 0.14em;\n    text-transform: uppercase;\n  }\n  h1, h2, p { margin: 0; overflow-wrap: anywhere; }\n  h1 { color: #fff; font-size: 36px; line-height: 1.08; font-weight: 800; }\n  h2 { color: #fff; font-size: 22px; line-height: 1.18; font-weight: 700; }\n  p { color: #cec2d8; font-size: 16px; line-height: 1.55; }\n  .muted { color: rgba(206,194,216,0.68); }\n  .row { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; }\n  .row-left { display: flex; align-items: center; gap: 14px; min-width: 0; }\n  .icon-box {\n    width: 46px;\n    height: 46px;\n    flex: 0 0 auto;\n    display: grid;\n    place-items: center;\n    border-radius: 16px;\n    color: #d8b9ff;\n    background: rgba(216,185,255,0.11);\n    border: 1px solid rgba(216,185,255,0.16);\n  }\n  .value { color: #fff; font-family: Geist, monospace; font-size: 14px; text-align: right; }\n  .success { color: #56ffa8; }\n  .warning { color: #fbbf24; }\n  .divider { height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0; }\n  .primary-button, .secondary-button {\n    width: 100%;\n    min-height: 56px;\n    border: 0;\n    border-radius: 18px;\n    font: 700 16px Inter, system-ui, sans-serif;\n  }\n  .primary-button { color: #240052; background: linear-gradient(135deg, #9945ff, #d8b9ff); box-shadow: 0 18px 38px rgba(153,69,255,0.24); }\n  .secondary-button { color: #d8b9ff; background: rgba(216,185,255,0.08); border: 1px solid rgba(216,185,255,0.18); }\n  .bottom-nav {\n    position: fixed;\n    z-index: 20;\n    left: 16px;\n    right: 16px;\n    bottom: 18px;\n    height: 70px;\n    display: grid;\n    grid-template-columns: repeat(5, 1fr);\n    align-items: center;\n    padding: 8px;\n    border-radius: 22px;\n    border: 1px solid rgba(255,255,255,0.12);\n    background: rgba(29,32,33,0.82);\n    backdrop-filter: blur(28px);\n  }\n  .nav-item {\n    min-width: 0;\n    height: 54px;\n    display: grid;\n    place-items: center;\n    gap: 2px;\n    border: 0;\n    border-radius: 16px;\n    color: rgba(206,194,216,0.62);\n    background: transparent;\n    font: 500 11px Geist, monospace;\n  }\n  .nav-item .material-symbols-outlined { font-size: 25px; }\n  .nav-item.active { color: #d8b9ff; background: rgba(216,185,255,0.11); box-shadow: inset 0 0 0 1px rgba(216,185,255,0.16); }\n  @media (max-width: 420px) {\n    .brand { font-size: 24px; }\n    .topbar { padding-left: 18px; padding-right: 18px; }\n    main { padding-left: 18px; padding-right: 18px; }\n    h1 { font-size: 32px; }\n    .chip { padding: 0 12px; }\n    .hero-card > .row { align-items: flex-start; }\n    .hero-card > .row > .icon-box { display: none; }\n  }\n</style>\n</head>\n<body>\n<header class=\"topbar\">\n  <div class=\"brand\"><span class=\"material-symbols-outlined brand-icon\">token</span><span>LuckyMe</span></div>\n  <div class=\"chip\"><span class=\"status-dot\"></span><span>Mainnet</span></div>\n</header>\n<main class=\"stack\" style=\"min-height: 100dvh; justify-content: center; padding-bottom: 72px;\">\n  <section class=\"hero-card\" style=\"text-align: center;\">\n    <div class=\"icon-box\" style=\"width: 88px; height: 88px; margin: 0 auto 24px; border-radius: 999px; color: #fbbf24; background: rgba(251,191,36,0.10); border-color: rgba(251,191,36,0.22);\"><span class=\"material-symbols-outlined\" style=\"font-size: 48px;\">cloud_off</span></div>\n    <p class=\"kicker\">Solana Mainnet-Beta Status</p>\n    <h1>On-Chain Syncing</h1>\n    <p class=\"muted\" style=\"margin-top: 14px;\">Live pools are unavailable until the production program is deployed and backend state is confirmed.</p>\n    <button class=\"primary-button\" style=\"margin-top: 26px;\"><span class=\"material-symbols-outlined\" style=\"vertical-align: middle; margin-right: 8px;\">sync</span>Retry Connection</button>\n    <button class=\"secondary-button\" style=\"margin-top: 12px;\">Settings</button>\n  </section>\n  <section class=\"panel\">\n    <div class=\"row\">\n      <div class=\"row-left\"><div class=\"icon-box\"><span class=\"material-symbols-outlined\">security</span></div><div><h2>Production Safety</h2><p class=\"muted\">No fallback pools are displayed while on-chain state is unavailable.</p></div></div>\n      <span class=\"value warning\">Pending</span>\n    </div>\n  </section>\n</main>\n</body>\n</html>",
-  "welcome": "<!DOCTYPE html>\n\n<html class=\"dark\" lang=\"en\"><head>\n<meta charset=\"utf-8\"/>\n<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>\n<title>LuckyMe - Welcome</title>\n<script src=\"https://cdn.tailwindcss.com?plugins=forms,container-queries\"></script>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Geist:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap\" rel=\"stylesheet\"/>\n<link href=\"https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap\" rel=\"stylesheet\"/>\n<link href=\"https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;display=swap\" rel=\"stylesheet\"/>\n<!-- Tailwind Configuration -->\n<script id=\"tailwind-config\">\n      tailwind.config = {\n        darkMode: \"class\",\n        theme: {\n          extend: {\n            \"colors\": {\n                \"primary\": \"#d8b9ff\",\n                \"outline-variant\": \"#4c4355\",\n                \"surface-variant\": \"#323536\",\n                \"surface-container-highest\": \"#323536\",\n                \"on-primary\": \"#450086\",\n                \"surface-dim\": \"#111415\",\n                \"surface-tint\": \"#d8b9ff\",\n                \"surface-container-low\": \"#191c1d\",\n                \"primary-fixed\": \"#eddcff\",\n                \"primary-container\": \"#9945ff\",\n                \"outline\": \"#978da1\",\n                \"on-secondary-container\": \"#00653b\",\n                \"on-secondary\": \"#00391f\",\n                \"on-secondary-fixed-variant\": \"#00522f\",\n                \"tertiary-container\": \"#767676\",\n                \"surface-container\": \"#1d2021\",\n                \"tertiary\": \"#c6c6c6\",\n                \"primary-fixed-dim\": \"#d8b9ff\",\n                \"on-background\": \"#e1e3e4\",\n                \"tertiary-fixed\": \"#e2e2e2\",\n                \"surface-container-lowest\": \"#0c0f10\",\n                \"on-primary-fixed\": \"#290055\",\n                \"error-container\": \"#93000a\",\n                \"inverse-on-surface\": \"#2e3132\",\n                \"background\": \"#111415\",\n                \"on-surface-variant\": \"#cec2d8\",\n                \"on-tertiary\": \"#303030\",\n                \"on-primary-fixed-variant\": \"#6300bb\",\n                \"on-tertiary-fixed-variant\": \"#474747\",\n                \"secondary\": \"#00ec91\",\n                \"on-secondary-fixed\": \"#002110\",\n                \"surface-bright\": \"#373a3b\",\n                \"error\": \"#ffb4ab\",\n                \"tertiary-fixed-dim\": \"#c6c6c6\",\n                \"secondary-fixed\": \"#56ffa8\",\n                \"on-tertiary-container\": \"#ffffff\",\n                \"secondary-fixed-dim\": \"#00e38b\",\n                \"on-primary-container\": \"#ffffff\",\n                \"on-tertiary-fixed\": \"#1b1b1b\",\n                \"on-error-container\": \"#ffdad6\",\n                \"surface-container-high\": \"#282a2b\",\n                \"on-error\": \"#690005\",\n                \"inverse-primary\": \"#7f21e5\",\n                \"surface\": \"#111415\",\n                \"secondary-container\": \"#00ec91\",\n                \"on-surface\": \"#e1e3e4\",\n                \"inverse-surface\": \"#e1e3e4\"\n            },\n            \"fontFamily\": {\n                \"label-mono\": [\"Geist\"],\n                \"headline-md\": [\"Inter\"],\n                \"display-lg\": [\"Inter\"],\n                \"display-lg-mobile\": [\"Inter\"]\n            },\n            \"fontSize\": {\n                \"label-mono\": [\"14px\", {\"lineHeight\": \"20px\", \"letterSpacing\": \"0.05em\", \"fontWeight\": \"500\"}],\n                \"headline-md\": [\"24px\", {\"lineHeight\": \"32px\", \"letterSpacing\": \"-0.02em\", \"fontWeight\": \"600\"}],\n                \"display-lg\": [\"48px\", {\"lineHeight\": \"56px\", \"letterSpacing\": \"-0.04em\", \"fontWeight\": \"700\"}],\n                \"display-lg-mobile\": [\"36px\", {\"lineHeight\": \"42px\", \"letterSpacing\": \"-0.03em\", \"fontWeight\": \"700\"}]\n            }\n          }\n        }\n      }\n    </script>\n<style>\n        @keyframes draw {\n            0% { stroke-dashoffset: 1000; }\n            100% { stroke-dashoffset: 0; }\n        }\n\n        @keyframes neon-glow {\n            from { filter: drop-shadow(0 0 2px #00EC91) drop-shadow(0 0 8px rgba(0, 236, 145, 0.4)); }\n            to { filter: drop-shadow(0 0 5px #00EC91) drop-shadow(0 0 15px rgba(0, 236, 145, 0.7)); }\n        }\n\n        @keyframes fade-up {\n            from { opacity: 0; transform: translateY(20px); }\n            to { opacity: 1; transform: translateY(0); }\n        }\n\n        .writing-path {\n            stroke-dasharray: 1000;\n            stroke-dashoffset: 1000;\n            animation: draw 3.5s cubic-bezier(0.45, 0, 0.55, 1) forwards;\n            stroke: #00EC91;\n            stroke-width: 2;\n            fill: none;\n        }\n\n        .neon-dot {\n            offset-path: path(\"M10 80 Q 50 10 90 80 T 170 80 Q 210 150 250 80\"); /* Simplified example path */\n            animation: move-dot 3.5s cubic-bezier(0.45, 0, 0.55, 1) forwards;\n        }\n\n        .fade-in-action {\n            opacity: 0;\n            animation: fade-up 1s ease-out 3.2s forwards;\n        }\n\n        .glass-panel {\n            backdrop-filter: blur(20px);\n            background: rgba(255, 255, 255, 0.03);\n            border: 1px solid rgba(255, 255, 255, 0.12);\n        }\n\n        .material-symbols-outlined {\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\n        }\n    </style>\n<style>\n    body {\n      min-height: max(884px, 100dvh);\n    }\n  </style>\n</head>\n<body class=\"bg-black text-on-surface overflow-hidden h-screen w-screen flex flex-items-center justify-center\">\n<!-- Deep Metallic Black Shader Background -->\n<!-- STITCH_SHADER_START:ANIMATION_13 class=\"absolute inset-0 w-full h-full opacity-60\" -->\n<div class=\"absolute inset-0 w-full h-full opacity-60\" style=\"display:block;\">\n<canvas id=\"shader-canvas-ANIMATION_13\" style=\"display:block;width:100%;height:100%\"></canvas>\n<script>\n(function() {\n  const canvas = document.getElementById('shader-canvas-ANIMATION_13');\n\n  // Sync the WebGL drawing-buffer size with the CSS-driven layout size.\n  // This fires on initial layout and whenever the element is resized.\n  function syncSize() {\n    const w = canvas.clientWidth  || 1280;\n    const h = canvas.clientHeight || 720;\n    if (canvas.width !== w || canvas.height !== h) {\n      canvas.width  = w;\n      canvas.height = h;\n    }\n  }\n  if (typeof ResizeObserver !== 'undefined') {\n    new ResizeObserver(syncSize).observe(canvas);\n  }\n  syncSize();\n\n  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');\n  if (!gl) return;\n  const vs = `attribute vec2 a_position;\nvarying vec2 v_texCoord;\nvoid main() {\n  v_texCoord = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}`;\n  const fs = `precision highp float;\nuniform float u_time;\nuniform vec2 u_resolution;\nuniform vec2 u_mouse;\nvarying vec2 v_texCoord;\n\nfloat hash(vec2 p) {\n    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);\n}\n\nfloat noise(vec2 p) {\n    vec2 i = floor(p);\n    vec2 f = fract(p);\n    vec2 u = f * f * (3.0 - 2.0 * f);\n    return mix(mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),\n               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);\n}\n\nvoid main() {\n    vec2 uv = v_texCoord;\n    vec2 p = uv * 2.0 - 1.0;\n    p.x *= u_resolution.x / u_resolution.y;\n\n    // Metallic base\n    float n = noise(uv * 10.0 + u_time * 0.05);\n    n += 0.5 * noise(uv * 20.0 - u_time * 0.1);\n    \n    vec3 baseColor = vec3(0.02, 0.02, 0.03); // Deep metallic black\n    float spec = pow(n, 4.0);\n    vec3 color = baseColor + spec * 0.05;\n\n    // Brushed metal effect\n    float grain = hash(uv * 1000.0) * 0.02;\n    color += grain;\n\n    // Subtle dark gradient\n    color *= 1.0 - length(p) * 0.5;\n\n    gl_FragColor = vec4(color, 1.0);\n}\n`;\n  function cs(type, src) {\n    const s = gl.createShader(type);\n    gl.shaderSource(s, src);\n    gl.compileShader(s);\n    return s;\n  }\n  const prog = gl.createProgram();\n  gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));\n  gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));\n  gl.linkProgram(prog);\n  gl.useProgram(prog);\n  const buf = gl.createBuffer();\n  gl.bindBuffer(gl.ARRAY_BUFFER, buf);\n  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);\n  const pos = gl.getAttribLocation(prog, 'a_position');\n  gl.enableVertexAttribArray(pos);\n  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);\n  const uTime = gl.getUniformLocation(prog, 'u_time');\n  const uRes = gl.getUniformLocation(prog, 'u_resolution');\n  const uMouse = gl.getUniformLocation(prog, 'u_mouse');\n\n  // u_mouse is in pixel coordinates matching u_resolution (ShaderToy convention).\n  // Shaders that need normalized coords should use: u_mouse / u_resolution.\n  let mouse = { x: canvas.width / 2, y: canvas.height / 2 };\n  window.addEventListener('mousemove', (event) => {\n    const rect = canvas.getBoundingClientRect();\n    if (rect.width && rect.height) {\n      const nx = (event.clientX - rect.left) / rect.width;\n      const ny = 1.0 - (event.clientY - rect.top) / rect.height;\n      mouse.x = nx * canvas.width;\n      mouse.y = ny * canvas.height;\n    }\n  });\n\n  function render(t) {\n    if (typeof ResizeObserver === 'undefined') syncSize();\n    gl.viewport(0, 0, canvas.width, canvas.height);\n    if (uTime) gl.uniform1f(uTime, t * 0.001);\n    if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);\n    if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);\n    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);\n    requestAnimationFrame(render);\n  }\n  render(0);\n})();\n</script>\n</div>\n<!-- STITCH_SHADER_END:ANIMATION_13 -->\n<!-- Content Canvas -->\n<main class=\"relative z-10 w-full h-full flex flex-col items-center justify-center px-container-padding\">\n<!-- Logo Animation Container -->\n<div class=\"relative flex flex-col items-center mb-stack-lg\">\n<!-- SVG Writing Animation -->\n<!-- Note: The path below is a high-end cursive-style vector representation of \"LuckyMe\" -->\n<svg class=\"w-72 md:w-[480px] h-auto overflow-visible\" style=\"animation: neon-glow 2s ease-in-out infinite alternate;\" viewbox=\"0 0 400 120\">\n<defs>\n<filter id=\"glow\">\n<fegaussianblur result=\"coloredBlur\" stddeviation=\"3.5\"></fegaussianblur>\n<femerge>\n<femergenode in=\"coloredBlur\"></femergenode>\n<femergenode in=\"SourceGraphic\"></femergenode>\n</femerge>\n</filter>\n</defs>\n<!-- Fluid Script Path for \"LuckyMe\" -->\n<path class=\"writing-path\" d=\"M30,80 C40,40 60,20 80,40 C100,60 90,90 110,85 C130,80 140,40 160,40 C180,40 185,85 205,85 C225,85 230,40 250,40 C270,40 275,85 295,85 C315,85 320,40 340,40 C360,40 370,80 380,80\"></path>\n<!-- The \"Lite\" dot following the path -->\n<circle class=\"neon-dot\" fill=\"#00EC91\" r=\"3\">\n<animatemotion dur=\"3.5s\" fill=\"freeze\" repeatcount=\"1\">\n<mpath href=\".writing-path\"></mpath>\n</animatemotion>\n</circle>\n</svg>\n<!-- Static Text Overlay (for final high-fidelity polish) -->\n<h1 class=\"font-display-lg-mobile md:font-display-lg text-display-lg-mobile md:text-display-lg text-secondary tracking-tighter opacity-0 absolute inset-0 flex items-center justify-center pointer-events-none\" style=\"animation: fade-up 1s ease-out 3s forwards; filter: drop-shadow(0 0 10px rgba(0,236,145,0.3));\">\n                LuckyMe\n            </h1>\n</div>\n<!-- Tagline / Trust Rail -->\n<div class=\"fade-in-action flex items-center gap-2 mb-stack-lg\">\n<span class=\"material-symbols-outlined text-secondary opacity-60 text-[18px]\">verified_user</span>\n<span class=\"font-label-mono text-label-mono text-white/40 uppercase tracking-[0.2em]\">Institutional Grade Security</span>\n</div>\n<!-- Action Button -->\n<div class=\"fade-in-action w-full max-w-xs mt-8\">\n<button class=\"group relative w-full h-[56px] flex items-center justify-center overflow-hidden rounded-full transition-all duration-300 active:scale-95\">\n<!-- Button Gradient Background -->\n<div class=\"absolute inset-0 bg-gradient-to-r from-primary-container to-secondary opacity-90 group-hover:opacity-100 transition-opacity\"></div>\n<!-- Content -->\n<div class=\"relative z-10 flex items-center gap-3\">\n<span class=\"font-headline-md text-headline-md text-white\">Get Started</span>\n<span class=\"material-symbols-outlined text-white group-hover:translate-x-1 transition-transform\">arrow_forward</span>\n</div>\n<!-- Subtle Inner Glow -->\n<div class=\"absolute inset-0 rounded-full border border-white/20\"></div>\n</button>\n<p class=\"mt-6 text-center font-label-mono text-[12px] text-white/20 tracking-widest uppercase\">\n                Powered by Solana Blockchain\n            </p>\n</div>\n</main>\n<!-- Atmospheric Elements -->\n<div class=\"absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/5 blur-[120px] pointer-events-none\"></div>\n<div class=\"absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-secondary/5 blur-[120px] pointer-events-none\"></div>\n<script>\n        // Micro-interaction for the start button\n        document.querySelector('button').addEventListener('mousedown', () => {\n            document.querySelector('button').style.transform = 'scale(0.97)';\n        });\n        document.querySelector('button').addEventListener('mouseup', () => {\n            document.querySelector('button').style.transform = 'scale(1)';\n        });\n\n        // Initialize any other visual polish here\n        document.addEventListener('DOMContentLoaded', () => {\n            console.log(\"LuckyMe Premium Welcome Initialized\");\n        });\n    </script>\n</body></html>",
+  home: page("LuckyMe | Home", "home", homeBody()),
+  pools: page("LuckyMe | Pools", "pools", poolsBody()),
+  activity: page("LuckyMe | Activity", "activity", activityBody()),
+  wallet: page("LuckyMe | Wallet", "wallet", walletBody()),
+  settings: page("LuckyMe | Settings", "settings", settingsBody()),
+  review: page("LuckyMe | Review", "pools", reviewBody()),
+  syncing: page("LuckyMe | Wallet Request", "pools", syncingBody()),
+  success: page("LuckyMe | Status", "activity", successBody()),
+  unavailable: page("LuckyMe | On-chain Syncing", "settings", unavailableBody()),
+  welcome: page("LuckyMe | Welcome", "home", homeBody()),
 };
