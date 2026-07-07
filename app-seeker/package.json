@@ -6,7 +6,7 @@
   "scripts": {
     "android": "expo run:android",
     "apk:verify": "apksigner verify --print-certs ${APK_PATH:-app-release.apk}",
-    "build:dapp-store": "eas build --platform android --profile dapp-store",
+    "build:dapp-store": "npx --yes eas-cli@20.5.1 build --platform android --profile dapp-store",
     "doctor": "expo-doctor",
     "prebuild:android": "expo prebuild --platform android",
     "start": "expo start --dev-client",
