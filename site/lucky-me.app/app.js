@@ -78,6 +78,7 @@ const state = {
   walletConnectModal: null,
   walletConnectUri: "",
   selectedPool: null,
+  ticketCount: 1,
   preparedTransaction: null,
   lastError: "",
 };
@@ -128,6 +129,34 @@ function poolById(poolId) {
 
 function poolFromApi(poolId) {
   return state.pools.find((pool) => pool.id === poolId || pool.slug === poolId);
+}
+
+function selectedTicketLimit(poolId = state.selectedPool) {
+  const pool = poolFromApi(poolId);
+  return Math.max(1, Number(pool?.maxTicketsPerEntry || (poolId === "premium" ? 1 : 1000)));
+}
+
+function selectedTicketPriceLamports(poolId = state.selectedPool) {
+  const livePool = poolFromApi(poolId);
+  const staticPool = poolById(poolId);
+  return BigInt(livePool?.ticketPriceLamports || Math.round(Number(staticPool.entrySol) * 1_000_000_000));
+}
+
+function formatSolFromLamports(lamports) {
+  const value = BigInt(lamports);
+  const whole = value / 1_000_000_000n;
+  const fraction = String(value % 1_000_000_000n).padStart(9, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : `${whole}`;
+}
+
+function setTicketCount(value) {
+  const limit = selectedTicketLimit();
+  const nextValue = Number(value);
+  state.ticketCount = Number.isSafeInteger(nextValue)
+    ? Math.min(limit, Math.max(1, nextValue))
+    : 1;
+  state.preparedTransaction = null;
+  state.lastError = "";
 }
 
 function renderPoolCard(pool, compact = false) {
@@ -624,46 +653,50 @@ async function copyWalletConnectUri() {
 
 function renderReview() {
   const pool = state.selectedPool ? poolById(state.selectedPool) : POOLS[0];
+  const ticketLimit = selectedTicketLimit(pool.id);
+  const ticketCount = Math.min(state.ticketCount, ticketLimit);
+  const amountLamports = selectedTicketPriceLamports(pool.id) * BigInt(ticketCount);
   const connected = Boolean(state.wallet);
-  const prepared = state.preparedTransaction;
-  const sim = prepared?.simulation;
-  const canBuild = connected && state.onchainAvailable;
+  const canBuy = connected && state.onchainAvailable;
+  const buyLabel = ticketCount === 1 ? "Buy 1 ticket" : `Buy ${ticketCount} tickets`;
 
   dom.reviewPanel.innerHTML = `
     <div>
       <span class="label">Pool</span>
       <h2>${pool.name}</h2>
-      <p>${pool.entrySol} SOL entry. ${pool.prize}. ${pool.winners}.</p>
+      <p>${pool.entrySol} SOL per ticket. ${pool.prize}. ${pool.winners}.</p>
+    </div>
+    <div class="ticket-control">
+      <div>
+        <span class="label">Tickets</span>
+        <strong>${ticketCount}</strong>
+        <p>${formatSolFromLamports(amountLamports)} SOL total</p>
+      </div>
+      <div class="stepper" role="group" aria-label="Ticket count">
+        <button class="icon-button" data-action="ticket-dec" ${ticketCount <= 1 ? "disabled" : ""}>-</button>
+        <input data-ticket-input type="number" min="1" max="${ticketLimit}" step="1" value="${ticketCount}" inputmode="numeric" aria-label="Tickets" />
+        <button class="icon-button" data-action="ticket-inc" ${ticketCount >= ticketLimit ? "disabled" : ""}>+</button>
+      </div>
     </div>
     <div class="review-summary">
       <div class="list-row">
         <div><span class="label">Wallet</span><p class="mono">${state.wallet?.address || "Not connected"}</p></div>
         <strong class="${connected ? "success" : "warning"}">${connected ? "CONNECTED" : "REQUIRED"}</strong>
       </div>
-      <div class="list-row">
-        <div><span class="label">Program</span><p class="mono">${PROGRAM_ID}</p></div>
-        <strong class="success">Set</strong>
-      </div>
-      <div class="list-row">
-        <div><span class="label">Backend simulation</span><p>${sim ? JSON.stringify(sim.err || "ok") : "Required before wallet prompt"}</p></div>
-        <strong class="${sim?.ok ? "success" : "warning"}">${sim ? (sim.ok ? "OK" : "CHECK") : "PENDING"}</strong>
-      </div>
     </div>
-    ${prepared ? `<pre class="code-box">${JSON.stringify(prepared.summary, null, 2)}</pre>` : ""}
     ${state.lastError ? `<div class="notice danger">${state.lastError}</div>` : ""}
     <div class="wallet-actions">
       ${connected ? "" : `<button class="primary-button" data-route="wallet">Connect wallet</button>`}
-      <button class="primary-button" data-action="prepare" ${canBuild ? "" : "disabled"}>Build and simulate</button>
-      <button class="secondary-button" data-action="sign" ${prepared?.simulation?.ok ? "" : "disabled"}>Sign and send in wallet</button>
+      <button class="primary-button" data-action="buy" ${canBuy ? "" : "disabled"}>${buyLabel}</button>
       <button class="secondary-button" data-route="pools">Back to pools</button>
     </div>
-    ${state.onchainAvailable ? "" : `<div class="notice">Mainnet program state is not available yet. Transaction build is disabled until backend /pools is live.</div>`}
+    ${state.onchainAvailable ? "" : `<div class="notice">Mainnet pool state is not available yet.</div>`}
   `;
 }
 
 async function prepareTransaction() {
   if (!state.wallet || !state.selectedPool) {
-    return;
+    return null;
   }
   state.lastError = "";
   state.preparedTransaction = null;
@@ -677,7 +710,7 @@ async function prepareTransaction() {
       },
       body: JSON.stringify({
         pool: state.selectedPool,
-        ticketCount: 1,
+        ticketCount: state.ticketCount,
         player: state.wallet.address,
       }),
     });
@@ -686,11 +719,13 @@ async function prepareTransaction() {
       throw new Error(payload.message || payload.error || "Transaction build failed");
     }
     state.preparedTransaction = payload;
+    return payload;
   } catch (error) {
     state.lastError = error instanceof Error ? error.message : String(error);
+    return null;
+  } finally {
+    renderReview();
   }
-
-  renderReview();
 }
 
 async function signAndSendPreparedTransaction() {
@@ -730,6 +765,14 @@ async function signAndSendPreparedTransaction() {
   }
 
   renderReview();
+}
+
+async function buyWithWallet() {
+  const prepared = await prepareTransaction();
+  if (!prepared?.transactionBase64) {
+    return;
+  }
+  await signAndSendPreparedTransaction();
 }
 
 async function signAndSendWalletConnectTransaction(transactionBase64) {
@@ -839,6 +882,7 @@ document.addEventListener("click", async (event) => {
   const poolButton = event.target.closest("[data-pool]");
   if (poolButton) {
     state.selectedPool = poolButton.dataset.pool;
+    setTicketCount(1);
     state.preparedTransaction = null;
     state.lastError = "";
     setRoute("review");
@@ -867,13 +911,28 @@ document.addEventListener("click", async (event) => {
     renderWallets();
   } else if (action === "copy-walletconnect-uri") {
     await copyWalletConnectUri();
-  } else if (action === "prepare") {
-    await prepareTransaction();
+  } else if (action === "ticket-dec") {
+    setTicketCount(state.ticketCount - 1);
+    renderReview();
+  } else if (action === "ticket-inc") {
+    setTicketCount(state.ticketCount + 1);
+    renderReview();
+  } else if (action === "buy") {
+    await buyWithWallet();
   } else if (action === "sign") {
     await signAndSendPreparedTransaction();
   } else if (action === "disconnect") {
     await disconnectWallet();
   }
+});
+
+document.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-ticket-input]");
+  if (!input) {
+    return;
+  }
+  setTicketCount(input.value);
+  renderReview();
 });
 
 renderPools();

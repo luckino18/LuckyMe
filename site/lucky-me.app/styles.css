@@ -135,7 +135,7 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
 
 .button:hover, .primary-button:hover, .secondary-button:hover, .icon-button:hover { text-decoration: none; }
 .button:active, .primary-button:active, .secondary-button:active, .icon-button:active { transform: scale(0.98); opacity: 0.82; }
-.primary-button[disabled], .secondary-button[disabled] { opacity: 0.42; cursor: not-allowed; transform: none; }
+.primary-button[disabled], .secondary-button[disabled], .icon-button[disabled] { opacity: 0.42; cursor: not-allowed; transform: none; }
 
 /* ---------------- shared surfaces ---------------- */
 
@@ -560,6 +560,40 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
 
 .review-panel { padding: 18px; display: grid; gap: 14px; border-color: var(--line-purple); box-shadow: 0 0 28px rgba(153, 69, 255, 0.1); }
 .review-summary { display: grid; gap: 10px; }
+.ticket-control {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(14, 20, 32, 0.72);
+}
+.ticket-control strong { display: block; margin-top: 4px; font-size: 28px; line-height: 1; }
+.ticket-control p { margin-top: 4px; color: var(--muted); }
+.stepper {
+  display: grid;
+  grid-template-columns: 42px minmax(74px, 96px) 42px;
+  gap: 8px;
+  align-items: center;
+}
+.stepper .icon-button { min-height: 42px; padding: 0; font-size: 18px; }
+.stepper input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--text);
+  background: rgba(3, 5, 10, 0.54);
+  text-align: center;
+  font: inherit;
+  font-weight: 800;
+}
+.stepper input:focus {
+  outline: 2px solid rgba(0, 209, 255, 0.32);
+  border-color: var(--hover-line);
+}
 
 /* bottom nav */
 
