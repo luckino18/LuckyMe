@@ -12,7 +12,7 @@ the Publisher Portal.
 | EAS APK build URL | Pending |
 | `apksigner verify --print-certs` output | Pending |
 | Android / Seeker phone smoke test | Victor reported the signed Seeker build tested on a Seeker phone on 2026-07-07. |
-| Android / Seeker wallet-signing test result | Pending until the mainnet program and pools are deployed/initialized. |
+| Android / Seeker wallet test result | Pending until the mainnet program and pools are deployed/initialized. |
 
 Notes:
 
