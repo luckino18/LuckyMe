@@ -73,6 +73,17 @@ APK_PATH=/path/to/final.apk npm run app:apk:verify
 - Backend never signs player transactions.
 - Production pool reads do not fall back to fake pools.
 
+## Mainnet Deployment Status
+
+- Program deployed on 2026-07-07 at
+  `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`.
+- Upgrade/config authority:
+  `AApgoYncyfpadcMwZBvbCtzp3L9QdocgsYTmrPR2wEds`.
+- Treasury: `87jw8LSagc3NdcyPixwXFYZRNPYes7YqFFmqU5WUeJtd`.
+- Config and all four pools are initialized on `mainnet-beta`.
+- The first active production round is open for Mini, Normal, High, and
+  Premium.
+
 ## Acceptance Checklist
 
 - `npm test`
@@ -89,7 +100,6 @@ APK_PATH=/path/to/final.apk npm run app:apk:verify
 
 - Production HTTPS backend URL.
 - Production mainnet RPC URL.
-- Mainnet program deployment and initialized production config/pools.
 - ORAO VRF provider production configuration.
 - EAS account/project access and release signing credentials.
 - Publisher Portal account with completed KYC/KYB.

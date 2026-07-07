@@ -17,6 +17,7 @@
     "backend:validate:production": "LUCKYME_VALIDATE_CONFIG_ONLY=true node backend/src/server.mjs",
     "wallet:plan": "node scripts/mainnet-wallet-plan.mjs",
     "init:pools": "node scripts/init-pools.mjs",
+    "init:pools:ledger": "node scripts/init-pools-ledger.mjs",
     "localnet:smoke": "node scripts/localnet-smoke.mjs",
     "round:open": "node scripts/open-round.mjs",
     "round:settle": "node scripts/settle-round.mjs",
@@ -31,6 +32,8 @@
   },
   "devDependencies": {
     "@coral-xyz/anchor": "0.32.1",
+    "@ledgerhq/hw-app-solana": "^7.10.5",
+    "@ledgerhq/hw-transport-node-hid": "^6.33.5",
     "@solana/web3.js": "1.98.4"
   },
   "dependencies": {

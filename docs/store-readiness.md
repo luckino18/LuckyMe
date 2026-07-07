@@ -42,8 +42,10 @@ Based on the official Solana Mobile publishing docs, prepare:
 - `README.md` and `docs/mainnet-readiness.md` document the same release mode,
   wallet chain, cluster, APK profile, and remaining credential-owned items.
 - Victor reported the signed Seeker build tested on a Seeker phone on
-  2026-07-07. Full wallet-signing release evidence remains gated by deployed
-  and initialized mainnet program state.
+  2026-07-07.
+- The synchronized Program ID is deployed and initialized on mainnet-beta.
+  `GET https://api.lucky-me.app/pools` returns `source: onchain` and active
+  round `1` for Mini, Normal, High, and Premium.
 
 ## User-Facing App Requirements
 
@@ -79,5 +81,4 @@ Based on the official Solana Mobile publishing docs, prepare:
 - Publisher wallet with SOL.
 - Release signing key or EAS-managed credentials.
 - Final signed APK artifact.
-- Confirmation that the synchronized Program ID is deployed and initialized on
-  mainnet-beta.
+- Post-deploy real-device wallet entry test against the active mainnet rounds.

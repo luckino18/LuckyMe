@@ -7,19 +7,27 @@ storage provider, Publisher Policy, and Developer Agreement.
 
 ## 1. Mainnet Program Deployment
 
-- Confirm the synchronized Program ID:
+- Completed on 2026-07-07 for synchronized Program ID:
   `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`.
-- Deploy the Anchor program to Solana `mainnet-beta`.
-- Confirm the deployed program account exists on `mainnet-beta`.
-- Preserve the deploy logs and program binary hash for release records.
+- Deploy tx:
+  `Euf5ociVf2MyeyVpypC7EcwyQgnWBvsnuqhuxPGSMCeta9Ho1u7dKNGiLFczKbwkamjZMf8Ajb6Ykbj4mMXAP8N`.
+- Confirmed program account on `mainnet-beta`:
+  owner `BPFLoaderUpgradeab1e11111111111111111111111`, executable `true`,
+  ProgramData `2BHrg3wqy2bcVtAp682exVGZEmrVJvey1WkjqxGCjWwh`, authority
+  `AApgoYncyfpadcMwZBvbCtzp3L9QdocgsYTmrPR2wEds`.
 
 ## 2. Program Initialization
 
-- Initialize LuckyMe config with the production authority and treasury.
-- Initialize the production pools.
-- Confirm config, pool, pool vault, and jackpot vault PDA addresses.
-- Open the first production round only after backend and app release env are
-  configured.
+- Completed on 2026-07-07 with production authority
+  `AApgoYncyfpadcMwZBvbCtzp3L9QdocgsYTmrPR2wEds` and treasury
+  `87jw8LSagc3NdcyPixwXFYZRNPYes7YqFFmqU5WUeJtd`.
+- Config PDA: `Cvx2ffKnwanpUZGsDBKyo2uwoo6gjucQmrRZpiYVyKh`.
+- Pool PDAs: Mini `AgZCfxkrsUb5iYaR1DhANVdM133hBgGzB2TPZaExiGRv`, Normal
+  `14mtJnGcu3ASaM5ZvzsUcn2ZGjPR73tv5Fug9UWjSj9s`, High
+  `PL7Yn89kfs9FjVWcuHXcN6vcHkiN8wPABvE9L1bUH61`, Premium
+  `9jBXss91gNEDLpjbRymWpn561GoDFdaxHd6iyXHKGTtp`.
+- First production rounds opened for all four pools after backend and app env
+  were already configured.
 
 ## 3. Backend HTTPS Deployment
 
@@ -37,9 +45,9 @@ npm run backend:validate:production
 npm run backend:start
 ```
 
-- Deploy behind a production HTTPS URL.
-- Confirm `GET /health`, `GET /config`, and `GET /pools` respond from the
-  production URL.
+- Deployed behind production HTTPS URL `https://api.lucky-me.app`.
+- Confirmed `GET /config` and `GET /pools` respond from the production URL with
+  `source: onchain`; `GET /pools` reports active round `1` for all four pools.
 - Keep `POST /transactions/submit` disabled unless there is a deliberate
   production relay policy.
 
