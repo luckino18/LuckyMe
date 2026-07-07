@@ -494,6 +494,16 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
   flex: 0 0 auto;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
 }
+.pool-chip.success {
+  color: var(--emerald);
+  background: rgba(20, 241, 149, 0.08);
+  border-color: rgba(20, 241, 149, 0.26);
+}
+.pool-chip.warning {
+  color: #FBD38D;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.26);
+}
 
 .entry { display: flex; align-items: baseline; gap: 6px; color: #fff; font-size: 30px; font-weight: 850; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .entry span { color: var(--muted); font-size: 13px; font-weight: 800; letter-spacing: 0.06em; }
@@ -511,6 +521,8 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
 .fact strong { display: block; color: #fff; font-size: 12.5px; line-height: 1.2; overflow-wrap: anywhere; }
 .jackpot-fact { border-color: rgba(20, 241, 149, 0.18); background: rgba(20, 241, 149, 0.045); }
 .jackpot-fact strong { color: var(--emerald); }
+.time-fact { border-color: rgba(0, 209, 255, 0.18); background: rgba(0, 209, 255, 0.045); }
+.time-fact strong { color: var(--cyan); font-variant-numeric: tabular-nums; }
 
 .pool-card p { font-size: 12.5px; color: var(--soft); }
 .pool-card .primary-button { width: 100%; margin-top: auto; }

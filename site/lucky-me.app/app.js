@@ -149,6 +149,54 @@ function formatSolFromLamports(lamports) {
   return fraction ? `${whole}.${fraction}` : `${whole}`;
 }
 
+function formatDuration(seconds) {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const secs = safeSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  }
+  return `${minutes}m ${String(secs).padStart(2, "0")}s`;
+}
+
+function roundTiming(poolId = state.selectedPool) {
+  const livePool = poolFromApi(poolId);
+  const round = livePool?.activeRound;
+  const roundId = round?.roundId ?? livePool?.currentRound ?? null;
+
+  if (!round) {
+    return {
+      isOpen: false,
+      roundId,
+      status: state.onchainAvailable ? "No active round" : "Pending",
+      timeLeft: state.onchainAvailable ? "Closed" : "Pending",
+      chipClass: "warning",
+    };
+  }
+
+  if (round.settled) {
+    return {
+      isOpen: false,
+      roundId,
+      status: `Round ${roundId}`,
+      timeLeft: "Settled",
+      chipClass: "warning",
+    };
+  }
+
+  const remainingSeconds = Number(round.endTs) - Math.floor(Date.now() / 1000);
+  const isOpen = remainingSeconds > 0;
+  return {
+    isOpen,
+    roundId,
+    status: `Round ${roundId}`,
+    timeLeft: isOpen ? formatDuration(remainingSeconds) : "Closed",
+    chipClass: isOpen ? "success" : "warning",
+  };
+}
+
 function setTicketCount(value) {
   const limit = selectedTicketLimit();
   const nextValue = Number(value);
@@ -161,12 +209,16 @@ function setTicketCount(value) {
 
 function renderPoolCard(pool, compact = false) {
   const livePool = poolFromApi(pool.id);
-  const liveRound = livePool?.currentRound ?? livePool?.round ?? null;
-  const liveStatus = state.onchainAvailable ? `Round ${liveRound || "open"}` : "Pending";
+  const timing = roundTiming(pool.id);
+  const liveStatus = state.onchainAvailable ? timing.status : "Pending";
   const jackpotValue = state.onchainAvailable && livePool?.jackpotSol
     ? `${livePool.jackpotSol} SOL`
     : "Pending";
-  const actionLabel = state.onchainAvailable ? `Join ${pool.name}` : "Review setup";
+  const actionLabel = state.onchainAvailable
+    ? timing.isOpen
+      ? `Join ${pool.name}`
+      : "Round closed"
+    : "Review setup";
 
   return `
     <article class="pool-card">
@@ -175,17 +227,18 @@ function renderPoolCard(pool, compact = false) {
           <span class="label">${pool.chip}</span>
           <h3>${pool.name}</h3>
         </div>
-        <span class="pool-chip">${liveStatus}</span>
+        <span class="pool-chip ${timing.chipClass}">${liveStatus}</span>
       </div>
       <div class="entry">${pool.entrySol}<span>SOL</span></div>
       <div class="facts-grid">
         <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
         <div class="fact"><span class="label">Winners</span><strong>${pool.winners}</strong></div>
         <div class="fact"><span class="label">Limit</span><strong>${pool.limit}</strong></div>
+        <div class="fact time-fact"><span class="label">Time left</span><strong>${timing.timeLeft}</strong></div>
         <div class="fact jackpot-fact"><span class="label">Jackpot</span><strong>${jackpotValue}</strong></div>
       </div>
       ${compact ? "" : `<p>${pool.note} Live state loads only from verified on-chain data.</p>`}
-      <button class="primary-button" data-pool="${pool.id}">${actionLabel}</button>
+      <button class="primary-button" data-pool="${pool.id}" ${state.onchainAvailable && !timing.isOpen ? "disabled" : ""}>${actionLabel}</button>
     </article>
   `;
 }
@@ -656,8 +709,9 @@ function renderReview() {
   const ticketLimit = selectedTicketLimit(pool.id);
   const ticketCount = Math.min(state.ticketCount, ticketLimit);
   const amountLamports = selectedTicketPriceLamports(pool.id) * BigInt(ticketCount);
+  const timing = roundTiming(pool.id);
   const connected = Boolean(state.wallet);
-  const canBuy = connected && state.onchainAvailable;
+  const canBuy = connected && state.onchainAvailable && timing.isOpen;
   const buyLabel = ticketCount === 1 ? "Buy 1 ticket" : `Buy ${ticketCount} tickets`;
 
   dom.reviewPanel.innerHTML = `
@@ -680,6 +734,10 @@ function renderReview() {
     </div>
     <div class="review-summary">
       <div class="list-row">
+        <div><span class="label">${timing.status}</span><p>${timing.isOpen ? "Round is open for entries" : "This round is no longer accepting entries"}</p></div>
+        <strong class="${timing.isOpen ? "success" : "warning"}">${timing.timeLeft}</strong>
+      </div>
+      <div class="list-row">
         <div><span class="label">Wallet</span><p class="mono">${state.wallet?.address || "Not connected"}</p></div>
         <strong class="${connected ? "success" : "warning"}">${connected ? "CONNECTED" : "REQUIRED"}</strong>
       </div>
@@ -691,6 +749,7 @@ function renderReview() {
       <button class="secondary-button" data-route="pools">Back to pools</button>
     </div>
     ${state.onchainAvailable ? "" : `<div class="notice">Mainnet pool state is not available yet.</div>`}
+    ${state.onchainAvailable && !timing.isOpen ? `<div class="notice">This round is closed. Wait for the next round to open.</div>` : ""}
   `;
 }
 
@@ -934,6 +993,16 @@ document.addEventListener("change", (event) => {
   setTicketCount(input.value);
   renderReview();
 });
+
+setInterval(() => {
+  if (!state.onchainAvailable) {
+    return;
+  }
+  renderPools();
+  if (state.route === "review" && !document.activeElement?.matches?.("[data-ticket-input]")) {
+    renderReview();
+  }
+}, 1000);
 
 renderPools();
 renderActivity();
