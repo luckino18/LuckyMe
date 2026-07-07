@@ -18,7 +18,10 @@
     },
     "extra": {
       "luckymeProgramId": "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3",
-      "solanaCluster": "mainnet-beta"
+      "solanaCluster": "mainnet-beta",
+      "eas": {
+        "projectId": "e054857c-6dfb-46ec-9d60-09ce2150dcc4"
+      }
     },
     "plugins": [
       [
