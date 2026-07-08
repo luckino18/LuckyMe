@@ -76,6 +76,19 @@ The UI has explicit states for missing wallet support, rejected wallet requests,
 insufficient SOL, failed simulation, stale or closed rounds, backend
 unavailability, RPC failures, settlement, and refund mode.
 
+## Future APK TODO
+
+- Add a first-run in-app notification explainer before requesting Android push
+  permission. Copy should explain that alerts are only for pool starts and
+  near-close reminders, with no spam.
+- Push policy for MVP: max two notifications per active round per opted-in
+  device: one when the first ticket starts a pool countdown, and one at 10
+  minutes remaining.
+- Deep-link push opens the APK directly on the relevant pool.
+- Add post-win sharing: generate a branded winner card image with pool, round
+  number, prize amount, and a `Share on X` action. Sharing must be opt-in and
+  must not expose wallet addresses unless the player explicitly chooses it.
+
 ## APK Profile
 
 `eas.json` contains a `dapp-store` profile:
