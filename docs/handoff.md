@@ -21,6 +21,18 @@ Current objective: operate the deployed LuckyMe `MAINNET_RELEASE` Solana Mobile
 - On-chain status on 2026-07-07: config initialized, all four pools
   initialized, and first active round opened for Mini, Normal, High, and
   Premium.
+- Final store APK: `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk`
+- Final APK SHA-256:
+  `bb83e7f14f287fc0bd781d6cae4769ba94b2243565ab439e13455e5c176567e4`
+- APK signing: EAS-managed Android credentials
+  `Build Credentials iNPMBDRiCC (default)`, verified with APK Signature Scheme
+  v2. Signer certificate SHA-256:
+  `e249bc5555bb8206fc11dce9fcda527f25ddf8b8af00a0156806892a2cbb2067`.
+- Push notifications: APK includes Expo push registration and the VPS backend
+  exposes `/notifications/register`. The live register/unregister smoke test
+  and keeper dry-run passed on 2026-07-08.
+- Winner share card: included in the APK/WebView flow as a dynamic,
+  responsive card with WhatsApp, X, Telegram, and PNG download actions.
 
 ## Main Files Changed In This Pass
 
@@ -28,12 +40,14 @@ Current objective: operate the deployed LuckyMe `MAINNET_RELEASE` Solana Mobile
 - `SECURITY.md`
 - `Anchor.toml`
 - `backend/src/server.mjs`
+- `backend/src/push-notifications.mjs`
 - `app-seeker/App.tsx`
 - `app-seeker/src/LuckyMeScreen.tsx`
 - `app-seeker/app.json`
 - `app-seeker/app.config.js`
 - `app-seeker/eas.json`
 - `app-seeker/scripts/validate-production-env.mjs`
+- `scripts/push-round-alerts.mjs`
 - `docs/apk-signing.md`
 - `docs/solana-mobile-publishing.md`
 - `docs/store-listing/*`
@@ -44,10 +58,9 @@ Current objective: operate the deployed LuckyMe `MAINNET_RELEASE` Solana Mobile
 
 - Publisher Portal account and KYC/KYB.
 - Publisher wallet with enough SOL for submission and storage costs.
-- Release APK signing key or EAS-managed credentials.
-- Signed APK artifact.
 - Publisher Portal API key and signer keypair if using the optional CLI path.
 - Post-deploy real-device wallet entry test against the active mainnet rounds.
+- Final Publisher Portal submission and storage provider selection.
 
 ## Validation Commands
 
@@ -62,6 +75,14 @@ cargo check
 cargo test
 ```
 
+Final store APK verification commands:
+
+```bash
+npm run app:apk:verify
+apksigner verify --verbose --print-certs /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk
+shasum -a 256 /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk
+```
+
 ## Mainnet Operations Notes
 
 - The successful deployment used a temporary local fee-payer/buffer wallet for
@@ -71,3 +92,7 @@ cargo test
   while using a local fee payer for transaction fees.
 - The temporary deployment wallet was drained after setup and verified at
   `0 SOL`.
+- The 32-character value `13ad45e384e61cf9c9c391ca0f3ea074` is treated as the
+  WalletConnect Project ID for web wallet flows. The Expo/EAS project ID used
+  by the APK for push tokens is
+  `e054857c-6dfb-46ec-9d60-09ce2150dcc4`.

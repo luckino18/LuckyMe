@@ -43,9 +43,17 @@ Based on the official Solana Mobile publishing docs, prepare:
   wallet chain, cluster, APK profile, and remaining credential-owned items.
 - Victor reported the signed Seeker build tested on a Seeker phone on
   2026-07-07.
+- Final store APK built on 2026-07-08:
+  `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk`
+- Final APK SHA-256:
+  `bb83e7f14f287fc0bd781d6cae4769ba94b2243565ab439e13455e5c176567e4`
+- Final APK signing verified with APK Signature Scheme v2 using EAS-managed
+  Android credentials `Build Credentials iNPMBDRiCC (default)`.
 - The synchronized Program ID is deployed and initialized on mainnet-beta.
   `GET https://api.lucky-me.app/pools` returns `source: onchain` and active
   round `1` for Mini, Normal, High, and Premium.
+- The VPS backend exposes Expo push notification registration and the push
+  keeper dry-run passed against the production configuration.
 
 ## User-Facing App Requirements
 
@@ -54,31 +62,30 @@ Based on the official Solana Mobile publishing docs, prepare:
 - Technical data such as mode, cluster, RPC/source details, Program ID,
   treasury, vaults, randomness mode, randomness commitment, and jackpot odds
   sits behind `Details / Transparency`.
-- The transaction review shows amount, pool, round, tickets, wallet, Solana
-  mainnet, and simulation result before wallet signing. Program ID and other
-  account-level details sit behind `Details / Transparency`.
+- The entry flow shows amount, pool, round, tickets, wallet, and Solana
+  mainnet before wallet signing. Program ID and other account-level details sit
+  behind transparency/details views, not in the primary purchase UI.
+- Winners can use the responsive share card with WhatsApp, X, Telegram, and PNG
+  download actions once round winner data is available.
 - The backend never signs player transactions and never custodies user funds.
 
 ## Final Release Checklist
 
-- APK built with `eas build --platform android --profile dapp-store`.
-- APK signed with the release key or EAS-managed release credentials.
-- `apksigner verify --print-certs` passes for the final APK.
-- Backend production HTTPS URL configured in the EAS environment or secret set.
-- App opens without loopback, LAN, or non-mainnet references.
+- APK built with `eas build --platform android --profile dapp-store`: done.
+- APK signed with EAS-managed release credentials: done.
+- `apksigner verify --print-certs` passes for the final APK: done.
+- Backend production HTTPS URL configured in the EAS environment: done.
+- App opens without loopback, LAN, or non-mainnet references: validator passed.
 - `EXPO_PUBLIC_LUCKYME_TERMS_URL`, `EXPO_PUBLIC_LUCKYME_PRIVACY_URL`, and
-  `EXPO_PUBLIC_LUCKYME_SUPPORT_URL` are final HTTPS URLs.
-- Screenshots and icon/adaptive icon assets are ready.
+  `EXPO_PUBLIC_LUCKYME_SUPPORT_URL` point at final HTTPS URLs.
+- Screenshots and icon/adaptive icon assets are ready or refreshed for the
+  final portal submission.
 - Publisher Portal account, KYC/KYB, publisher wallet, SOL balance, and storage
-  provider are ready.
+  provider must be ready before submission.
 
 ## Remaining Credential-Owned Items
 
-- Real production HTTPS backend URL.
-- Real production mainnet RPC URL.
-- Final terms, privacy, and support URLs.
 - Publisher Portal account and KYC/KYB.
 - Publisher wallet with SOL.
-- Release signing key or EAS-managed credentials.
-- Final signed APK artifact.
+- Publisher Portal storage provider and final submission.
 - Post-deploy real-device wallet entry test against the active mainnet rounds.
