@@ -22,6 +22,7 @@
     "round:open": "node scripts/open-round.mjs",
     "round:settle": "node scripts/settle-round.mjs",
     "round:close-empty": "node scripts/close-empty-round.mjs",
+    "round:crank-empty": "node scripts/crank-empty-rounds.mjs",
     "refund:crank": "node scripts/refund-cranker.mjs",
     "randomness:request": "node scripts/randomness-request.mjs",
     "randomness:status": "node scripts/randomness-status.mjs",

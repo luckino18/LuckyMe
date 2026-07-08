@@ -17,6 +17,7 @@ const WALLETCONNECT_SOLANA_METHODS = [
 ];
 const WALLETCONNECT_PROVIDER_URL = "https://unpkg.com/@walletconnect/universal-provider@2.23.9/dist/index.umd.js";
 const WALLETCONNECT_MODAL_URL = "https://unpkg.com/@walletconnect/modal@2.7.0/dist/cdn/bundle.js";
+const OPERATOR_MODE = new URLSearchParams(window.location.search).has("operator");
 const MOBILE_WALLET_BROWSERS = [
   { id: "phantom", name: "Phantom" },
   { id: "solflare", name: "Solflare" },
@@ -364,6 +365,7 @@ function renderWallets() {
         </div>
         <p class="mono">${state.wallet.address}</p>
         <div class="wallet-actions">
+          ${OPERATOR_MODE ? `<button class="primary-button" data-action="crank-empty-rounds">Crank rounds</button>` : ""}
           <button class="secondary-button" data-action="disconnect">Disconnect</button>
         </div>
       </article>
@@ -803,27 +805,7 @@ async function signAndSendPreparedTransaction() {
   renderReview();
 
   try {
-    const transaction = Transaction.from(base64ToBytes(state.preparedTransaction.transactionBase64));
-    const provider = state.wallet.provider;
-    let signature;
-
-    if (state.wallet.type === "walletconnect") {
-      signature = await signAndSendWalletConnectTransaction(state.preparedTransaction.transactionBase64);
-    } else if (typeof provider.signAndSendTransaction === "function") {
-      const result = await provider.signAndSendTransaction(transaction);
-      signature = typeof result === "string" ? result : result?.signature;
-    } else if (typeof provider.signTransaction === "function") {
-      const signed = await provider.signTransaction(transaction);
-      const connection = new Connection(state.preparedTransaction.clusterUrl || state.config?.clusterUrl || DEFAULT_RPC, "confirmed");
-      signature = await connection.sendRawTransaction(signed.serialize(), {
-        maxRetries: 3,
-        skipPreflight: false,
-      });
-      await connection.confirmTransaction(signature, "confirmed");
-    } else {
-      throw new Error(`${state.wallet.name} does not expose a Solana transaction signing method`);
-    }
-
+    const signature = await signAndSendTransactionPayload(state.preparedTransaction);
     state.preparedTransaction.signature = signature;
     state.lastError = signature ? `Submitted: ${signature}` : "Transaction submitted";
   } catch (error) {
@@ -841,11 +823,81 @@ async function buyWithWallet() {
   await signAndSendPreparedTransaction();
 }
 
-async function signAndSendWalletConnectTransaction(transactionBase64) {
+async function signAndSendTransactionPayload(preparedTransaction) {
+  if (!state.wallet || !preparedTransaction?.transactionBase64) {
+    return null;
+  }
+
+  const transaction = Transaction.from(base64ToBytes(preparedTransaction.transactionBase64));
+  const provider = state.wallet.provider;
+
+  if (state.wallet.type === "walletconnect") {
+    return signAndSendWalletConnectTransaction(preparedTransaction.transactionBase64, preparedTransaction.clusterUrl);
+  }
+
+  if (typeof provider.signAndSendTransaction === "function") {
+    const result = await provider.signAndSendTransaction(transaction);
+    return typeof result === "string" ? result : result?.signature;
+  }
+
+  if (typeof provider.signTransaction === "function") {
+    const signed = await provider.signTransaction(transaction);
+    const connection = new Connection(preparedTransaction.clusterUrl || state.config?.clusterUrl || DEFAULT_RPC, "confirmed");
+    const signature = await connection.sendRawTransaction(signed.serialize(), {
+      maxRetries: 3,
+      skipPreflight: false,
+    });
+    await connection.confirmTransaction(signature, "confirmed");
+    return signature;
+  }
+
+  throw new Error(`${state.wallet.name} does not expose a Solana transaction signing method`);
+}
+
+async function crankEmptyRounds() {
+  if (!state.wallet?.address) {
+    showWalletMessage("Connect a funded Solana wallet first.", "warning");
+    return;
+  }
+
+  showWalletMessage("Preparing round crank transaction...", "soft");
+
+  try {
+    const response = await fetch(`${API_BASE}/transactions/crank-empty-rounds`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        keeper: state.wallet.address,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || payload.error || "Crank transaction build failed");
+    }
+    if (!payload.transactionBase64) {
+      showWalletMessage("No expired empty rounds need cranking.", "success");
+      return;
+    }
+    if (payload.simulation && payload.simulation.ok === false) {
+      throw new Error(`Crank simulation failed: ${JSON.stringify(payload.simulation.err)}`);
+    }
+
+    const signature = await signAndSendTransactionPayload(payload);
+    showWalletMessage(signature ? `Crank submitted: ${signature}` : "Crank transaction submitted.", "success");
+    await loadPools();
+    renderWallets();
+  } catch (error) {
+    showWalletMessage(error instanceof Error ? error.message : String(error), "danger");
+  }
+}
+
+async function signAndSendWalletConnectTransaction(transactionBase64, clusterUrl) {
   const provider = state.wallet?.provider;
   const chainId = state.wallet?.chainId || WALLETCONNECT_SOLANA_CHAIN;
   const methods = state.wallet?.session?.namespaces?.solana?.methods || [];
-  const connection = new Connection(state.preparedTransaction.clusterUrl || state.config?.clusterUrl || DEFAULT_RPC, "confirmed");
+  const connection = new Connection(clusterUrl || state.config?.clusterUrl || DEFAULT_RPC, "confirmed");
 
   if (methods.includes("solana_signAndSendTransaction")) {
     const result = await provider.request({
@@ -985,6 +1037,8 @@ document.addEventListener("click", async (event) => {
     renderReview();
   } else if (action === "buy") {
     await buyWithWallet();
+  } else if (action === "crank-empty-rounds") {
+    await crankEmptyRounds();
   } else if (action === "sign") {
     await signAndSendPreparedTransaction();
   } else if (action === "disconnect") {

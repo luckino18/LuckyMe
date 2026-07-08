@@ -1,6 +1,7 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import http from "node:http";
 import { URL } from "node:url";
+import { Transaction } from "@solana/web3.js";
 import {
   DEFAULT_HOUSE_FEE_BPS,
   DEFAULT_JACKPOT_BPS,
@@ -220,6 +221,18 @@ const server = http.createServer(async (req, res) => {
     try {
       const payload = await readJson(req);
       return json(res, 200, await buildBuyTicketsTransaction(payload));
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "transaction_build_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/transactions/crank-empty-rounds") {
+    try {
+      const payload = await readJson(req);
+      return json(res, 200, await buildCrankEmptyRoundsTransaction(payload));
     } catch (error) {
       return json(res, error.status ?? 500, {
         error: error.code ?? "transaction_build_failed",
@@ -611,6 +624,186 @@ async function buildBuyTicketsTransaction(payload) {
     lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
     simulation,
   };
+}
+
+async function buildCrankEmptyRoundsTransaction(payload) {
+  const keeper = parsePublicKey(payload.keeper, "keeper");
+  enforceSubjectRateLimit(keeper.toBase58());
+  const requestedPool = payload.pool ? parsePoolSlug(payload.pool) : null;
+  const pools = requestedPool
+    ? [ONCHAIN_POOL_BY_SLUG.get(requestedPool)]
+    : ONCHAIN_POOLS;
+  const { connection, program, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
+  const config = deriveConfig();
+  const transaction = new Transaction();
+  const now = Math.floor(Date.now() / 1000);
+  const actions = [];
+
+  for (const poolSpec of pools) {
+    const pool = derivePool(config, poolSpec.id);
+    const poolAccount = await program.account.pool.fetch(pool);
+    const currentRound = numberFromAnchor(poolAccount.currentRound);
+
+    if (currentRound <= 0) {
+      await addOpenRoundInstruction({
+        program,
+        transaction,
+        actions,
+        keeper,
+        config,
+        pool,
+        poolSpec,
+        roundId: 1,
+      });
+      continue;
+    }
+
+    const round = deriveRound(pool, currentRound);
+    const roundAccount = await program.account.round.fetch(round);
+    const endTs = numberFromAnchor(roundAccount.endTs);
+    const empty = bigintFromAnchor(roundAccount.totalTickets) === 0n &&
+      bigintFromAnchor(roundAccount.totalLamports) === 0n &&
+      Number(roundAccount.entrantCount) === 0;
+    const expired = now >= endTs;
+
+    if (!expired) {
+      actions.push({
+        action: "skip_active_round",
+        pool: poolSpec.slug,
+        roundId: currentRound,
+        round: round.toBase58(),
+        endTs,
+      });
+      continue;
+    }
+
+    if (!empty) {
+      actions.push({
+        action: "skip_non_empty_expired_round",
+        pool: poolSpec.slug,
+        roundId: currentRound,
+        round: round.toBase58(),
+        totalTickets: stringFromAnchor(roundAccount.totalTickets),
+      });
+      continue;
+    }
+
+    if (!roundAccount.settled) {
+      const closeInstruction = await program.methods
+        .closeEmptyRoundAfterTimeout()
+        .accounts({
+          keeper,
+          config,
+          pool,
+          round,
+        })
+        .instruction();
+      transaction.add(closeInstruction);
+      actions.push({
+        action: "close_empty_round",
+        pool: poolSpec.slug,
+        roundId: currentRound,
+        round: round.toBase58(),
+      });
+    }
+
+    await addOpenRoundInstruction({
+      program,
+      transaction,
+      actions,
+      keeper,
+      config,
+      pool,
+      poolSpec,
+      roundId: currentRound + 1,
+    });
+  }
+
+  if (transaction.instructions.length === 0) {
+    return {
+      clusterUrl: publicRpcUrl(url),
+      programId: PROGRAM_ID.toBase58(),
+      transactionBase64: null,
+      summary: {
+        action: "crank_empty_rounds",
+        keeper: keeper.toBase58(),
+        actions,
+        executableInstructions: 0,
+      },
+      simulation: {
+        ok: true,
+        err: null,
+        logs: [],
+        unitsConsumed: null,
+      },
+    };
+  }
+
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  transaction.feePayer = keeper;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+  const transactionBase64 = transaction
+    .serialize({ requireAllSignatures: false, verifySignatures: false })
+    .toString("base64");
+  const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
+
+  return {
+    clusterUrl: publicRpcUrl(url),
+    programId: PROGRAM_ID.toBase58(),
+    transactionBase64,
+    summary: {
+      action: "crank_empty_rounds",
+      keeper: keeper.toBase58(),
+      actions,
+      executableInstructions: transaction.instructions.length,
+      estimatedNewRoundRentLamports: String(2_811_840n * BigInt(
+        actions.filter((item) => item.action === "open_round").length,
+      )),
+    },
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    simulation,
+  };
+}
+
+async function addOpenRoundInstruction({
+  program,
+  transaction,
+  actions,
+  keeper,
+  config,
+  pool,
+  poolSpec,
+  roundId,
+}) {
+  const round = deriveRound(pool, roundId);
+  const reveal = randomBytes(32);
+  const commitment = createHash("sha256")
+    .update(Buffer.from("luckyme-commit"))
+    .update(reveal)
+    .digest();
+  const instruction = await program.methods
+    .openRound([...commitment])
+    .accounts({
+      keeper,
+      config,
+      pool,
+      round,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+  transaction.add(instruction);
+  actions.push({
+    action: "open_round",
+    pool: poolSpec.slug,
+    roundId,
+    round: round.toBase58(),
+    randomnessCommitment: commitment.toString("hex"),
+    randomnessReveal: reveal.toString("hex"),
+  });
 }
 
 async function buildRefundEntryTransaction(payload) {
