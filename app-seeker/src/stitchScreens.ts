@@ -3,7 +3,7 @@ export type StitchScreenId =
   | "pools"
   | "activity"
   | "wallet"
-  | "settings"
+  | "links"
   | "review"
   | "syncing"
   | "success"
@@ -48,10 +48,10 @@ const POOLS: PoolSpec[] = [
     name: "Mini",
     chip: "Low entry",
     entry: "0.005 SOL",
-    prize: "95% main prize",
+    prize: "95% prize pool",
     winners: "1 winner",
     limits: "1,000 tickets max",
-    note: "Low entry, same settlement rules.",
+    note: "3% builds the reserve jackpot. 2% goes to treasury.",
     tone: "cyan",
   },
   {
@@ -59,10 +59,10 @@ const POOLS: PoolSpec[] = [
     name: "Normal",
     chip: "Balanced",
     entry: "0.01 SOL",
-    prize: "95% main prize",
+    prize: "95% prize pool",
     winners: "1 winner",
     limits: "1,000 tickets max",
-    note: "Balanced public pool.",
+    note: "3% builds the reserve jackpot. 2% goes to treasury.",
     tone: "purple",
   },
   {
@@ -70,10 +70,10 @@ const POOLS: PoolSpec[] = [
     name: "High",
     chip: "Higher entry",
     entry: "0.05 SOL",
-    prize: "95% main prize",
+    prize: "95% prize pool",
     winners: "1 winner",
     limits: "1,000 tickets max",
-    note: "Higher entry, single winner.",
+    note: "3% builds the reserve jackpot. 2% goes to treasury.",
     tone: "violet",
   },
   {
@@ -84,20 +84,18 @@ const POOLS: PoolSpec[] = [
     prize: "70 / 20 / 10 split",
     winners: "3 winners",
     limits: "1 ticket per wallet",
-    note: "Minimum 3 wallets required.",
+    note: "Minimum 3 wallets required. Main prize splits 70 / 20 / 10.",
     tone: "prime",
   },
 ];
 
 const RULES = [
   ["Round length", "1 hour"],
-  ["Main prize", "95%"],
-  ["Treasury", "2%"],
-  ["Jackpot reserve", "3%"],
+  ["Main prize", "95% of entries"],
+  ["Jackpot reserve", "3% of entries"],
+  ["Treasury", "2% of entries"],
 ];
 
-const PROGRAM_ID = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
-const API_HOST = "api.lucky-me.app";
 const DEFAULT_WINNER_SHARE: WinnerShareData = {
   pool: "Mini Pool",
   round: "1284",
@@ -148,7 +146,7 @@ const ICONS = {
   pools: `<svg ${SVG}><path d="m12 3.5 7.5 4.2L12 11.9 4.5 7.7Z"/><path d="m4.5 12.2 7.5 4.2 7.5-4.2"/><path d="m4.5 16.4 7.5 4.2 7.5-4.2"/></svg>`,
   activity: `<svg ${SVG}><path d="M3.5 12.5h3.6l2.6-7 4.6 13 2.6-6h3.6"/></svg>`,
   wallet: `<svg ${SVG}><rect x="3.2" y="6" width="17.6" height="13" rx="3"/><path d="M3.2 10h17.6"/><path d="M16.4 14.6h.01"/></svg>`,
-  settings: `<svg ${SVG}><path d="M4 8.2h9"/><path d="M19.5 8.2H20"/><path d="M4 15.8h3.5"/><path d="M13 15.8h7"/><circle cx="16" cy="8.2" r="2.4"/><circle cx="10" cy="15.8" r="2.4"/></svg>`,
+  links: `<svg ${SVG}><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.8 12.8 5a3.6 3.6 0 0 1 5.1 5.1L16.1 12"/><path d="M13 17.2 11.2 19a3.6 3.6 0 0 1-5.1-5.1L7.9 12"/></svg>`,
   shield: `<svg ${SVG}><path d="M12 3.4 19 6v5.4c0 4.4-2.9 7.7-7 9.2-4.1-1.5-7-4.8-7-9.2V6Z"/><path d="m9.3 12 2 2 3.6-3.7"/></svg>`,
   clock: `<svg ${SVG}><circle cx="12" cy="12" r="8.4"/><path d="M12 7.6V12l3 2"/></svg>`,
   sync: `<svg ${SVG}><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 3.5V9h-5.5"/></svg>`,
@@ -517,6 +515,10 @@ function page(
       color: var(--text);
       background: var(--panel);
       border: 1px solid var(--line-strong);
+    }
+    .secondary-button.disabled {
+      opacity: 0.56;
+      color: var(--soft);
     }
     .secondary-button svg { width: 16px; height: 16px; color: var(--soft); }
 
@@ -889,7 +891,7 @@ function bottomNav(active: StitchScreenId) {
     ["pools", ICONS.pools, "Pools"],
     ["activity", ICONS.activity, "Activity"],
     ["wallet", ICONS.wallet, "Wallet"],
-    ["settings", ICONS.settings, "Settings"],
+    ["links", ICONS.links, "Links"],
   ];
 
   // aria-hidden: the native wrapper renders the accessible tab controls
@@ -965,13 +967,23 @@ function homeBody() {
       <h1>Rounds you can verify</h1>
       <p>Fixed entry tiers. External wallet signing. Verifiable VRF settlement.</p>
       <div class="chip-row">
-        <span class="chip chip-p">95% main prize</span>
+        <span class="chip chip-p">95% prize</span>
+        <span class="chip chip-e">3% jackpot</span>
+        <span class="chip chip-a">2% treasury</span>
         <span class="chip chip-c">1 hour rounds</span>
-        <span class="chip chip-e">ORAO VRF</span>
       </div>
       <div class="cta-row">
         <button class="primary-button" data-route="pools">View pools</button>
-        <button class="secondary-button" data-route="settings">Configuration</button>
+        <button class="secondary-button" data-route="links">Links</button>
+      </div>
+    </div>
+  </section>
+  <section class="panel glow-cyan">
+    <div class="row">
+      <div>
+        <span class="label">Every entry</span>
+        <h2>95% prize / 3% jackpot / 2% treasury</h2>
+        <p class="muted" style="margin-top: 4px;">Rounds are wallet-signed on Solana mainnet and settled with verifiable randomness.</p>
       </div>
     </div>
   </section>
@@ -1251,25 +1263,22 @@ function walletBody() {
 </main>`;
 }
 
-function settingsBody() {
+function linksBody() {
   return String.raw`<main class="stack">
   <section class="section-header">
     <div>
-      <span class="label">Settings</span>
-      <h2>Verified configuration</h2>
+      <span class="label">Links</span>
+      <h2>Official pages</h2>
     </div>
   </section>
-  <p style="margin-top: -4px;">These values are fixed at build time and cannot change at runtime.</p>
-  <section class="list">
-    <div class="list-row"><div><span class="label">Program</span><p class="mono soft" style="font-size: 13px;">${PROGRAM_ID}</p></div><strong class="success">Set</strong></div>
-    <div class="list-row"><div><span class="label">Backend</span><p class="mono soft" style="font-size: 13px;">${API_HOST}</p></div><strong class="success">HTTPS</strong></div>
-    <div class="list-row"><div><span class="label">Randomness</span><p class="soft" style="font-size: 13px;">ORAO VRF</p></div><strong class="success">Set</strong></div>
-  </section>
+  <p style="margin-top: -4px;">Legal and community links only.</p>
   <section class="panel">
     <div class="compact-stack">
       <button class="secondary-button" data-route="link" data-link="terms">Terms ${ICONS.external}</button>
       <button class="secondary-button" data-route="link" data-link="privacy">Privacy ${ICONS.external}</button>
       <button class="secondary-button" data-route="link" data-link="support">Support ${ICONS.external}</button>
+      <button class="secondary-button disabled" disabled>X - coming soon</button>
+      <button class="secondary-button disabled" disabled>Discord - coming soon</button>
     </div>
   </section>
 </main>`;
@@ -1384,7 +1393,7 @@ function unavailableBody() {
     </div>
     <div class="cta-row">
       <button class="primary-button" data-route="refresh">Retry connection</button>
-      <button class="secondary-button" data-route="settings">Configuration</button>
+      <button class="secondary-button" data-route="links">Links</button>
     </div>
   </section>
   <section class="panel">
@@ -1410,7 +1419,7 @@ const TITLES: Record<StitchScreenId, string> = {
   pools: "LuckyMe | Pools",
   activity: "LuckyMe | Activity",
   wallet: "LuckyMe | Wallet",
-  settings: "LuckyMe | Settings",
+  links: "LuckyMe | Links",
   review: "LuckyMe | Review",
   syncing: "LuckyMe | Wallet Request",
   success: "LuckyMe | Status",
@@ -1424,7 +1433,7 @@ const BODIES: Record<StitchScreenId, () => string> = {
   pools: poolsBody,
   activity: activityBody,
   wallet: walletBody,
-  settings: settingsBody,
+  links: linksBody,
   review: reviewBody,
   syncing: syncingBody,
   success: successBody,
@@ -1438,7 +1447,7 @@ const DEFAULT_TAB: Record<StitchScreenId, StitchScreenId> = {
   pools: "pools",
   activity: "activity",
   wallet: "wallet",
-  settings: "settings",
+  links: "links",
   review: "pools",
   syncing: "pools",
   success: "activity",
@@ -1469,7 +1478,7 @@ export const STITCH_SCREENS: Record<StitchScreenId, string> = {
   pools: renderStitchScreen("pools"),
   activity: renderStitchScreen("activity"),
   wallet: renderStitchScreen("wallet"),
-  settings: renderStitchScreen("settings"),
+  links: renderStitchScreen("links"),
   review: renderStitchScreen("review"),
   syncing: renderStitchScreen("syncing"),
   success: renderStitchScreen("success"),

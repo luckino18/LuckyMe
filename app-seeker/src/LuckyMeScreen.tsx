@@ -44,7 +44,7 @@ const WINNER_SCREEN: StitchScreenId = "winner";
 const API_URL =
   process.env.EXPO_PUBLIC_LUCKYME_API_URL ?? "https://api.lucky-me.app";
 const UI_PREVIEW_ENABLED = process.env.EXPO_PUBLIC_LUCKYME_UI_PREVIEW === "true";
-const NOTIFICATION_PROMPT_KEY = "luckyme.notifications.prompt.v1";
+const NOTIFICATION_PROMPT_KEY = "luckyme.notifications.prompt.v2";
 const PUSH_TOKEN_KEY = "luckyme.notifications.expoPushToken.v1";
 const ROUND_ALERTS_CHANNEL_ID = "luckyme-round-alerts";
 
@@ -68,16 +68,17 @@ const LEGAL_LINKS: Record<LegalLinkKey, string> = {
 const SCREEN_BY_LABEL: Record<string, StitchScreenId> = {
   activity: "activity",
   home: "home",
+  links: "links",
   pools: "pools",
-  settings: "settings",
+  settings: "links",
   wallet: "wallet",
 };
 const UNAVAILABLE_ALLOWED_SCREENS = new Set<StitchScreenId>([
-  "settings",
+  "links",
   "wallet",
   "winner",
 ]);
-const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "wallet", "settings"];
+const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "wallet", "links"];
 const NAV_TABS = new Set<StitchScreenId>(NAV_ITEMS);
 
 function isLegalLinkKey(value: unknown): value is LegalLinkKey {
@@ -183,7 +184,7 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
         for (const label in labels) {
           if (text === label || text.endsWith(label)) {
             const route = labels[label];
-            return canNavigateOnchainScreens || route === 'settings' || route === 'wallet' ? route : null;
+            return canNavigateOnchainScreens || route === 'links' || route === 'wallet' ? route : null;
           }
         }
 
@@ -374,9 +375,10 @@ function parseAppRoute(value: string): AppRoute {
       screenName === "home" ||
       screenName === "activity" ||
       screenName === "wallet" ||
+      screenName === "links" ||
       screenName === "settings"
     ) {
-      return { screen: screenName };
+      return { screen: screenName === "settings" ? "links" : screenName };
     }
   } catch {
     return undefined;
@@ -465,15 +467,14 @@ export function LuckyMeScreen() {
           return;
         }
 
-        if (permissions.status === "denied") {
-          setNotificationOptInState("denied");
-          setNotificationPromptVisible(false);
-          await AsyncStorage.setItem(NOTIFICATION_PROMPT_KEY, "denied");
+        const previousDecision = await AsyncStorage.getItem(NOTIFICATION_PROMPT_KEY);
+        if (!active) {
           return;
         }
 
-        const previousDecision = await AsyncStorage.getItem(NOTIFICATION_PROMPT_KEY);
-        if (!active) {
+        if (permissions.status === "denied") {
+          setNotificationOptInState("denied");
+          setNotificationPromptVisible(previousDecision !== "declined");
           return;
         }
 
@@ -573,12 +574,22 @@ export function LuckyMeScreen() {
 
     try {
       await configureNotificationChannel();
+      const currentPermissions = await Notifications.getPermissionsAsync();
+
+      if (currentPermissions.status === "denied" && !currentPermissions.granted) {
+        setNotificationOptInState("denied");
+        setNotificationPromptVisible(true);
+        setNotificationError("Android has notifications blocked for LuckyMe. Enable them from App Info > Notifications, then reopen LuckyMe.");
+        await Linking.openSettings();
+        return;
+      }
+
       const permissions = await Notifications.requestPermissionsAsync();
 
       if (!permissions.granted) {
         setNotificationOptInState("denied");
-        setNotificationPromptVisible(false);
-        await AsyncStorage.setItem(NOTIFICATION_PROMPT_KEY, "denied");
+        setNotificationError("Android has notifications blocked for LuckyMe. Open App Info > Notifications to allow round alerts, or choose Not now.");
+        setNotificationPromptVisible(true);
         return;
       }
 
@@ -730,6 +741,9 @@ function NotificationOptInModal({
           {state === "error" && !error ? (
             <Text style={styles.notificationError}>Notifications are not available right now.</Text>
           ) : null}
+          {state === "denied" && !error ? (
+            <Text style={styles.notificationError}>Notifications are blocked by Android for this app. Enable them in App Info to receive round alerts.</Text>
+          ) : null}
           <View style={styles.notificationActions}>
             <Pressable
               accessibilityRole="button"
@@ -741,7 +755,9 @@ function NotificationOptInModal({
               ]}
             >
               {busy ? <ActivityIndicator color="#FFFFFF" /> : null}
-              <Text style={styles.notificationPrimaryText}>Enable alerts</Text>
+              <Text style={styles.notificationPrimaryText}>
+                {state === "denied" ? "Open Android permissions" : "Enable alerts"}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

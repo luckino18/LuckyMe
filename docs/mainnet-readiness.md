@@ -19,10 +19,9 @@ LuckyMe release mode is `MAINNET_RELEASE` for Solana mainnet-beta.
 - Solana Mobile release builds use the `dapp-store` EAS profile and produce a
   signed APK.
 - The app review screen shows amount, pool, connected wallet, network,
-  simulation result, and expected ticket/refund behavior before signing.
-- Program ID, mode, cluster, randomness, commitment, source/RPC, treasury,
-  vaults, and jackpot odds are available in the expandable
-  `Details / Transparency` panel.
+  and expected ticket/refund behavior before signing.
+- Legal and community pages are available through `Links`: Terms, Privacy,
+  Support, and future X/Discord placeholders.
 - Backend submit relay stays disabled for production.
 
 ## Program ID

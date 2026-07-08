@@ -43,10 +43,10 @@ Based on the official Solana Mobile publishing docs, prepare:
   wallet chain, cluster, APK profile, and remaining credential-owned items.
 - Victor reported the signed Seeker build tested on a Seeker phone on
   2026-07-07.
-- Final store APK built on 2026-07-08:
-  `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk`
+- Final store APK v2 built on 2026-07-08:
+  `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
 - Final APK SHA-256:
-  `bb83e7f14f287fc0bd781d6cae4769ba94b2243565ab439e13455e5c176567e4`
+  `c104ec372270dc175d54d26bf472edd9f489813324f66c9a6766df423fc05bc2`
 - Final APK signing verified with APK Signature Scheme v2 using EAS-managed
   Android credentials `Build Credentials iNPMBDRiCC (default)`.
 - The synchronized Program ID is deployed and initialized on mainnet-beta.
@@ -59,12 +59,10 @@ Based on the official Solana Mobile publishing docs, prepare:
 
 - The main screen presents pool choice, ticket price, jackpot, round status,
   user chance, wallet status, and entry action first.
-- Technical data such as mode, cluster, RPC/source details, Program ID,
-  treasury, vaults, randomness mode, randomness commitment, and jackpot odds
-  sits behind `Details / Transparency`.
+- Legal and community navigation is limited to `Links`: Terms, Privacy,
+  Support, and future X/Discord placeholders.
 - The entry flow shows amount, pool, round, tickets, wallet, and Solana
-  mainnet before wallet signing. Program ID and other account-level details sit
-  behind transparency/details views, not in the primary purchase UI.
+  mainnet before wallet signing.
 - Winners can use the responsive share card with WhatsApp, X, Telegram, and PNG
   download actions once round winner data is available.
 - The backend never signs player transactions and never custodies user funds.

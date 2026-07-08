@@ -36,12 +36,11 @@ by the Solana program.
 - **Device smoke test:** Victor reported the signed Seeker build tested on a
   Seeker phone on 2026-07-07.
 
-The app builds and reviews an unsigned transaction, the connected wallet signs
-it, and the backend submit relay is disabled by default. Users see the amount,
-pool, connected wallet, Solana mainnet network, simulation result, and expected
-ticket behavior before signing. Program, vault, randomness, commitment, cluster,
-RPC/source, treasury, and jackpot-odds details sit behind the expandable
-`Details / Transparency` panel.
+The app builds an unsigned transaction, the connected wallet signs it, and the
+backend submit relay is disabled by default. Users see the amount, pool,
+connected wallet, Solana mainnet network, and expected ticket behavior before
+signing. The legal/community surface is `Links` only: Terms, Privacy, Support,
+and future X/Discord placeholders.
 
 ## Repository Layout
 

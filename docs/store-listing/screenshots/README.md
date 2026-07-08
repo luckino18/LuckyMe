@@ -10,7 +10,7 @@ Screenshots for the current LuckyMe UI preview.
 | Pool details | <img src="./02-pool-details.png" width="180" alt="LuckyMe pool details screenshot" /> |
 | Activity | <img src="./03-activity.png" width="180" alt="LuckyMe activity screenshot" /> |
 | Wallet | <img src="./04-wallet.png" width="180" alt="LuckyMe wallet screenshot" /> |
-| Settings | <img src="./05-settings.png" width="180" alt="LuckyMe settings screenshot" /> |
+| Links | <img src="./05-links.png" width="180" alt="LuckyMe links screenshot" /> |
 | Review transaction | <img src="./06-review-transaction.png" width="180" alt="LuckyMe review transaction screenshot" /> |
 | Syncing | <img src="./07-syncing.png" width="180" alt="LuckyMe syncing screenshot" /> |
 | Success | <img src="./08-success.png" width="180" alt="LuckyMe success screenshot" /> |

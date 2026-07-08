@@ -3,7 +3,7 @@
 ## Final APK
 
 - Artifact:
-  `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk`
+  `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
 - Size: 113 MB
 - Package: `com.luckyme.seeker`
 - Version: `1.0.0`
@@ -11,7 +11,7 @@
 - Min SDK: `24`
 - Target SDK: `36`
 - SHA-256:
-  `bb83e7f14f287fc0bd781d6cae4769ba94b2243565ab439e13455e5c176567e4`
+  `c104ec372270dc175d54d26bf472edd9f489813324f66c9a6766df423fc05bc2`
 
 The APK was built with the EAS `dapp-store` profile using EAS-managed Android
 credentials `Build Credentials iNPMBDRiCC (default)`.
@@ -47,10 +47,16 @@ credentials `Build Credentials iNPMBDRiCC (default)`.
 ## Included In This Build
 
 - Mainnet LuckyMe pool UI for Mini, Normal, High, and Premium.
+- Final v2 UI correction: no visible Settings/Configuration screen. The
+  support/legal screen is now `Links` only, with Terms, Privacy, Support, and
+  disabled future X/Discord links.
+- Home copy explicitly shows `95% prize / 3% jackpot / 2% treasury`.
 - Simplified purchase flow: choose pool, choose ticket count, then wallet signs.
 - Real on-chain pool/round state from the production backend.
 - No backend player signing and no custodial wallet flow.
-- Push notification opt-in and Expo push registration.
+- Push notification opt-in and Expo push registration. The final v2 APK uses a
+  new opt-in storage key so older dismissed prompts do not suppress this build's
+  explainer.
 - Round alert backend support: max two alerts per round.
 - Dynamic winner share card with WhatsApp, X, Telegram, and PNG download.
 - Store URLs for terms, privacy, and support.
@@ -75,8 +81,8 @@ npm test
 npm run audit:mainnet-release
 npm run app:validate:production
 npm run app:apk:verify
-apksigner verify --verbose --print-certs /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk
-shasum -a 256 /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk
+apksigner verify --verbose --print-certs /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk
+shasum -a 256 /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk
 ```
 
 Results:
@@ -93,7 +99,8 @@ Results:
 - Install this final APK on the Seeker and do one real-device smoke test.
 - Test wallet connect and a low-value wallet signing flow against active mainnet
   rounds.
-- Confirm push notification permission prompt and token registration on device.
+- Install this final v2 APK on the Seeker and confirm the notification
+  explainer/Android permission prompt and token registration on device.
 - Prepare final Publisher Portal assets if the portal requires fresh
   screenshots.
 - Complete Publisher Portal account/KYC/KYB, storage provider, wallet funding,

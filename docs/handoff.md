@@ -21,16 +21,22 @@ Current objective: operate the deployed LuckyMe `MAINNET_RELEASE` Solana Mobile
 - On-chain status on 2026-07-07: config initialized, all four pools
   initialized, and first active round opened for Mini, Normal, High, and
   Premium.
-- Final store APK: `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk`
+- Final store APK: `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
 - Final APK SHA-256:
-  `bb83e7f14f287fc0bd781d6cae4769ba94b2243565ab439e13455e5c176567e4`
+  `c104ec372270dc175d54d26bf472edd9f489813324f66c9a6766df423fc05bc2`
 - APK signing: EAS-managed Android credentials
   `Build Credentials iNPMBDRiCC (default)`, verified with APK Signature Scheme
   v2. Signer certificate SHA-256:
   `e249bc5555bb8206fc11dce9fcda527f25ddf8b8af00a0156806892a2cbb2067`.
 - Push notifications: APK includes Expo push registration and the VPS backend
   exposes `/notifications/register`. The live register/unregister smoke test
-  and keeper dry-run passed on 2026-07-08.
+  and keeper dry-run passed on 2026-07-08. The final v2 APK uses a new
+  notification prompt key so older dismissed prompts do not suppress this
+  build's explainer.
+- Final v2 UI correction: `Settings` / `Configuration` was removed from the
+  visible app. The legal/community screen is now `Links` only, with Terms,
+  Privacy, Support, and future X/Discord placeholders.
+- Home copy now states `95% prize / 3% jackpot / 2% treasury`.
 - Winner share card: included in the APK/WebView flow as a dynamic,
   responsive card with WhatsApp, X, Telegram, and PNG download actions.
 
@@ -79,8 +85,8 @@ Final store APK verification commands:
 
 ```bash
 npm run app:apk:verify
-apksigner verify --verbose --print-certs /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk
-shasum -a 256 /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-2026-07-08.apk
+apksigner verify --verbose --print-certs /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk
+shasum -a 256 /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk
 ```
 
 ## Mainnet Operations Notes

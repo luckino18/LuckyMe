@@ -61,11 +61,11 @@ eas build --platform android --profile dapp-store --local
 ## Wallet And Signing Flow
 
 - Mobile Wallet Adapter uses `solana:mainnet` in production.
-- The backend builds and simulates unsigned transactions.
-- The app displays amount, pool, connected wallet, Solana mainnet, simulation
-  result, and expected ticket/refund behavior before signing.
-- Program, vault, cluster, randomness, commitment, treasury, source, and
-  jackpot-odds details are available in `Details / Transparency`.
+- The backend builds unsigned transactions.
+- The app displays amount, pool, connected wallet, Solana mainnet, and expected
+  ticket/refund behavior before signing.
+- The app exposes legal and community pages through `Links`: Terms, Privacy,
+  Support, and future X/Discord placeholders.
 - The connected wallet signs the transaction.
 - The backend does not hold user private keys and does not sign player
   transactions.
