@@ -119,6 +119,19 @@ Verify a signed APK with:
 APK_PATH=/path/to/app-release.apk npm run apk:verify
 ```
 
+Local release signing uses `android/keystore.properties` or equivalent
+`LUCKYME_ANDROID_*` environment variables:
+
+```properties
+storeFile=/absolute/path/to/luckyme-upload.jks
+storePassword=...
+keyAlias=luckyme-upload
+keyPassword=...
+```
+
+For a store/release artifact, build with `-PluckyMe.requireReleaseSigning=true`
+so Gradle fails instead of silently using the debug certificate.
+
 ## Local Development Only
 
 Use local development mode only for engineering and simulator workflows, never
