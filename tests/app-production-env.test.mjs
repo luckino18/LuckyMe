@@ -83,7 +83,10 @@ test("Seeker APK includes opt-in notification and winner card surfaces", () => {
   assert.match(screen, /Notifications\.requestPermissionsAsync/);
   assert.match(screen, /Notifications\.getExpoPushTokenAsync/);
   assert.match(screen, /\/notifications\/register/);
+  assert.match(screen, /signAndSendTransactions/);
+  assert.match(screen, /\/transactions\/buy-tickets/);
   assert.match(screen, /screenName === "winner"/);
+  assert.doesNotMatch(stitch, /data-route="syncing">Confirm entry/);
   assert.match(stitch, /Solana Winner Card/);
   assert.match(stitch, /SHARE ON/);
   assert.match(stitch, /WhatsApp/);

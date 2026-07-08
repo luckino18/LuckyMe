@@ -152,6 +152,33 @@ function formatSolFromLamports(lamports) {
   return fraction ? `${whole}.${fraction}` : `${whole}`;
 }
 
+function bigintValue(value) {
+  try {
+    return BigInt(value?.toString?.() ?? value ?? 0);
+  } catch {
+    return 0n;
+  }
+}
+
+function numberValue(value) {
+  const parsed = Number(value?.toString?.() ?? value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function activeRound(poolOrId) {
+  const livePool = typeof poolOrId === "string" ? poolFromApi(poolOrId) : poolOrId;
+  return livePool?.activeRound || null;
+}
+
+function roundUserEntry(round) {
+  const entry = round?.userEntry;
+  return entry && bigintValue(entry.ticketCount) > 0n ? entry : null;
+}
+
+function ticketWord(value) {
+  return Number(value) === 1 ? "ticket" : "tickets";
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -203,13 +230,40 @@ function roundTiming(poolId = state.selectedPool) {
 
   const remainingSeconds = Number(round.endTs) - Math.floor(Date.now() / 1000);
   const isOpen = remainingSeconds > 0;
+  const totalTickets = bigintValue(round.totalTickets);
+  const expired = !isOpen;
+
+  if (expired && totalTickets > 0n) {
+    return {
+      isOpen: false,
+      canDetermine: true,
+      roundId,
+      status: `Round ${roundId}`,
+      timeLeft: "Settling",
+      chipClass: "warning",
+      settlementPending: true,
+    };
+  }
+
+  if (expired) {
+    return {
+      isOpen: false,
+      canDetermine: true,
+      roundId,
+      status: `Round ${roundId}`,
+      timeLeft: "Starting soon",
+      chipClass: "warning",
+      needsCrank: true,
+    };
+  }
+
   return {
     isOpen,
     canDetermine: true,
     roundId,
     status: `Round ${roundId}`,
-    timeLeft: isOpen ? formatDuration(remainingSeconds) : "Closed",
-    chipClass: isOpen ? "success" : "warning",
+    timeLeft: formatDuration(remainingSeconds),
+    chipClass: "success",
   };
 }
 
@@ -226,6 +280,10 @@ function setTicketCount(value) {
 function renderPoolCard(pool, compact = false) {
   const livePool = poolFromApi(pool.id);
   const timing = roundTiming(pool.id);
+  const round = activeRound(livePool);
+  const userEntry = roundUserEntry(round);
+  const totalTickets = bigintValue(round?.totalTickets);
+  const entrantCount = numberValue(round?.entrantCount);
   const liveStatus = state.onchainAvailable ? timing.status : "Pending";
   const jackpotValue = state.onchainAvailable && livePool?.jackpotSol
     ? `${livePool.jackpotSol} SOL`
@@ -235,8 +293,11 @@ function renderPoolCard(pool, compact = false) {
       ? "Review setup"
       : timing.isOpen
       ? `Join ${pool.name}`
-      : "Round closed"
+      : timing.settlementPending
+      ? "Settling"
+      : "Starting soon"
     : "Review setup";
+  const disablePrimary = state.onchainAvailable && timing.canDetermine && !timing.isOpen;
 
   return `
     <article class="pool-card">
@@ -252,13 +313,49 @@ function renderPoolCard(pool, compact = false) {
         <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
         <div class="fact"><span class="label">Winners</span><strong>${pool.winners}</strong></div>
         <div class="fact"><span class="label">Limit</span><strong>${pool.limit}</strong></div>
+        <div class="fact"><span class="label">Sold</span><strong>${totalTickets.toString()} ${ticketWord(totalTickets)}</strong></div>
+        <div class="fact"><span class="label">Players</span><strong>${entrantCount}</strong></div>
+        ${state.wallet ? `<div class="fact"><span class="label">My tickets</span><strong>${userEntry ? `${escapeHtml(userEntry.ticketCount)} ${ticketWord(userEntry.ticketCount)}` : "0"}</strong></div>` : ""}
         <div class="fact time-fact"><span class="label">Time left</span><strong>${timing.timeLeft}</strong></div>
         <div class="fact jackpot-fact"><span class="label">Jackpot</span><strong>${jackpotValue}</strong></div>
       </div>
       ${compact ? "" : `<p>${pool.note} Live state loads only from verified on-chain data.</p>`}
-      <button class="primary-button" data-pool="${pool.id}" ${state.onchainAvailable && timing.canDetermine && !timing.isOpen ? "disabled" : ""}>${actionLabel}</button>
+      <button class="primary-button" data-pool="${pool.id}" ${disablePrimary ? "disabled" : ""}>${actionLabel}</button>
+      ${operatorPoolActions(pool, timing, round)}
     </article>
   `;
+}
+
+function operatorPoolActions(pool, timing, round) {
+  if (!OPERATOR_MODE) {
+    return "";
+  }
+
+  const roundId = round?.roundId;
+  const provider = round?.providerRandomness || {};
+  const buttons = [];
+
+  if (timing.needsCrank || round?.settled) {
+    buttons.push(`<button class="secondary-button" data-action="operator-crank-pool" data-pool-id="${pool.id}">Open next</button>`);
+  }
+
+  if (timing.settlementPending && roundId) {
+    if (provider.status === "not_requested") {
+      buttons.push(`<button class="secondary-button" data-action="operator-request-randomness" data-pool-id="${pool.id}" data-round-id="${roundId}">Request randomness</button>`);
+    } else if (provider.providerStatus === "missing") {
+      buttons.push(`<button class="secondary-button" data-action="operator-request-orao" data-pool-id="${pool.id}" data-round-id="${roundId}">Request ORAO</button>`);
+    } else if (provider.providerStatus === "fulfilled") {
+      buttons.push(`<button class="secondary-button" data-action="operator-settle" data-pool-id="${pool.id}" data-round-id="${roundId}">Settle</button>`);
+    } else {
+      buttons.push(`<button class="secondary-button" disabled>ORAO pending</button>`);
+    }
+  }
+
+  if (!buttons.length) {
+    return "";
+  }
+
+  return `<div class="wallet-actions operator-actions">${buttons.join("")}</div>`;
 }
 
 function renderPools() {
@@ -270,14 +367,52 @@ function renderPools() {
 
 function renderActivity() {
   const winnerItems = winnerShareItems();
-  if (winnerItems.length) {
-    dom.activityList.innerHTML = winnerItems.map((item) => `
+  const roundItems = state.pools.flatMap((pool) => {
+    const rows = [];
+    const poolName = escapeHtml(pool.label || poolById(pool.id)?.name || pool.id);
+
+    if (pool.activeRound) {
+      const timing = roundTiming(pool.id);
+      const round = pool.activeRound;
+      rows.push({
+        label: `${poolName} round #${escapeHtml(round.roundId)}`,
+        detail: `${escapeHtml(round.totalTickets)} ${ticketWord(round.totalTickets)} sold · ${escapeHtml(round.entrantCount)} players · ${escapeHtml(round.totalSol || "0")} SOL`,
+        value: timing.timeLeft,
+        tone: timing.isOpen ? "success" : "warning",
+      });
+
+      const entry = roundUserEntry(round);
+      if (entry) {
+        rows.push({
+          label: `${poolName} my entry`,
+          detail: `Round #${escapeHtml(round.roundId)} · entry ${escapeHtml(entry.address || "")}`,
+          value: `${escapeHtml(entry.ticketCount)} ${ticketWord(entry.ticketCount)}`,
+          tone: "success",
+        });
+      }
+    }
+
+    return rows;
+  });
+
+  const winnerRows = winnerItems.map((item) => ({
+    label: `${escapeHtml(item.poolName)} round #${escapeHtml(item.roundId)}`,
+    detail: `${escapeHtml(item.amountSol)} SOL won by ${escapeHtml(formatAddress(item.wallet))}`,
+    value: "Share card",
+    tone: "success",
+    href: item.href,
+  }));
+
+  if (winnerRows.length || roundItems.length) {
+    dom.activityList.innerHTML = [...winnerRows, ...roundItems].map((item) => `
       <div class="list-row">
         <div>
-          <span class="label">${escapeHtml(item.poolName)} round #${escapeHtml(item.roundId)}</span>
-          <p>${escapeHtml(item.amountSol)} SOL won by ${escapeHtml(formatAddress(item.wallet))}</p>
+          <span class="label">${item.label}</span>
+          <p>${item.detail}</p>
         </div>
-        <a class="secondary-button" href="${escapeHtml(item.href)}" target="_blank" rel="noopener">Share card</a>
+        ${item.href
+          ? `<a class="secondary-button" href="${escapeHtml(item.href)}" target="_blank" rel="noopener">${item.value}</a>`
+          : `<strong class="mono ${item.tone}">${item.value}</strong>`}
       </div>
     `).join("");
     return;
@@ -435,7 +570,6 @@ function renderWallets() {
         </div>
         <p class="mono">${state.wallet.address}</p>
         <div class="wallet-actions">
-          ${OPERATOR_MODE ? `<button class="primary-button" data-action="crank-empty-rounds">Crank rounds</button>` : ""}
           <button class="secondary-button" data-action="disconnect">Disconnect</button>
         </div>
       </article>
@@ -785,13 +919,24 @@ async function copyWalletConnectUri() {
 
 function renderReview() {
   const pool = state.selectedPool ? poolById(state.selectedPool) : POOLS[0];
+  const livePool = poolFromApi(pool.id);
+  const round = activeRound(livePool);
+  const userEntry = roundUserEntry(round);
   const ticketLimit = selectedTicketLimit(pool.id);
   const ticketCount = Math.min(state.ticketCount, ticketLimit);
   const amountLamports = selectedTicketPriceLamports(pool.id) * BigInt(ticketCount);
   const timing = roundTiming(pool.id);
   const connected = Boolean(state.wallet);
-  const canBuy = connected && state.onchainAvailable && timing.isOpen;
+  const alreadyEntered = Boolean(userEntry);
+  const canBuy = connected && state.onchainAvailable && timing.isOpen && !alreadyEntered;
   const buyLabel = ticketCount === 1 ? "Buy 1 ticket" : `Buy ${ticketCount} tickets`;
+  const roundCopy = timing.isOpen
+    ? "Round is open for entries"
+    : timing.settlementPending
+    ? "Round ended and is waiting for settlement"
+    : timing.needsCrank
+    ? "Next round is being opened"
+    : "This round is no longer accepting entries";
 
   dom.reviewPanel.innerHTML = `
     <div>
@@ -813,9 +958,21 @@ function renderReview() {
     </div>
     <div class="review-summary">
       <div class="list-row">
-        <div><span class="label">${timing.status}</span><p>${timing.isOpen ? "Round is open for entries" : "This round is no longer accepting entries"}</p></div>
+        <div><span class="label">${timing.status}</span><p>${roundCopy}</p></div>
         <strong class="${timing.isOpen ? "success" : "warning"}">${timing.timeLeft}</strong>
       </div>
+      <div class="list-row">
+        <div><span class="label">Tickets sold</span><p>${escapeHtml(round?.totalSol || "0")} SOL in this round</p></div>
+        <strong class="mono">${bigintValue(round?.totalTickets).toString()}</strong>
+      </div>
+      <div class="list-row">
+        <div><span class="label">Players</span><p>Confirmed entry accounts</p></div>
+        <strong class="mono">${numberValue(round?.entrantCount)}</strong>
+      </div>
+      ${connected ? `<div class="list-row">
+        <div><span class="label">My tickets</span><p>${alreadyEntered ? `Entry ${escapeHtml(userEntry.address || "")}` : "No entry for this wallet in this round"}</p></div>
+        <strong class="${alreadyEntered ? "success" : "warning"}">${alreadyEntered ? `${escapeHtml(userEntry.ticketCount)} ${ticketWord(userEntry.ticketCount)}` : "0"}</strong>
+      </div>` : ""}
       <div class="list-row">
         <div><span class="label">Wallet</span><p class="mono">${state.wallet?.address || "Not connected"}</p></div>
         <strong class="${connected ? "success" : "warning"}">${connected ? "CONNECTED" : "REQUIRED"}</strong>
@@ -828,7 +985,9 @@ function renderReview() {
       <button class="secondary-button" data-route="pools">Back to pools</button>
     </div>
     ${state.onchainAvailable ? "" : `<div class="notice">Mainnet pool state is not available yet.</div>`}
-    ${state.onchainAvailable && timing.canDetermine && !timing.isOpen ? `<div class="notice">This round is closed. Wait for the next round to open.</div>` : ""}
+    ${alreadyEntered ? `<div class="notice success">This wallet already has confirmed tickets in the current round.</div>` : ""}
+    ${state.onchainAvailable && timing.settlementPending ? `<div class="notice">This round has ended and is waiting for keeper settlement.</div>` : ""}
+    ${state.onchainAvailable && timing.needsCrank ? `<div class="notice">This empty round needs keeper refresh before entries reopen.</div>` : ""}
   `;
 }
 
@@ -877,7 +1036,8 @@ async function signAndSendPreparedTransaction() {
   try {
     const signature = await signAndSendTransactionPayload(state.preparedTransaction);
     state.preparedTransaction.signature = signature;
-    state.lastError = signature ? `Submitted: ${signature}` : "Transaction submitted";
+    state.lastError = signature ? `Submitted: ${signature}. Confirming chain state...` : "Transaction submitted. Confirming chain state...";
+    await refreshAfterTransaction();
   } catch (error) {
     state.lastError = error instanceof Error ? error.message : String(error);
   }
@@ -924,43 +1084,92 @@ async function signAndSendTransactionPayload(preparedTransaction) {
   throw new Error(`${state.wallet.name} does not expose a Solana transaction signing method`);
 }
 
-async function crankEmptyRounds() {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function refreshAfterTransaction() {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await sleep(attempt === 0 ? 900 : 1500);
+    await loadPools();
+    const round = activeRound(state.selectedPool);
+    if (!state.wallet?.address || roundUserEntry(round)) {
+      return;
+    }
+  }
+}
+
+async function sendOperatorTransaction(endpoint, body, preparingMessage, successPrefix) {
   if (!state.wallet?.address) {
     showWalletMessage("Connect a funded Solana wallet first.", "warning");
     return;
   }
 
-  showWalletMessage("Preparing round crank transaction...", "soft");
+  showWalletMessage(preparingMessage, "soft");
 
   try {
-    const response = await fetch(`${API_BASE}/transactions/crank-empty-rounds`, {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        keeper: state.wallet.address,
-      }),
+      body: JSON.stringify({ keeper: state.wallet.address, ...body }),
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.message || payload.error || "Crank transaction build failed");
+      throw new Error(payload.message || payload.error || "Operator transaction build failed");
     }
     if (!payload.transactionBase64) {
-      showWalletMessage("No expired empty rounds need cranking.", "success");
+      showWalletMessage(payload.summary?.actions?.length ? "No executable transaction is needed." : "Nothing to do.", "success");
       return;
     }
     if (payload.simulation && payload.simulation.ok === false) {
-      throw new Error(`Crank simulation failed: ${JSON.stringify(payload.simulation.err)}`);
+      throw new Error(`Simulation failed: ${JSON.stringify(payload.simulation.err)}`);
     }
 
     const signature = await signAndSendTransactionPayload(payload);
-    showWalletMessage(signature ? `Crank submitted: ${signature}` : "Crank transaction submitted.", "success");
+    showWalletMessage(signature ? `${successPrefix}: ${signature}` : `${successPrefix}.`, "success");
     await loadPools();
     renderWallets();
   } catch (error) {
     showWalletMessage(error instanceof Error ? error.message : String(error), "danger");
   }
+}
+
+async function crankEmptyRounds(poolId = null) {
+  await sendOperatorTransaction(
+    "/transactions/crank-empty-rounds",
+    poolId ? { pool: poolId } : {},
+    poolId ? `Preparing ${poolId} round refresh...` : "Preparing round crank transaction...",
+    "Crank submitted",
+  );
+}
+
+async function requestLuckyMeRandomness(poolId, roundId) {
+  await sendOperatorTransaction(
+    "/transactions/request-randomness",
+    { pool: poolId, roundId: Number(roundId) },
+    `Preparing ${poolId} LuckyMe randomness request...`,
+    "LuckyMe randomness request submitted",
+  );
+}
+
+async function requestOraoRandomness(poolId, roundId) {
+  await sendOperatorTransaction(
+    "/transactions/request-orao-randomness",
+    { pool: poolId, roundId: Number(roundId) },
+    `Preparing ${poolId} ORAO randomness request...`,
+    "ORAO request submitted",
+  );
+}
+
+async function settleProviderRound(poolId, roundId) {
+  await sendOperatorTransaction(
+    "/transactions/settle-provider-round",
+    { pool: poolId, roundId: Number(roundId) },
+    `Preparing ${poolId} settlement...`,
+    "Settlement submitted",
+  );
 }
 
 async function signAndSendWalletConnectTransaction(transactionBase64, clusterUrl) {
@@ -1109,6 +1318,14 @@ document.addEventListener("click", async (event) => {
     await buyWithWallet();
   } else if (action === "crank-empty-rounds") {
     await crankEmptyRounds();
+  } else if (action === "operator-crank-pool") {
+    await crankEmptyRounds(actionButton.dataset.poolId);
+  } else if (action === "operator-request-randomness") {
+    await requestLuckyMeRandomness(actionButton.dataset.poolId, actionButton.dataset.roundId);
+  } else if (action === "operator-request-orao") {
+    await requestOraoRandomness(actionButton.dataset.poolId, actionButton.dataset.roundId);
+  } else if (action === "operator-settle") {
+    await settleProviderRound(actionButton.dataset.poolId, actionButton.dataset.roundId);
   } else if (action === "sign") {
     await signAndSendPreparedTransaction();
   } else if (action === "disconnect") {

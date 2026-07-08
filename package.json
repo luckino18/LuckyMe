@@ -23,6 +23,7 @@
     "round:settle": "node scripts/settle-round.mjs",
     "round:close-empty": "node scripts/close-empty-round.mjs",
     "round:crank-empty": "node scripts/crank-empty-rounds.mjs",
+    "incident:forensics": "node scripts/incident-forensics.mjs",
     "push:round-alerts": "node scripts/push-round-alerts.mjs",
     "refund:crank": "node scripts/refund-cranker.mjs",
     "randomness:request": "node scripts/randomness-request.mjs",

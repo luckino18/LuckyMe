@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import http from "node:http";
 import { URL } from "node:url";
+import anchor from "@coral-xyz/anchor";
+import oraoVrf from "@orao-network/solana-vrf";
 import { Transaction } from "@solana/web3.js";
 import {
   registerPushToken,
@@ -40,6 +42,8 @@ import {
   u64Le,
 } from "../../scripts/anchor-client.mjs";
 
+const { AnchorProvider } = anchor;
+const { Orao } = oraoVrf;
 const REFUND_DELAY_SECONDS = 600;
 const REFUND_SCAN_ROUNDS = Number(process.env.REFUND_SCAN_ROUNDS ?? 20);
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES ?? 100_000);
@@ -88,6 +92,20 @@ const ONCHAIN_POOL_BY_SLUG = new Map(
   ONCHAIN_POOLS.map((pool) => [pool.slug, pool]),
 );
 const rateBuckets = new Map();
+
+class ReadonlyPublicKeyWallet {
+  constructor(publicKey) {
+    this.publicKey = publicKey;
+  }
+
+  async signTransaction() {
+    throw new Error("Readonly wallet cannot sign transactions");
+  }
+
+  async signAllTransactions() {
+    throw new Error("Readonly wallet cannot sign transactions");
+  }
+}
 
 validateRuntimeConfig();
 
@@ -300,6 +318,18 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, error.status ?? 500, {
         error: error.code ?? "transaction_build_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/transactions/request-orao-randomness") {
+    try {
+      const payload = await readJson(req);
+      return json(res, 200, await buildRequestOraoRandomnessTransaction(payload));
+    } catch (error) {
+      return json(res, error.status ?? 500, {
+        error: error.code ?? "orao_transaction_build_failed",
         message: error.message,
       });
     }
@@ -702,6 +732,27 @@ async function buildCrankEmptyRoundsTransaction(payload) {
       Number(roundAccount.entrantCount) === 0;
     const expired = now >= endTs;
 
+    if (roundAccount.settled) {
+      actions.push({
+        action: "open_next_after_settlement",
+        pool: poolSpec.slug,
+        roundId: currentRound + 1,
+        previousRoundId: currentRound,
+        previousRound: round.toBase58(),
+      });
+      await addOpenRoundInstruction({
+        program,
+        transaction,
+        actions,
+        keeper,
+        config,
+        pool,
+        poolSpec,
+        roundId: currentRound + 1,
+      });
+      continue;
+    }
+
     if (!expired) {
       actions.push({
         action: "skip_active_round",
@@ -715,7 +766,7 @@ async function buildCrankEmptyRoundsTransaction(payload) {
 
     if (!empty) {
       actions.push({
-        action: "skip_non_empty_expired_round",
+        action: "skip_non_empty_expired_round_needs_settlement",
         pool: poolSpec.slug,
         roundId: currentRound,
         round: round.toBase58(),
@@ -1174,6 +1225,121 @@ async function buildRequestRandomnessTransaction(payload) {
         round: round.toBase58(),
         roundRandomness: sidecar.toBase58(),
         oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+      },
+    },
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+    simulation,
+  };
+}
+
+async function buildRequestOraoRandomnessTransaction(payload) {
+  requireOraoMode();
+  const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
+  const roundId = parseRoundId(payload.roundId);
+  const keeper = parsePublicKey(payload.keeper ?? payload.feePayer, "keeper");
+  enforceSubjectRateLimit(keeper.toBase58());
+
+  const { connection, program, url } = createClient({
+    requireSigner: false,
+    url: ANCHOR_PROVIDER_URL,
+  });
+  const { config, pool, round, roundAccount, poolSpec } = await fetchRoundContext(
+    program,
+    poolSlug,
+    roundId,
+  );
+  assertRoundReadyForProviderRequest(roundAccount);
+
+  const sidecar = deriveRoundRandomnessAccount(round);
+  const sidecarAccount = await fetchRoundRandomnessSidecar(program, sidecar);
+  if (!sidecarAccount) {
+    throw httpError(
+      409,
+      "randomness_not_requested",
+      "Run /transactions/request-randomness first to create the LuckyMe sidecar",
+    );
+  }
+
+  const seed = Buffer.from(sidecarAccount.randomnessSeed);
+  const expectedRequest = deriveOraoRandomnessAccount(seed, ORAO_PROGRAM_ID);
+  if (!sidecarAccount.request.equals(expectedRequest)) {
+    throw httpError(
+      409,
+      "orao_request_mismatch",
+      "LuckyMe sidecar ORAO request does not match the derived ORAO PDA",
+    );
+  }
+
+  const existingRequest = await connection.getAccountInfo(sidecarAccount.request, "confirmed");
+  if (existingRequest) {
+    return {
+      clusterUrl: publicRpcUrl(url),
+      programId: PROGRAM_ID.toBase58(),
+      transactionBase64: null,
+      summary: {
+        action: "request_orao_randomness",
+        pool: poolSlug,
+        poolLabel: poolSpec.label,
+        roundId,
+        keeper: keeper.toBase58(),
+        request: sidecarAccount.request.toBase58(),
+        providerStatus: "already_exists",
+      },
+      simulation: {
+        ok: true,
+        err: null,
+        logs: [],
+        unitsConsumed: null,
+      },
+    };
+  }
+
+  const provider = new AnchorProvider(
+    connection,
+    new ReadonlyPublicKeyWallet(keeper),
+    {
+      commitment: "confirmed",
+      preflightCommitment: "confirmed",
+    },
+  );
+  const vrf = new Orao(provider, ORAO_PROGRAM_ID);
+  const networkState = await vrf.getNetworkState("confirmed");
+  const builder = await vrf.request(seed);
+  builder.withComputeUnitPrice(0n);
+  const methodBuilder = await builder.build();
+  const transaction = await methodBuilder.transaction();
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  transaction.feePayer = keeper;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+
+  const transactionBase64 = transaction
+    .serialize({ requireAllSignatures: false, verifySignatures: false })
+    .toString("base64");
+  const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
+
+  return {
+    clusterUrl: publicRpcUrl(url),
+    programId: PROGRAM_ID.toBase58(),
+    transactionBase64,
+    summary: {
+      action: "request_orao_randomness",
+      randomnessMode: RANDOMNESS_MODE,
+      provider: "orao_vrf",
+      pool: poolSlug,
+      poolLabel: poolSpec.label,
+      roundId,
+      keeper: keeper.toBase58(),
+      seed: seed.toString("hex"),
+      request: sidecarAccount.request.toBase58(),
+      requestFeeLamports: networkState.config.requestFee.toString(),
+      accounts: {
+        config: config.toBase58(),
+        pool: pool.toBase58(),
+        round: round.toBase58(),
+        roundRandomness: sidecar.toBase58(),
+        oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+        oraoTreasury: networkState.config.treasury.toBase58(),
       },
     },
     blockhash: latestBlockhash.blockhash,

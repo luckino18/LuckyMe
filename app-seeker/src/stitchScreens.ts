@@ -18,6 +18,16 @@ export type StitchRenderOptions = {
   activeTab?: StitchScreenId;
   /** Winner card payload supplied by a settlement deep link or native flow. */
   winner?: WinnerShareData;
+  /** Confirmed pool state fetched from the backend. */
+  livePools?: LivePool[];
+  /** Pool currently being reviewed for entry. */
+  selectedPool?: string;
+  /** Ticket count currently selected in the review flow. */
+  ticketCount?: number;
+  /** Connected wallet address, if the native wallet has authorized. */
+  walletAddress?: string;
+  /** Native transaction progress/error shown in the WebView. */
+  transaction?: TransactionStatus;
 };
 
 export type WinnerShareData = {
@@ -26,6 +36,48 @@ export type WinnerShareData = {
   amount: string;
   wallet: string;
   shareUrl: string;
+};
+
+export type TransactionStatus = {
+  state: "idle" | "building" | "wallet" | "confirming" | "confirmed" | "error";
+  message?: string;
+  signature?: string;
+};
+
+export type LiveUserEntry = {
+  ticketCount?: string | number;
+  lamports?: string | number;
+  chancePercent?: string;
+};
+
+export type LiveRound = {
+  id?: number;
+  roundId?: number;
+  status?: string;
+  settled?: boolean;
+  totalTickets?: string | number;
+  totalLamports?: string | number;
+  entrantCount?: string | number;
+  startTs?: string | number;
+  endTs?: string | number;
+  userEntry?: LiveUserEntry | null;
+  randomnessProof?: {
+    status?: string;
+    providerStatus?: string;
+  } | null;
+};
+
+export type LivePool = {
+  id: string;
+  label?: string;
+  ticketPriceLamports?: string | number;
+  ticketPriceSol?: string | number;
+  currentRound?: number;
+  activeRound?: LiveRound | null;
+  recentRounds?: LiveRound[];
+  onchain?: {
+    available?: boolean;
+  };
 };
 
 type PoolTone = "cyan" | "purple" | "violet" | "prime";
@@ -125,6 +177,85 @@ function winnerPayload(input?: WinnerShareData): WinnerShareData {
 
 function shortAddress(value: string) {
   return value.length > 14 ? `${value.slice(0, 6)}...${value.slice(-6)}` : value;
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function livePool(poolId: string, options: StitchRenderOptions) {
+  return options.livePools?.find((pool) => pool.id === poolId);
+}
+
+function activeRound(pool?: LivePool | null) {
+  return pool?.activeRound ?? pool?.recentRounds?.[0] ?? null;
+}
+
+function selectedPool(options: StitchRenderOptions) {
+  return POOLS.find((pool) => pool.id === (options.selectedPool ?? "mini")) ?? POOLS[0];
+}
+
+function ticketCountFor(pool: PoolSpec, options: StitchRenderOptions) {
+  const limit = pool.id === "premium" ? 1 : 1_000;
+  const requested = Math.trunc(numberValue(options.ticketCount, 1));
+  return Math.max(1, Math.min(limit, requested));
+}
+
+function priceSol(pool: PoolSpec, live?: LivePool) {
+  const direct = live?.ticketPriceSol;
+  if (direct !== undefined && direct !== null) {
+    return String(direct);
+  }
+  return pool.entry.replace(" SOL", "");
+}
+
+function totalSol(pool: PoolSpec, options: StitchRenderOptions) {
+  const live = livePool(pool.id, options);
+  return (Number(priceSol(pool, live)) * ticketCountFor(pool, options)).toFixed(3).replace(/\.?0+$/, "");
+}
+
+function roundStatus(round?: LiveRound | null) {
+  if (!round) {
+    return "Waiting";
+  }
+  if (round.settled || round.status === "settled") {
+    return "Settled";
+  }
+  const tickets = numberValue(round.totalTickets);
+  const endTs = numberValue(round.endTs);
+  const now = Math.floor(Date.now() / 1000);
+  if (tickets <= 0) {
+    return "Waiting first ticket";
+  }
+  if (endTs > 0 && now >= endTs) {
+    return "Settlement pending";
+  }
+  return "Live";
+}
+
+function roundFacts(pool: PoolSpec, options: StitchRenderOptions) {
+  const live = livePool(pool.id, options);
+  const round = activeRound(live);
+  const tickets = round?.totalTickets ?? "0";
+  const players = round?.entrantCount ?? "0";
+  const myTickets = round?.userEntry?.ticketCount ?? "0";
+  const status = roundStatus(round);
+  return {
+    live,
+    round,
+    tickets: String(tickets),
+    players: String(players),
+    myTickets: String(myTickets),
+    status,
+    statusTone: status === "Live" ? "emerald" : status === "Settlement pending" ? "amber" : "neutral",
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -523,6 +654,40 @@ function page(
     .secondary-button svg { width: 16px; height: 16px; color: var(--soft); }
 
     .primary-button:active, .secondary-button:active, .nav-item:active { transform: scale(0.98); opacity: 0.8; }
+
+    .ticket-picker {
+      display: grid;
+      grid-template-columns: 48px 1fr 48px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .ticket-step {
+      min-height: 48px;
+      border-radius: 13px;
+      border: 1px solid var(--line-strong);
+      background: var(--panel);
+      color: #fff;
+      font-size: 22px;
+      font-weight: 850;
+    }
+
+    .ticket-value {
+      min-height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      border: 1px solid var(--line-purple);
+      background: rgba(153, 69, 255, 0.10);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 850;
+    }
+
+    .button-disabled {
+      opacity: 0.55;
+      pointer-events: none;
+    }
 
     /* ---------- winner share card ---------- */
 
@@ -932,25 +1097,28 @@ function trustBadges() {
 </section>`;
 }
 
-function poolCard(pool: PoolSpec, joinRoute: "pools" | "review") {
+function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: StitchRenderOptions = {}) {
+  const facts = roundFacts(pool, options);
+  const buttonLabel = facts.myTickets !== "0" ? "View entry" : `Join ${pool.name}`;
   return String.raw`<article class="pool-card tone-${pool.tone}">
   <div class="row">
     <div class="row-left">
       <span class="icon-chip pool-marker">${ICONS.diamond}</span>
       <h3>${pool.name}</h3>
     </div>
-    <span class="pool-chip">${pool.chip}</span>
+    <span class="pool-chip">${facts.status}</span>
   </div>
-  <div class="entry-big mono"><strong>${pool.entry.replace(" SOL", "")}</strong><span>SOL</span></div>
+  <div class="entry-big mono"><strong>${priceSol(pool, facts.live)}</strong><span>SOL</span></div>
   <div class="pool-facts">
     <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
-    <div class="fact"><span class="label">Winners</span><strong>${pool.winners}</strong></div>
-    <div class="fact"><span class="label">Limit</span><strong>${pool.limits}</strong></div>
+    <div class="fact"><span class="label">Sold</span><strong>${escapeHtml(facts.tickets)} tickets</strong></div>
+    <div class="fact"><span class="label">Players</span><strong>${escapeHtml(facts.players)}</strong></div>
+    ${facts.myTickets !== "0" ? `<div class="fact"><span class="label">My tickets</span><strong>${escapeHtml(facts.myTickets)}</strong></div>` : `<div class="fact"><span class="label">Limit</span><strong>${pool.limits}</strong></div>`}
   </div>
   <div class="pool-note">
     <p class="soft" style="font-size: 12.5px;">${pool.note} Live values load from verified chain state.</p>
   </div>
-  <button class="primary-button" data-route="${joinRoute}">Join ${pool.name}</button>
+  <button class="primary-button" data-route="${joinRoute}" data-pool="${pool.id}">${buttonLabel}</button>
 </article>`;
 }
 
@@ -958,7 +1126,7 @@ function poolCard(pool: PoolSpec, joinRoute: "pools" | "review") {
 /* Screens                                                              */
 /* ------------------------------------------------------------------ */
 
-function homeBody() {
+function homeBody(options: StitchRenderOptions = {}) {
   return String.raw`<main class="stack">
   <section class="hero-card">
     <img class="hero-art" src="${LOGO_HERO}" alt="LuckyMe" />
@@ -999,7 +1167,7 @@ function homeBody() {
   </section>
   ${rulesPanel()}
   <section class="pool-grid">
-    ${POOLS.map((pool) => poolCard(pool, "pools")).join("\n    ")}
+    ${POOLS.map((pool) => poolCard(pool, "pools", options)).join("\n    ")}
   </section>
   <section class="panel glow-amber">
     <div class="row">
@@ -1014,7 +1182,7 @@ function homeBody() {
 </main>`;
 }
 
-function poolsBody() {
+function poolsBody(options: StitchRenderOptions = {}) {
   return String.raw`<main class="stack">
   <section class="section-header">
     <div>
@@ -1024,32 +1192,51 @@ function poolsBody() {
     <span class="status-pill neutral">Fixed rules</span>
   </section>
   <section class="pool-grid two">
-    ${POOLS.map((pool) => poolCard(pool, "review")).join("\n    ")}
+    ${POOLS.map((pool) => poolCard(pool, "review", options)).join("\n    ")}
   </section>
   ${rulesPanel()}
 </main>`;
 }
 
-function activityBody() {
+function activityBody(options: StitchRenderOptions = {}) {
+  const rows = POOLS.map((pool) => {
+    const facts = roundFacts(pool, options);
+    const round = facts.round;
+    const roundLabel = round?.roundId ?? round?.id ?? "-";
+    const value = `${facts.tickets} tickets`;
+    const detail = `Round #${roundLabel} · ${facts.players} players · ${facts.status}`;
+    return String.raw`<div class="list-row">
+      <div><span class="label">${pool.name}</span><p class="soft" style="font-size: 13px;">${escapeHtml(detail)}</p></div>
+      <strong class="mono ${facts.status === "Settlement pending" ? "warning" : facts.status === "Live" ? "success" : ""}">${escapeHtml(value)}</strong>
+    </div>`;
+  }).join("\n    ");
+  const myRows = POOLS.map((pool) => {
+    const facts = roundFacts(pool, options);
+    if (facts.myTickets === "0") {
+      return "";
+    }
+    return String.raw`<div class="list-row">
+      <div><span class="label">My ${pool.name} entry</span><p class="soft" style="font-size: 13px;">Confirmed from /pools?player</p></div>
+      <strong class="mono success">${escapeHtml(facts.myTickets)} tickets</strong>
+    </div>`;
+  }).filter(Boolean).join("\n    ");
+
   return String.raw`<main class="stack">
   <section class="section-header">
     <div>
       <span class="label">Activity</span>
       <h2>Round ledger</h2>
     </div>
-    <span class="status-pill amber">Syncing</span>
+    <span class="status-pill ${options.onchainAvailable ? "emerald" : "amber"}">${options.onchainAvailable ? "Mainnet" : "Syncing"}</span>
   </section>
-  <p style="margin-top: -4px;">Rows appear only after settlements confirm on-chain.</p>
+  <p style="margin-top: -4px;">Live rows are read from confirmed Solana state.</p>
   <section class="list">
-    ${[
-      ["Latest settlement", "Pending", "warning"],
-      ["Open rounds", "Pending", "warning"],
-      ["Reserve jackpot", "Pending", "warning"],
-      ["Randomness provider", "ORAO VRF", ""],
-    ].map(([label, value, toneClass]) => String.raw`<div class="list-row">
-      <div><span class="label">${label}</span><p class="soft" style="font-size: 13px;">Loaded from verified state</p></div>
-      <strong class="mono ${toneClass}">${value}</strong>
-    </div>`).join("\n    ")}
+    ${rows}
+    ${myRows}
+    <div class="list-row">
+      <div><span class="label">Randomness provider</span><p class="soft" style="font-size: 13px;">Settlement waits for keeper + ORAO fulfillment</p></div>
+      <strong class="mono">ORAO VRF</strong>
+    </div>
   </section>
   ${trustBadges()}
 </main>`;
@@ -1284,7 +1471,16 @@ function linksBody() {
 </main>`;
 }
 
-function reviewBody() {
+function reviewBody(options: StitchRenderOptions = {}) {
+  const pool = selectedPool(options);
+  const facts = roundFacts(pool, options);
+  const count = ticketCountFor(pool, options);
+  const alreadyEntered = facts.myTickets !== "0";
+  const canBuy = facts.status !== "Settlement pending" && !alreadyEntered;
+  const total = totalSol(pool, options);
+  const wallet = options.walletAddress ? shortAddress(options.walletAddress) : "Connect in wallet";
+  const buttonClass = canBuy ? "primary-button" : "primary-button button-disabled";
+  const buttonLabel = alreadyEntered ? "Entry already confirmed" : "Sign in wallet";
   return String.raw`<main class="stack">
   <section class="section-header">
     <div>
@@ -1295,10 +1491,26 @@ function reviewBody() {
   <p style="margin-top: -4px;">Final pool and amount are read from live chain state before your wallet approves.</p>
   <section class="panel glow-purple">
     <div class="kv">
-      <div class="row"><span class="label">Pool</span><strong class="mono warning">Pending</strong></div>
-      <div class="row"><span class="label">Entry</span><strong class="mono warning">Pending</strong></div>
+      <div class="row"><span class="label">Pool</span><strong class="mono">${pool.name}</strong></div>
+      <div class="row"><span class="label">Ticket price</span><strong class="mono">${escapeHtml(priceSol(pool, facts.live))} SOL</strong></div>
+      <div class="row"><span class="label">Round status</span><strong class="mono ${facts.status === "Live" ? "success" : facts.status === "Settlement pending" ? "warning" : ""}">${facts.status}</strong></div>
+      <div class="row"><span class="label">Sold</span><strong class="mono">${escapeHtml(facts.tickets)} tickets</strong></div>
+      <div class="row"><span class="label">Players</span><strong class="mono">${escapeHtml(facts.players)}</strong></div>
+      ${alreadyEntered ? `<div class="row"><span class="label">My tickets</span><strong class="mono success">${escapeHtml(facts.myTickets)}</strong></div>` : ""}
+      <div class="row"><span class="label">Wallet</span><strong class="mono">${escapeHtml(wallet)}</strong></div>
       <div class="row"><span class="label">Network</span><strong class="mono">Mainnet</strong></div>
       <div class="row"><span class="label">Signer</span><strong class="mono">External wallet</strong></div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="row" style="margin-bottom: 12px;">
+      <span class="label">Tickets</span>
+      <strong class="mono">${escapeHtml(total)} SOL total</strong>
+    </div>
+    <div class="ticket-picker">
+      <button class="ticket-step" data-action="ticket-dec" data-pool="${pool.id}">-</button>
+      <div class="ticket-value mono">${count}</div>
+      <button class="ticket-step" data-action="ticket-inc" data-pool="${pool.id}">+</button>
     </div>
   </section>
   <section class="panel">
@@ -1307,61 +1519,72 @@ function reviewBody() {
       <p style="font-size: 14px;">Your wallet shows the full transaction before anything is signed.</p>
     </div>
   </section>
-  <button class="primary-button" data-route="syncing">Confirm entry</button>
+  <button class="${buttonClass}" data-action="buy-entry" data-pool="${pool.id}">${buttonLabel}</button>
   <button class="secondary-button" data-route="pools">Back to pools</button>
 </main>`;
 }
 
-function syncingBody() {
+function syncingBody(options: StitchRenderOptions = {}) {
+  const tx = options.transaction ?? { state: "wallet" as const };
+  const title = tx.state === "building"
+    ? "Preparing transaction"
+    : tx.state === "confirming"
+      ? "Confirming on Solana"
+      : tx.state === "error"
+        ? "Wallet request failed"
+        : "Waiting for wallet approval";
+  const status = tx.state === "error" ? "Error" : tx.state === "confirmed" ? "Confirmed" : "Pending";
+  const message = tx.message ?? "Nothing moves until your wallet approves and the backend confirms.";
   return String.raw`<main class="stack">
   <section class="section-header">
     <div>
       <span class="label">Wallet request</span>
-      <h2>Waiting for wallet approval</h2>
+      <h2>${escapeHtml(title)}</h2>
     </div>
-    <span class="status-pill amber">Pending</span>
+    <span class="status-pill ${tx.state === "error" ? "amber" : tx.state === "confirmed" ? "emerald" : "amber"}">${status}</span>
   </section>
-  <p style="margin-top: -4px;">Nothing moves until your wallet approves and the backend confirms.</p>
+  <p style="margin-top: -4px;">${escapeHtml(message)}</p>
   <section class="panel glow-purple">
     <div class="timeline" role="list">
       <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot now"></span><span class="step-line"></span></div>
-        <div class="step-body"><span class="step-title">Unsigned transaction</span><span class="step-state soft">Prepared in the app</span></div>
+        <div class="step-rail"><span class="step-dot ${tx.state === "building" ? "now" : ""}"></span><span class="step-line"></span></div>
+        <div class="step-body"><span class="step-title">Unsigned transaction</span><span class="step-state ${tx.state === "building" ? "warning" : "soft"}">Built by backend</span></div>
       </div>
       <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot"></span><span class="step-line"></span></div>
-        <div class="step-body"><span class="step-title">Wallet approval</span><span class="step-state warning">Pending &middot; external wallet only</span></div>
+        <div class="step-rail"><span class="step-dot ${tx.state === "wallet" ? "now" : ""}"></span><span class="step-line"></span></div>
+        <div class="step-body"><span class="step-title">Wallet approval</span><span class="step-state ${tx.state === "wallet" ? "warning" : "soft"}">External wallet only</span></div>
       </div>
       <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot"></span></div>
-        <div class="step-body"><span class="step-title">Backend confirmation</span><span class="step-state soft">Required before status changes</span></div>
+        <div class="step-rail"><span class="step-dot ${tx.state === "confirming" || tx.state === "confirmed" ? "now" : ""}"></span></div>
+        <div class="step-body"><span class="step-title">Backend confirmation</span><span class="step-state ${tx.state === "confirmed" ? "success" : "soft"}">${tx.signature ? escapeHtml(shortAddress(tx.signature)) : "Refreshes after signature"}</span></div>
       </div>
     </div>
   </section>
-  <button class="secondary-button" data-route="success">Continue</button>
+  <button class="secondary-button" data-route="${tx.state === "error" ? "review" : "activity"}">Continue</button>
 </main>`;
 }
 
-function successBody() {
+function successBody(options: StitchRenderOptions = {}) {
+  const tx = options.transaction;
   return String.raw`<main class="stack">
   <section class="section-header">
     <div>
       <span class="label">Status</span>
-      <h2>Entry pending</h2>
+      <h2>${tx?.signature ? "Entry sent" : "Entry status"}</h2>
     </div>
-    <span class="status-pill amber">Waiting</span>
+    <span class="status-pill emerald">Confirmed</span>
   </section>
-  <p style="margin-top: -4px;">Final entry state appears once confirmed chain data is available.</p>
+  <p style="margin-top: -4px;">Pool state refreshes from confirmed chain data after wallet approval.</p>
   <section class="panel glow-amber">
     <div class="row">
       <div>
         <span class="label">Confirmation</span>
-        <h2>Pending</h2>
-        <p class="muted" style="margin-top: 4px;">No balance or payout state is shown before backend confirmation.</p>
+        <h2>${tx?.signature ? escapeHtml(shortAddress(tx.signature)) : "Confirmed"}</h2>
+        <p class="muted" style="margin-top: 4px;">Open Activity to verify tickets and round state.</p>
       </div>
     </div>
   </section>
-  <button class="primary-button" data-route="home">Done</button>
+  <button class="primary-button" data-route="activity">Done</button>
 </main>`;
 }
 
@@ -1428,7 +1651,7 @@ const TITLES: Record<StitchScreenId, string> = {
   winner: "LuckyMe | Winner Card",
 };
 
-const BODIES: Record<StitchScreenId, () => string> = {
+const BODIES: Record<StitchScreenId, (options?: StitchRenderOptions) => string> = {
   home: homeBody,
   pools: poolsBody,
   activity: activityBody,
@@ -1468,7 +1691,7 @@ export function renderStitchScreen(
 ): string {
   const onchainAvailable = options.onchainAvailable ?? screen !== "unavailable";
   const active = options.activeTab ?? DEFAULT_TAB[screen];
-  const body = screen === "winner" ? winnerBody(options.winner) : BODIES[screen]();
+  const body = screen === "winner" ? winnerBody(options.winner) : BODIES[screen](options);
   return page(TITLES[screen], active, body, onchainAvailable, screen !== "winner");
 }
 

@@ -113,7 +113,8 @@ Important backend behavior:
   transaction for the connected wallet.
 - `POST /transactions/refund-entry` builds and simulates an unsigned refund
   transaction when refund state is available.
-- `POST /transactions/request-randomness` and
+- `POST /transactions/request-randomness`,
+  `POST /transactions/request-orao-randomness`, and
   `POST /transactions/settle-provider-round` support the ORAO keeper flow.
 - `POST /transactions/submit` is disabled unless explicitly enabled; keep it
   disabled for production.
@@ -131,6 +132,16 @@ npm run push:round-alerts
 The sender reads confirmed on-chain rounds and sends max two notifications per
 active round per registered APK token: countdown started and last 10 minutes.
 Without `LUCKYME_PUSH_SEND=true`, it runs as a dry-run.
+
+Incident forensics:
+
+```bash
+ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com \
+npm run incident:forensics -- --pool mini --round 2
+```
+
+The report is read-only and prints pool vault balances, entries, active rounds,
+and ORAO randomness state for the deployed mainnet program.
 
 ## Web App
 

@@ -17,9 +17,16 @@ import * as Notifications from "expo-notifications";
 import { WebView } from "react-native-webview";
 import type { WebViewMessageEvent } from "react-native-webview";
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
+import { Transaction } from "@solana/web3.js";
+import { Buffer } from "@craftzdog/react-native-buffer";
 
 import { renderStitchScreen, stitchDefaultTab, STITCH_SCREENS } from "./stitchScreens";
-import type { StitchScreenId, WinnerShareData } from "./stitchScreens";
+import type {
+  LivePool,
+  StitchScreenId,
+  TransactionStatus,
+  WinnerShareData,
+} from "./stitchScreens";
 
 type LegalLinkKey = "terms" | "privacy" | "support";
 type NotificationOptInState =
@@ -32,8 +39,9 @@ type NotificationOptInState =
   | "error";
 
 type StitchMessage =
-  | { type: "navigate"; screen: StitchScreenId }
+  | { type: "navigate"; screen: StitchScreenId; pool?: string }
   | { type: "refresh" }
+  | { type: "action"; action: "ticket-dec" | "ticket-inc" | "buy-entry"; pool?: string }
   | { type: "link"; link: LegalLinkKey }
   | { type: "external"; url: string }
   | undefined;
@@ -44,7 +52,7 @@ const WINNER_SCREEN: StitchScreenId = "winner";
 const API_URL =
   process.env.EXPO_PUBLIC_LUCKYME_API_URL ?? "https://api.lucky-me.app";
 const UI_PREVIEW_ENABLED = process.env.EXPO_PUBLIC_LUCKYME_UI_PREVIEW === "true";
-const NOTIFICATION_PROMPT_KEY = "luckyme.notifications.prompt.v2";
+const NOTIFICATION_PROMPT_KEY = "luckyme.notifications.prompt.v3";
 const PUSH_TOKEN_KEY = "luckyme.notifications.expoPushToken.v1";
 const ROUND_ALERTS_CHANNEL_ID = "luckyme-round-alerts";
 
@@ -88,6 +96,8 @@ function isLegalLinkKey(value: unknown): value is LegalLinkKey {
 function parseStitchMessage(data: string): StitchMessage {
   try {
     const message = JSON.parse(data) as {
+      action?: string;
+      pool?: string;
       type?: string;
       screen?: StitchScreenId;
       link?: string;
@@ -106,8 +116,17 @@ function parseStitchMessage(data: string): StitchMessage {
       return { type: "external", url: message.url };
     }
 
+    if (
+      message?.type === "action" &&
+      (message.action === "ticket-dec" ||
+        message.action === "ticket-inc" ||
+        message.action === "buy-entry")
+    ) {
+      return { type: "action", action: message.action, pool: message.pool };
+    }
+
     if (message?.type === "navigate" && message.screen && message.screen in STITCH_SCREENS) {
-      return { type: "navigate", screen: message.screen };
+      return { type: "navigate", screen: message.screen, pool: message.pool };
     }
   } catch {
     return undefined;
@@ -229,13 +248,31 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
 
       document.querySelectorAll('a, button').forEach(function (element) {
         element.addEventListener('click', function (event) {
+          const actionCarrier = element.closest ? element.closest('[data-action]') : null;
+          const dataAction = actionCarrier ? actionCarrier.getAttribute('data-action') : null;
+          if (dataAction) {
+            event.preventDefault();
+            event.stopPropagation();
+            post({
+              type: 'action',
+              action: dataAction,
+              pool: actionCarrier.getAttribute('data-pool') || ''
+            });
+            return;
+          }
+
           const route = routeFor(element);
           if (!route) {
             return;
           }
           event.preventDefault();
           event.stopPropagation();
-          send(route);
+          const routeCarrier = element.closest ? element.closest('[data-route]') : null;
+          post({
+            type: 'navigate',
+            screen: route,
+            pool: routeCarrier ? routeCarrier.getAttribute('data-pool') || '' : ''
+          });
         }, true);
       });
 
@@ -254,6 +291,11 @@ type BackendConfig = {
 type InitialScreenResult = {
   onchainAvailable: boolean;
   screen: StitchScreenId;
+};
+
+type PoolsResult = {
+  onchainAvailable: boolean;
+  pools: LivePool[];
 };
 
 async function loadInitialScreen() {
@@ -282,6 +324,61 @@ async function loadInitialScreen() {
     onchainAvailable,
     screen: onchainAvailable ? INITIAL_SCREEN : UNAVAILABLE_SCREEN,
   } satisfies InitialScreenResult;
+}
+
+async function loadPoolsForWallet(player?: string): Promise<PoolsResult> {
+  if (UI_PREVIEW_ENABLED) {
+    return {
+      onchainAvailable: true,
+      pools: [],
+    };
+  }
+
+  const url = new URL(`${API_URL}/pools`);
+  if (player) {
+    url.searchParams.set("player", player);
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    return { onchainAvailable: false, pools: [] };
+  }
+
+  const payload = (await response.json()) as {
+    onchain?: { available?: boolean };
+    pools?: LivePool[];
+  };
+
+  return {
+    onchainAvailable: payload.onchain?.available === true,
+    pools: Array.isArray(payload.pools) ? payload.pools : [],
+  };
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function clampTicketCount(pool: string, value: number) {
+  const limit = pool === "premium" ? 1 : 1_000;
+  const next = Number.isFinite(value) ? Math.trunc(value) : 1;
+  return Math.max(1, Math.min(limit, next));
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Wallet request failed";
+}
+
+function poolHasUserEntry(pools: LivePool[], poolId: string) {
+  const pool = pools.find((item) => item.id === poolId);
+  const round = pool?.activeRound ?? pool?.recentRounds?.[0];
+  const tickets = round?.userEntry?.ticketCount;
+  return Number(tickets ?? 0) > 0;
 }
 
 async function configureNotificationChannel() {
@@ -317,7 +414,7 @@ async function getExpoPushToken() {
   return token.data;
 }
 
-async function registerExpoPushToken(token: string) {
+async function registerExpoPushToken(token: string, wallet?: string) {
   const response = await fetch(`${API_URL}/notifications/register`, {
     method: "POST",
     headers: {
@@ -328,6 +425,7 @@ async function registerExpoPushToken(token: string) {
       token,
       platform: Platform.OS,
       projectId: expoProjectId(),
+      wallet,
     }),
   });
 
@@ -343,7 +441,7 @@ function notificationDeepLink(response: Notifications.NotificationResponse) {
 }
 
 type AppRoute =
-  | { screen: StitchScreenId; winner?: WinnerShareData }
+  | { screen: StitchScreenId; pool?: string; winner?: WinnerShareData }
   | undefined;
 
 function parseAppRoute(value: string): AppRoute {
@@ -368,7 +466,7 @@ function parseAppRoute(value: string): AppRoute {
     }
 
     if (screenName === "pool" || screenName === "pools" || screenName === "play") {
-      return { screen: "pools" };
+      return { screen: "pools", pool: url.searchParams.get("pool") ?? undefined };
     }
 
     if (
@@ -378,7 +476,10 @@ function parseAppRoute(value: string): AppRoute {
       screenName === "links" ||
       screenName === "settings"
     ) {
-      return { screen: screenName === "settings" ? "links" : screenName };
+      return {
+        screen: screenName === "settings" ? "links" : screenName,
+        pool: url.searchParams.get("pool") ?? undefined,
+      };
     }
   } catch {
     return undefined;
@@ -397,16 +498,38 @@ export function LuckyMeScreen() {
   const [notificationPromptVisible, setNotificationPromptVisible] = useState(false);
   const [notificationBusy, setNotificationBusy] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [livePools, setLivePools] = useState<LivePool[]>([]);
+  const [selectedPool, setSelectedPool] = useState("mini");
+  const [ticketCount, setTicketCount] = useState(1);
+  const [transactionStatus, setTransactionStatus] = useState<TransactionStatus>({
+    state: "idle",
+  });
   const wallet = useMobileWallet();
+  const walletAddress = walletAddressToString(wallet.account?.address);
 
   const html = useMemo(
     () =>
       renderStitchScreen(screen, {
         onchainAvailable,
         activeTab: screen === UNAVAILABLE_SCREEN ? requestedTab : undefined,
+        livePools,
+        selectedPool,
+        ticketCount,
+        transaction: transactionStatus,
+        walletAddress,
         winner: winnerShare,
       }),
-    [onchainAvailable, requestedTab, screen, winnerShare],
+    [
+      livePools,
+      onchainAvailable,
+      requestedTab,
+      screen,
+      selectedPool,
+      ticketCount,
+      transactionStatus,
+      walletAddress,
+      winnerShare,
+    ],
   );
 
   const activeTab =
@@ -420,24 +543,34 @@ export function LuckyMeScreen() {
   const refreshFromBackend = useCallback(() => {
     let active = true;
 
-    loadInitialScreen()
-      .then((next) => {
+    Promise.all([loadInitialScreen(), loadPoolsForWallet(walletAddress)])
+      .then(([next, pools]) => {
         if (active) {
-          setOnchainAvailable(next.onchainAvailable);
-          setScreen(next.screen);
+          setOnchainAvailable(next.onchainAvailable || pools.onchainAvailable);
+          setScreen((current) =>
+            current === UNAVAILABLE_SCREEN || current === INITIAL_SCREEN ? next.screen : current,
+          );
+          setLivePools(pools.pools);
         }
       })
       .catch(() => {
         if (active) {
           setOnchainAvailable(UI_PREVIEW_ENABLED);
-          setScreen(UI_PREVIEW_ENABLED ? INITIAL_SCREEN : UNAVAILABLE_SCREEN);
+          setScreen((current) =>
+            current === UNAVAILABLE_SCREEN || current === INITIAL_SCREEN
+              ? UI_PREVIEW_ENABLED
+                ? INITIAL_SCREEN
+                : UNAVAILABLE_SCREEN
+              : current,
+          );
+          setLivePools([]);
         }
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [walletAddress]);
 
   useEffect(() => refreshFromBackend(), [refreshFromBackend]);
 
@@ -460,7 +593,7 @@ export function LuckyMeScreen() {
           try {
             const token = await getExpoPushToken();
             await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
-            await registerExpoPushToken(token);
+            await registerExpoPushToken(token, walletAddress);
           } catch {
             // Token fetch can fail offline; permission state remains valid.
           }
@@ -499,9 +632,15 @@ export function LuckyMeScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [walletAddress]);
 
-  const navigateTo = useCallback((nextScreen: StitchScreenId) => {
+  const navigateTo = useCallback((nextScreen: StitchScreenId, pool?: string) => {
+    if (pool) {
+      setSelectedPool(pool);
+      setTicketCount(1);
+      setTransactionStatus({ state: "idle" });
+    }
+
     if (NAV_TABS.has(nextScreen)) {
       setRequestedTab(nextScreen);
     }
@@ -527,7 +666,7 @@ export function LuckyMeScreen() {
       return;
     }
 
-    navigateTo(route.screen);
+    navigateTo(route.screen, route.pool);
   }, [navigateTo]);
 
   useEffect(() => {
@@ -568,6 +707,104 @@ export function LuckyMeScreen() {
     };
   }, [handleAppUrl]);
 
+  const refreshLivePools = useCallback(async (player = walletAddress) => {
+    const pools = await loadPoolsForWallet(player);
+    setOnchainAvailable((current) => current || pools.onchainAvailable);
+    setLivePools(pools.pools);
+    return pools.pools;
+  }, [walletAddress]);
+
+  const buyEntry = useCallback(async (pool = selectedPool) => {
+    const poolId = pool || selectedPool;
+    const count = clampTicketCount(poolId, ticketCount);
+    setSelectedPool(poolId);
+    setTicketCount(count);
+    setRequestedTab("pools");
+    setScreen("syncing");
+    setTransactionStatus({
+      state: "building",
+      message: "Preparing the on-chain ticket transaction.",
+    });
+
+    try {
+      const account = wallet.account ?? await wallet.connect();
+      const player = walletAddressToString(account.address);
+
+      if (!player) {
+        throw new Error("Wallet did not return a usable public key");
+      }
+
+      const response = await fetch(`${API_URL}/transactions/buy-tickets`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          player,
+          pool: poolId,
+          ticketCount: count,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        simulation?: { ok?: boolean; err?: unknown };
+        transactionBase64?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? payload.error ?? "Ticket transaction build failed");
+      }
+      if (!payload.transactionBase64) {
+        throw new Error("Backend did not return a ticket transaction");
+      }
+      if (payload.simulation?.ok === false) {
+        throw new Error(`Backend simulation failed: ${JSON.stringify(payload.simulation.err)}`);
+      }
+
+      const transaction = Transaction.from(Buffer.from(payload.transactionBase64, "base64"));
+      const minContextSlot = await wallet.connection.getSlot("confirmed").catch(() => 0);
+      setTransactionStatus({
+        state: "wallet",
+        message: "Approve the LuckyMe ticket transaction in your wallet.",
+      });
+      const signature = await wallet.signAndSendTransactions(transaction, minContextSlot);
+      setTransactionStatus({
+        state: "confirming",
+        message: "Wallet approved. Confirming on Solana and refreshing tickets.",
+        signature,
+      });
+
+      await wallet.connection.confirmTransaction(signature, "confirmed").catch(() => undefined);
+
+      let latestPools: LivePool[] = [];
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        latestPools = await refreshLivePools(player);
+        if (poolHasUserEntry(latestPools, poolId)) {
+          break;
+        }
+        await delay(900);
+      }
+
+      setTransactionStatus({
+        state: "confirmed",
+        message: poolHasUserEntry(latestPools, poolId)
+          ? "Ticket entry is confirmed in the round ledger."
+          : "Transaction confirmed. Pool state is still catching up.",
+        signature,
+      });
+      setRequestedTab("activity");
+      setScreen("success");
+    } catch (error) {
+      setTransactionStatus({
+        state: "error",
+        message: errorMessage(error),
+      });
+      setScreen("syncing");
+    }
+  }, [refreshLivePools, selectedPool, ticketCount, wallet]);
+
   const enableNotifications = useCallback(async () => {
     setNotificationBusy(true);
     setNotificationError(null);
@@ -600,7 +837,7 @@ export function LuckyMeScreen() {
       try {
         const token = await getExpoPushToken();
         await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
-        await registerExpoPushToken(token);
+        await registerExpoPushToken(token, walletAddress);
       } catch {
         setNotificationError("Notifications are enabled, but backend registration is not available yet.");
       }
@@ -613,7 +850,7 @@ export function LuckyMeScreen() {
     } finally {
       setNotificationBusy(false);
     }
-  }, []);
+  }, [walletAddress]);
 
   const declineNotifications = useCallback(async () => {
     setNotificationOptInState("declined");
@@ -637,6 +874,21 @@ export function LuckyMeScreen() {
       return;
     }
 
+    if (message?.type === "action") {
+      if (message.pool) {
+        setSelectedPool(message.pool);
+      }
+
+      if (message.action === "ticket-dec") {
+        setTicketCount((current) => clampTicketCount(message.pool ?? selectedPool, current - 1));
+      } else if (message.action === "ticket-inc") {
+        setTicketCount((current) => clampTicketCount(message.pool ?? selectedPool, current + 1));
+      } else if (message.action === "buy-entry") {
+        buyEntry(message.pool ?? selectedPool);
+      }
+      return;
+    }
+
     if (message?.type === "link") {
       openLegalLink(message.link);
       return;
@@ -648,9 +900,9 @@ export function LuckyMeScreen() {
     }
 
     if (message?.type === "navigate") {
-      navigateTo(message.screen);
+      navigateTo(message.screen, message.pool);
     }
-  }, [navigateTo, openLegalLink, refreshFromBackend]);
+  }, [buyEntry, navigateTo, openLegalLink, refreshFromBackend, selectedPool]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
