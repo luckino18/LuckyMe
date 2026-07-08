@@ -20,7 +20,9 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0E14"
       },
-      "permissions": []
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "extra": {
       "luckymeProgramId": "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3",

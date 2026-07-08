@@ -76,21 +76,23 @@ The UI has explicit states for missing wallet support, rejected wallet requests,
 insufficient SOL, failed simulation, stale or closed rounds, backend
 unavailability, RPC failures, settlement, and refund mode.
 
-## Future APK TODO
+## APK Engagement Features
 
-- Add a first-run in-app notification explainer before requesting Android push
-  permission. Copy should explain that alerts are only for pool starts and
-  near-close reminders, with no spam.
-- Push policy for MVP: max two notifications per active round per opted-in
+- First-run notification explainer is implemented before the Android permission
+  request. Copy says alerts are only for pool starts and near-close reminders.
+- APK notification policy is max two alerts per active round per opted-in
   device: one when the first ticket starts a pool countdown, and one at 10
   minutes remaining.
-- Deep-link push opens the APK directly on the relevant pool.
-- Add post-win sharing: generate a branded winner card image with pool, round
-  number, prize amount, and a `Share on X` action. Sharing must be opt-in and
-  must not expose wallet addresses unless the player explicitly chooses it.
-- Later APK/WebView pass: port the same web winner card page/component into the
-  Seeker WebView flow after the real APK buy/settlement state is wired. Do not
-  implement this in the current web-only integration pass.
+- Deep links are implemented for `luckyme://pools` and
+  `luckyme://winner?pool=...&round=...&amount=...&wallet=...`.
+- Post-win winner card sharing is implemented as a standalone WebView screen
+  with WhatsApp, X, Telegram, and Download PNG actions. The screen is populated
+  dynamically from settlement/deep-link data and does not expose wallet
+  addresses beyond the shortened public winner address.
+
+Backend/keeper follow-up: register persisted push tokens server-side and trigger
+the two round notifications from confirmed on-chain/keeper events. The APK is
+ready to receive those deep links once the backend event sender is wired.
 
 ## APK Profile
 

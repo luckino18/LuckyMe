@@ -8,13 +8,24 @@ export type StitchScreenId =
   | "syncing"
   | "success"
   | "unavailable"
-  | "welcome";
+  | "welcome"
+  | "winner";
 
 export type StitchRenderOptions = {
   /** Confirmed on-chain/backend availability. Drives the header status pill. */
   onchainAvailable?: boolean;
   /** Which bottom tab is highlighted. Defaults to the screen's own tab. */
   activeTab?: StitchScreenId;
+  /** Winner card payload supplied by a settlement deep link or native flow. */
+  winner?: WinnerShareData;
+};
+
+export type WinnerShareData = {
+  pool: string;
+  round: string;
+  amount: string;
+  wallet: string;
+  shareUrl: string;
 };
 
 type PoolTone = "cyan" | "purple" | "violet" | "prime";
@@ -87,6 +98,36 @@ const RULES = [
 
 const PROGRAM_ID = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
 const API_HOST = "api.lucky-me.app";
+const DEFAULT_WINNER_SHARE: WinnerShareData = {
+  pool: "Mini Pool",
+  round: "1284",
+  amount: "2.45",
+  wallet: "7xA9vQx5Q7GKvRz2pQ3L111111111111111111",
+  shareUrl: "https://lucky-me.app/play/",
+};
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function winnerPayload(input?: WinnerShareData): WinnerShareData {
+  return {
+    pool: input?.pool || DEFAULT_WINNER_SHARE.pool,
+    round: input?.round || DEFAULT_WINNER_SHARE.round,
+    amount: input?.amount || DEFAULT_WINNER_SHARE.amount,
+    wallet: input?.wallet || DEFAULT_WINNER_SHARE.wallet,
+    shareUrl: input?.shareUrl || DEFAULT_WINNER_SHARE.shareUrl,
+  };
+}
+
+function shortAddress(value: string) {
+  return value.length > 14 ? `${value.slice(0, 6)}...${value.slice(-6)}` : value;
+}
 
 /* ------------------------------------------------------------------ */
 /* Brand art — official LuckyMe mark (from SOLANA LEDGER.png),          */
@@ -116,6 +157,10 @@ const ICONS = {
   chain: `<svg ${SVG}><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.8 12.8 5a3.6 3.6 0 0 1 5.1 5.1L16.1 12"/><path d="M13 17.2 11.2 19a3.6 3.6 0 0 1-5.1-5.1L7.9 12"/></svg>`,
   dice: `<svg ${SVG}><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9h.01M15 9h.01M12 12h.01M9 15h.01M15 15h.01"/></svg>`,
   diamond: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2.6" transform="rotate(45 12 12)"/></svg>`,
+  whatsapp: `<svg ${SVG}><path d="M4.5 19.5 5.8 15.9A7.2 7.2 0 1 1 8 18Z"/><path d="M9.2 8.7c.2-.4.4-.4.7-.4h.5c.2 0 .4 0 .5.4l.5 1.1c.1.3.1.5-.1.7l-.4.5c.5 1 1.3 1.8 2.4 2.4l.5-.4c.2-.2.4-.2.7-.1l1.2.6c.3.1.4.3.4.6v.5c0 .3-.1.5-.4.7-.5.3-1.2.5-1.8.4-3-.4-5.4-2.8-5.8-5.8-.1-.7.1-1.3.5-1.8Z"/></svg>`,
+  x: `<svg ${SVG}><path d="M5 5l14 14"/><path d="M19 5 5 19"/></svg>`,
+  telegram: `<svg ${SVG}><path d="m21 4-4 16-5.2-4.1L8.6 19l.7-5.2L3 11.2Z"/><path d="M9.3 13.8 21 4"/></svg>`,
+  download: `<svg ${SVG}><path d="M12 4v10"/><path d="m8.5 10.5 3.5 3.5 3.5-3.5"/><path d="M4.5 19.5h15"/></svg>`,
 };
 
 /* ------------------------------------------------------------------ */
@@ -127,6 +172,7 @@ function page(
   active: StitchScreenId,
   body: string,
   onchainAvailable: boolean,
+  chrome = true,
 ) {
   return String.raw`<!doctype html>
 <html lang="en">
@@ -191,6 +237,11 @@ function page(
       margin: 0 auto;
       padding: 10px 16px calc(env(safe-area-inset-bottom) + 104px);
       overflow-x: hidden;
+    }
+
+    .app.standalone-app {
+      max-width: 1200px;
+      padding: 10px 10px calc(env(safe-area-inset-bottom) + 16px);
     }
 
     .topbar {
@@ -471,6 +522,260 @@ function page(
 
     .primary-button:active, .secondary-button:active, .nav-item:active { transform: scale(0.98); opacity: 0.8; }
 
+    /* ---------- winner share card ---------- */
+
+    .winner-shell {
+      display: grid;
+      gap: 14px;
+      padding: 2px 0 8px;
+    }
+
+    .winner-card {
+      position: relative;
+      width: 100%;
+      max-width: 1200px;
+      aspect-ratio: 1200 / 630;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: clamp(12px, 3vw, 28px);
+      overflow: hidden;
+      padding: clamp(18px, 5vw, 54px);
+      border: 1px solid rgba(20, 241, 149, 0.32);
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 16% 18%, rgba(20, 241, 149, 0.28), transparent 24%),
+        radial-gradient(circle at 88% 16%, rgba(153, 69, 255, 0.30), transparent 28%),
+        radial-gradient(circle at 74% 86%, rgba(0, 209, 255, 0.20), transparent 32%),
+        linear-gradient(145deg, #071018 0%, #120D23 52%, #06131B 100%);
+      box-shadow: 0 0 38px rgba(20, 241, 149, 0.13), 0 0 46px rgba(153, 69, 255, 0.16);
+      isolation: isolate;
+    }
+
+    .winner-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+      background-size: 38px 38px;
+      opacity: 0.26;
+      mask-image: radial-gradient(circle at 45% 45%, black, transparent 76%);
+    }
+
+    .winner-brand {
+      display: grid;
+      align-content: space-between;
+      min-width: 0;
+    }
+
+    .winner-logo-row {
+      display: flex;
+      align-items: center;
+      gap: clamp(9px, 2.3vw, 18px);
+      min-width: 0;
+    }
+
+    .winner-logo {
+      width: clamp(54px, 14vw, 142px);
+      height: auto;
+      filter: drop-shadow(0 0 16px rgba(20, 241, 149, 0.32));
+    }
+
+    .winner-wordmark {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .winner-wordmark strong {
+      color: #fff;
+      font-size: clamp(22px, 6vw, 64px);
+      font-weight: 900;
+      line-height: 0.96;
+    }
+
+    .winner-wordmark span,
+    .winner-kicker,
+    .winner-label {
+      color: rgba(203, 213, 225, 0.72);
+      font-size: clamp(9px, 2vw, 18px);
+      font-weight: 800;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .winner-title {
+      display: grid;
+      gap: clamp(6px, 1.8vw, 14px);
+      margin-top: auto;
+    }
+
+    .winner-title h1 {
+      font-size: clamp(24px, 9vw, 92px);
+      line-height: 0.9;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      text-shadow: 0 0 30px rgba(153, 69, 255, 0.42);
+    }
+
+    .winner-title p {
+      max-width: 34em;
+      color: rgba(226, 232, 240, 0.78);
+      font-size: clamp(11px, 2.6vw, 24px);
+      line-height: 1.28;
+    }
+
+    .winner-details {
+      display: grid;
+      align-content: end;
+      gap: clamp(8px, 2vw, 16px);
+      min-width: 0;
+    }
+
+    .winner-amount {
+      display: grid;
+      gap: 5px;
+      padding: clamp(12px, 3vw, 26px);
+      border: 1px solid rgba(20, 241, 149, 0.28);
+      border-radius: 14px;
+      background: rgba(3, 9, 14, 0.44);
+    }
+
+    .winner-amount strong {
+      color: #14F195;
+      font-size: clamp(32px, 10vw, 102px);
+      font-weight: 950;
+      line-height: 0.92;
+      letter-spacing: 0;
+      text-shadow: 0 0 28px rgba(20, 241, 149, 0.32);
+    }
+
+    .winner-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(7px, 1.7vw, 12px);
+    }
+
+    .winner-fact {
+      min-width: 0;
+      padding: clamp(10px, 2.4vw, 18px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.055);
+    }
+
+    .winner-fact strong {
+      display: block;
+      margin-top: 4px;
+      color: #fff;
+      font-size: clamp(12px, 3.2vw, 24px);
+      line-height: 1.08;
+      overflow-wrap: anywhere;
+    }
+
+    .share-panel {
+      display: grid;
+      gap: 10px;
+      padding: 0 2px;
+    }
+
+    .share-title {
+      color: var(--soft);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .share-actions {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .share-button {
+      min-height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.055);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 850;
+      text-decoration: none;
+    }
+
+    .share-button svg { width: 18px; height: 18px; flex: 0 0 auto; }
+    .share-button:active { transform: scale(0.98); opacity: 0.82; }
+    .share-button.whatsapp { border-color: rgba(20, 241, 149, 0.32); }
+    .share-button.x { border-color: rgba(255, 255, 255, 0.22); }
+    .share-button.telegram { border-color: rgba(0, 209, 255, 0.32); }
+    .share-button.download { border-color: rgba(153, 69, 255, 0.34); }
+
+    @media (max-width: 520px) {
+      .winner-card {
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+        padding: 12px;
+      }
+      .winner-brand {
+        align-content: start;
+        gap: 42px;
+      }
+      .winner-logo-row { gap: 7px; }
+      .winner-logo { width: 46px; }
+      .winner-wordmark { gap: 1px; }
+      .winner-wordmark strong {
+        font-size: 20px;
+        line-height: 1;
+      }
+      .winner-wordmark span,
+      .winner-kicker,
+      .winner-label {
+        font-size: 7px;
+        letter-spacing: 0.12em;
+      }
+      .winner-title {
+        gap: 3px;
+        margin-top: 0;
+      }
+      .winner-title h1 {
+        font-size: 30px;
+        line-height: 0.88;
+      }
+      .winner-title p { display: none; }
+      .winner-details { gap: 7px; }
+      .winner-amount {
+        gap: 3px;
+        padding: 8px 10px;
+        border-radius: 12px;
+      }
+      .winner-amount strong {
+        font-size: 34px;
+        line-height: 0.9;
+      }
+      .winner-grid { gap: 6px; }
+      .winner-fact {
+        padding: 7px 8px;
+        border-radius: 10px;
+      }
+      .winner-fact strong {
+        font-size: 10px;
+        line-height: 1.05;
+        overflow-wrap: normal;
+        word-break: normal;
+      }
+      .share-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .share-button { min-height: 46px; font-size: 11px; }
+    }
+
     /* ---------- timeline ---------- */
 
     .timeline { display: grid; padding: 2px 2px 0; }
@@ -552,11 +857,11 @@ function page(
   </style>
 </head>
 <body>
-  <div class="app">
-    ${topbar(onchainAvailable)}
+  <div class="app ${chrome ? "" : "standalone-app"}">
+    ${chrome ? topbar(onchainAvailable) : ""}
     ${body}
   </div>
-  ${bottomNav(active)}
+  ${chrome ? bottomNav(active) : ""}
 </body>
 </html>`;
 }
@@ -735,6 +1040,194 @@ function activityBody() {
     </div>`).join("\n    ")}
   </section>
   ${trustBadges()}
+</main>`;
+}
+
+function winnerBody(input?: WinnerShareData) {
+  const data = winnerPayload(input);
+  const pool = escapeHtml(data.pool);
+  const round = escapeHtml(data.round);
+  const amount = escapeHtml(data.amount);
+  const wallet = escapeHtml(shortAddress(data.wallet));
+  const shareUrl = data.shareUrl || DEFAULT_WINNER_SHARE.shareUrl;
+  const shareText = `I just won ${data.amount} SOL on LuckyMe! 🏆\nPool: ${data.pool}\nRound #${data.round}\nTry your luck: ${shareUrl}`;
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+  const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+  const scriptData = JSON.stringify(data).replaceAll("<", "\\u003c");
+
+  return String.raw`<main class="winner-shell">
+  <section class="winner-card" id="winnerCard" aria-label="LuckyMe Solana winner card">
+    <div class="winner-brand">
+      <div class="winner-logo-row">
+        <img class="winner-logo" src="${LOGO_HERO}" alt="LuckyMe" />
+        <div class="winner-wordmark">
+          <strong>LuckyMe</strong>
+          <span>Solana pools</span>
+        </div>
+      </div>
+      <div class="winner-title">
+        <span class="winner-kicker">Solana Winner Card</span>
+        <h1>Winner</h1>
+        <p>Round #${round} settled on LuckyMe.</p>
+      </div>
+    </div>
+    <div class="winner-details">
+      <div class="winner-amount">
+        <span class="winner-label">SOL amount won</span>
+        <strong>${amount}</strong>
+      </div>
+      <div class="winner-grid">
+        <div class="winner-fact">
+          <span class="winner-label">Pool</span>
+          <strong>${pool}</strong>
+        </div>
+        <div class="winner-fact">
+          <span class="winner-label">Round</span>
+          <strong>#${round}</strong>
+        </div>
+        <div class="winner-fact" style="grid-column: 1 / -1;">
+          <span class="winner-label">Winner wallet</span>
+          <strong class="mono">${wallet}</strong>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="share-panel" aria-label="Winner share actions">
+    <div class="share-title">SHARE ON</div>
+    <div class="share-actions">
+      <a class="share-button whatsapp" href="${escapeHtml(whatsappUrl)}" data-route="external" data-url="${escapeHtml(whatsappUrl)}">${ICONS.whatsapp}<span>WhatsApp</span></a>
+      <a class="share-button x" href="${escapeHtml(xUrl)}" data-route="external" data-url="${escapeHtml(xUrl)}">${ICONS.x}<span>X</span></a>
+      <a class="share-button telegram" href="${escapeHtml(telegramUrl)}" data-route="external" data-url="${escapeHtml(telegramUrl)}">${ICONS.telegram}<span>Telegram</span></a>
+      <button class="share-button download" type="button" onclick="downloadWinnerCard()">${ICONS.download}<span>Download PNG</span></button>
+    </div>
+  </section>
+  <script>
+    const winnerCardData = ${scriptData};
+    function drawWinnerCard(ctx, logo) {
+      const width = 1200;
+      const height = 630;
+      const bg = ctx.createLinearGradient(0, 0, width, height);
+      bg.addColorStop(0, "#071018");
+      bg.addColorStop(0.52, "#120D23");
+      bg.addColorStop(1, "#06131B");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, width, height);
+
+      function glow(x, y, r, color) {
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      glow(190, 120, 250, "rgba(20,241,149,0.28)");
+      glow(1010, 115, 290, "rgba(153,69,255,0.30)");
+      glow(880, 545, 280, "rgba(0,209,255,0.20)");
+      ctx.strokeStyle = "rgba(20,241,149,0.32)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(18, 18, width - 36, height - 36);
+
+      if (logo) {
+        ctx.drawImage(logo, 58, 48, 135, 135);
+      }
+
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "900 62px system-ui, sans-serif";
+      ctx.fillText("LuckyMe", 215, 95);
+      ctx.fillStyle = "rgba(203,213,225,0.72)";
+      ctx.font = "800 20px system-ui, sans-serif";
+      ctx.fillText("SOLANA POOLS", 218, 128);
+
+      ctx.fillStyle = "rgba(203,213,225,0.72)";
+      ctx.font = "800 22px system-ui, sans-serif";
+      ctx.fillText("SOLANA WINNER CARD", 64, 388);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "950 92px system-ui, sans-serif";
+      ctx.fillText("WINNER", 60, 485);
+      ctx.fillStyle = "rgba(226,232,240,0.78)";
+      ctx.font = "500 26px system-ui, sans-serif";
+      ctx.fillText("Round #" + winnerCardData.round + " settled on LuckyMe.", 64, 535);
+
+      ctx.fillStyle = "rgba(3,9,14,0.50)";
+      ctx.strokeStyle = "rgba(20,241,149,0.30)";
+      roundRect(ctx, 680, 92, 440, 190, 22);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(203,213,225,0.72)";
+      ctx.font = "800 22px system-ui, sans-serif";
+      ctx.fillText("SOL AMOUNT WON", 712, 145);
+      ctx.fillStyle = "#14F195";
+      ctx.font = "950 96px system-ui, sans-serif";
+      ctx.fillText(String(winnerCardData.amount), 712, 242);
+
+      drawFact(ctx, 680, 314, 210, 104, "POOL", winnerCardData.pool);
+      drawFact(ctx, 910, 314, 210, 104, "ROUND", "#" + winnerCardData.round);
+      drawFact(ctx, 680, 438, 440, 104, "WINNER WALLET", shortWallet(winnerCardData.wallet));
+    }
+
+    function roundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    function drawFact(ctx, x, y, width, height, label, value) {
+      ctx.fillStyle = "rgba(255,255,255,0.055)";
+      ctx.strokeStyle = "rgba(148,163,184,0.20)";
+      roundRect(ctx, x, y, width, height, 18);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(203,213,225,0.72)";
+      ctx.font = "800 18px system-ui, sans-serif";
+      ctx.fillText(label, x + 24, y + 36);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "800 28px system-ui, sans-serif";
+      ctx.fillText(String(value), x + 24, y + 76, width - 48);
+    }
+
+    function shortWallet(value) {
+      value = String(value || "");
+      return value.length > 14 ? value.slice(0, 6) + "..." + value.slice(-6) : value;
+    }
+
+    function downloadWinnerCard() {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1200;
+        canvas.height = 630;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas not available");
+        const logo = new Image();
+        logo.onload = function () {
+          drawWinnerCard(ctx, logo);
+          const link = document.createElement("a");
+          link.download = "luckyme-round-" + winnerCardData.round + "-winner.png";
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+        };
+        logo.onerror = function () {
+          drawWinnerCard(ctx, null);
+          const link = document.createElement("a");
+          link.download = "luckyme-round-" + winnerCardData.round + "-winner.png";
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+        };
+        logo.src = ${JSON.stringify(LOGO_HERO)};
+      } catch (error) {
+        alert("PNG export is not available in this WebView. Use the share buttons instead.");
+      }
+    }
+  </script>
 </main>`;
 }
 
@@ -923,6 +1416,7 @@ const TITLES: Record<StitchScreenId, string> = {
   success: "LuckyMe | Status",
   unavailable: "LuckyMe | On-chain Syncing",
   welcome: "LuckyMe | Welcome",
+  winner: "LuckyMe | Winner Card",
 };
 
 const BODIES: Record<StitchScreenId, () => string> = {
@@ -936,6 +1430,7 @@ const BODIES: Record<StitchScreenId, () => string> = {
   success: successBody,
   unavailable: unavailableBody,
   welcome: homeBody,
+  winner: () => winnerBody(),
 };
 
 const DEFAULT_TAB: Record<StitchScreenId, StitchScreenId> = {
@@ -949,6 +1444,7 @@ const DEFAULT_TAB: Record<StitchScreenId, StitchScreenId> = {
   success: "activity",
   unavailable: "home",
   welcome: "home",
+  winner: "activity",
 };
 
 /** Bottom tab that should be highlighted for a given screen. */
@@ -963,7 +1459,8 @@ export function renderStitchScreen(
 ): string {
   const onchainAvailable = options.onchainAvailable ?? screen !== "unavailable";
   const active = options.activeTab ?? DEFAULT_TAB[screen];
-  return page(TITLES[screen], active, BODIES[screen](), onchainAvailable);
+  const body = screen === "winner" ? winnerBody(options.winner) : BODIES[screen]();
+  return page(TITLES[screen], active, body, onchainAvailable, screen !== "winner");
 }
 
 /** Static default renders (kept for screen-id validation and previews). */
@@ -978,4 +1475,5 @@ export const STITCH_SCREENS: Record<StitchScreenId, string> = {
   success: renderStitchScreen("success"),
   unavailable: renderStitchScreen("unavailable"),
   welcome: renderStitchScreen("welcome"),
+  winner: renderStitchScreen("winner"),
 };

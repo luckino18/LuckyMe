@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const SCRIPT = "app-seeker/scripts/validate-production-env.mjs";
+const LUCKYME_SCREEN = "app-seeker/src/LuckyMeScreen.tsx";
 const STITCH_SCREENS = "app-seeker/src/stitchScreens.ts";
 
 test("Seeker production env validation rejects missing env", () => {
@@ -71,6 +72,21 @@ test("Seeker static UI reflects upgraded pool economics", () => {
   assert.match(content, /Minimum 3 wallets required/);
   assert.doesNotMatch(content, /High Roller/i);
   assert.doesNotMatch(content, /Win Chance/i);
+});
+
+test("Seeker APK includes opt-in notification and winner card surfaces", () => {
+  const screen = readFileSync(LUCKYME_SCREEN, "utf8");
+  const stitch = readFileSync(STITCH_SCREENS, "utf8");
+
+  assert.match(screen, /ROUND_ALERTS_CHANNEL_ID = "luckyme-round-alerts"/);
+  assert.match(screen, /Max 2 alerts per active round/);
+  assert.match(screen, /Notifications\.requestPermissionsAsync/);
+  assert.match(screen, /Notifications\.getExpoPushTokenAsync/);
+  assert.match(screen, /screenName === "winner"/);
+  assert.match(stitch, /Solana Winner Card/);
+  assert.match(stitch, /SHARE ON/);
+  assert.match(stitch, /WhatsApp/);
+  assert.match(stitch, /Download PNG/);
 });
 
 function mainnetReleaseEnv(overrides = {}) {
