@@ -82,6 +82,7 @@ test("Seeker APK includes opt-in notification and winner card surfaces", () => {
   assert.match(screen, /Max 2 alerts per active round/);
   assert.match(screen, /Notifications\.requestPermissionsAsync/);
   assert.match(screen, /Notifications\.getExpoPushTokenAsync/);
+  assert.match(screen, /\/notifications\/register/);
   assert.match(screen, /screenName === "winner"/);
   assert.match(stitch, /Solana Winner Card/);
   assert.match(stitch, /SHARE ON/);

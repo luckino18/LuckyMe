@@ -69,6 +69,7 @@ export LUCKYME_RANDOMNESS_MODE=orao_vrf
 export LUCKYME_PRODUCTION_RANDOMNESS=true
 export CORS_ORIGIN=https://lucky-me.app,https://www.lucky-me.app
 export ENABLE_TRANSACTION_SUBMIT=false
+export LUCKYME_PUSH_TOKEN_STORE=/var/lib/luckyme/push-tokens.json
 ```
 
 Set these app variables for the Solana Mobile dApp Store APK build:
@@ -117,6 +118,20 @@ Important backend behavior:
   `POST /transactions/settle-provider-round` support the ORAO keeper flow.
 - `POST /transactions/submit` is disabled unless explicitly enabled; keep it
   disabled for production.
+- `POST /notifications/register` stores opted-in Expo push tokens for the
+  APK notification flow; responses return only a token hash.
+
+Round notification sender:
+
+```bash
+CONFIRM_MAINNET_PUSH_ALERTS=true \
+LUCKYME_PUSH_SEND=true \
+npm run push:round-alerts
+```
+
+The sender reads confirmed on-chain rounds and sends max two notifications per
+active round per registered APK token: countdown started and last 10 minutes.
+Without `LUCKYME_PUSH_SEND=true`, it runs as a dry-run.
 
 ## Web App
 

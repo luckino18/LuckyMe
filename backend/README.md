@@ -16,6 +16,7 @@ export HOST=0.0.0.0
 export PORT=8788
 export CORS_ORIGIN=https://lucky-me.app,https://www.lucky-me.app
 export ENABLE_TRANSACTION_SUBMIT=false
+export LUCKYME_PUSH_TOKEN_STORE=/var/lib/luckyme/push-tokens.json
 node backend/src/server.mjs
 ```
 
@@ -43,12 +44,32 @@ node backend/src/server.mjs
 - `POST /transactions/request-randomness` - builds an unsigned keeper request tx
 - `POST /transactions/settle-provider-round` - builds an unsigned provider settlement tx
 - `POST /transactions/submit` - disabled by default and should stay disabled for production
+- `POST /notifications/register` - persists an opted-in Expo push token
+- `POST /notifications/unregister` - removes an Expo push token
 
 ## Production Safety
 
 The API returns an unavailable state instead of fake pool data when mainnet
 on-chain state cannot be read. Player transactions are always returned unsigned
 for Mobile Wallet Adapter signing.
+
+Push notifications are opt-in only. The backend stores Expo push tokens in
+`LUCKYME_PUSH_TOKEN_STORE`; API responses return only a token hash, never the
+raw token. Round alerts are sent by the keeper script, not by transaction
+builder endpoints, so alerts are based on confirmed on-chain state rather than
+unsigned wallet requests.
+
+Run one notification scan with:
+
+```bash
+CONFIRM_MAINNET_PUSH_ALERTS=true \
+LUCKYME_PUSH_SEND=true \
+npm run push:round-alerts
+```
+
+Omit `LUCKYME_PUSH_SEND=true` for a dry-run. The script sends at most two
+alerts per active round per registered token: countdown started and last 10
+minutes.
 
 Use a production HTTPS reverse proxy or managed platform in front of this
 process. Keep CORS restricted to the production app origins and apply upstream

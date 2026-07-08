@@ -23,12 +23,13 @@
     "round:settle": "node scripts/settle-round.mjs",
     "round:close-empty": "node scripts/close-empty-round.mjs",
     "round:crank-empty": "node scripts/crank-empty-rounds.mjs",
+    "push:round-alerts": "node scripts/push-round-alerts.mjs",
     "refund:crank": "node scripts/refund-cranker.mjs",
     "randomness:request": "node scripts/randomness-request.mjs",
     "randomness:status": "node scripts/randomness-status.mjs",
     "randomness:settle": "node scripts/randomness-settle.mjs",
     "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
-    "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/app-production-env.test.mjs tests/deploy-safety.test.mjs tests/docs-scripts.test.mjs",
+    "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/app-production-env.test.mjs tests/deploy-safety.test.mjs tests/docs-scripts.test.mjs tests/push-notifications.test.mjs",
     "sim:preview": "node sim/preview.mjs"
   },
   "devDependencies": {

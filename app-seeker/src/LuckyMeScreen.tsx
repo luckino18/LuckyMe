@@ -316,6 +316,25 @@ async function getExpoPushToken() {
   return token.data;
 }
 
+async function registerExpoPushToken(token: string) {
+  const response = await fetch(`${API_URL}/notifications/register`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      token,
+      platform: Platform.OS,
+      projectId: expoProjectId(),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Push registration failed");
+  }
+}
+
 function notificationDeepLink(response: Notifications.NotificationResponse) {
   const data = response.notification.request.content.data;
   const url = data?.url;
@@ -439,6 +458,7 @@ export function LuckyMeScreen() {
           try {
             const token = await getExpoPushToken();
             await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
+            await registerExpoPushToken(token);
           } catch {
             // Token fetch can fail offline; permission state remains valid.
           }
@@ -569,8 +589,9 @@ export function LuckyMeScreen() {
       try {
         const token = await getExpoPushToken();
         await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
+        await registerExpoPushToken(token);
       } catch {
-        setNotificationError("Notifications are enabled, but the push token is not available yet.");
+        setNotificationError("Notifications are enabled, but backend registration is not available yet.");
       }
     } catch (error) {
       setNotificationOptInState("error");

@@ -3,6 +3,10 @@ import http from "node:http";
 import { URL } from "node:url";
 import { Transaction } from "@solana/web3.js";
 import {
+  registerPushToken,
+  unregisterPushToken,
+} from "./push-notifications.mjs";
+import {
   DEFAULT_HOUSE_FEE_BPS,
   DEFAULT_JACKPOT_BPS,
   DEFAULT_MAIN_PRIZE_BPS,
@@ -161,6 +165,30 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, error.status ?? 500, {
         error: error.code ?? "refunds_fetch_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/notifications/register") {
+    try {
+      const payload = await readJson(req);
+      return json(res, 200, await registerPushToken(payload));
+    } catch (error) {
+      return json(res, error.status ?? 400, {
+        error: error.code ?? "notification_registration_failed",
+        message: error.message,
+      });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/notifications/unregister") {
+    try {
+      const payload = await readJson(req);
+      return json(res, 200, await unregisterPushToken(payload));
+    } catch (error) {
+      return json(res, error.status ?? 400, {
+        error: error.code ?? "notification_unregister_failed",
         message: error.message,
       });
     }
@@ -514,6 +542,11 @@ async function getPublicConfig() {
       strictOnchain: STRICT_ONCHAIN,
       transactionSubmitRelayEnabled: ENABLE_TRANSACTION_SUBMIT,
       backendSignsPlayerTransactions: false,
+    },
+    notifications: {
+      provider: "expo",
+      registrationEndpoint: "/notifications/register",
+      maxRoundAlertsPerRound: 2,
     },
   };
 }

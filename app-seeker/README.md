@@ -83,6 +83,8 @@ unavailability, RPC failures, settlement, and refund mode.
 - APK notification policy is max two alerts per active round per opted-in
   device: one when the first ticket starts a pool countdown, and one at 10
   minutes remaining.
+- Accepted Expo push tokens are registered with the backend through
+  `/notifications/register` and persisted server-side for the keeper sender.
 - Deep links are implemented for `luckyme://pools` and
   `luckyme://winner?pool=...&round=...&amount=...&wallet=...`.
 - Post-win winner card sharing is implemented as a standalone WebView screen
@@ -90,9 +92,10 @@ unavailability, RPC failures, settlement, and refund mode.
   dynamically from settlement/deep-link data and does not expose wallet
   addresses beyond the shortened public winner address.
 
-Backend/keeper follow-up: register persisted push tokens server-side and trigger
-the two round notifications from confirmed on-chain/keeper events. The APK is
-ready to receive those deep links once the backend event sender is wired.
+The backend keeper sender is `npm run push:round-alerts`. It reads confirmed
+on-chain rounds and sends the two alert types only after tickets exist in the
+round. It is dry-run by default; production delivery requires
+`LUCKYME_PUSH_SEND=true`.
 
 ## APK Profile
 
