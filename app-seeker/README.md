@@ -88,6 +88,9 @@ unavailability, RPC failures, settlement, and refund mode.
 - Add post-win sharing: generate a branded winner card image with pool, round
   number, prize amount, and a `Share on X` action. Sharing must be opt-in and
   must not expose wallet addresses unless the player explicitly chooses it.
+- Later APK/WebView pass: port the same web winner card page/component into the
+  Seeker WebView flow after the real APK buy/settlement state is wired. Do not
+  implement this in the current web-only integration pass.
 
 ## APK Profile
 

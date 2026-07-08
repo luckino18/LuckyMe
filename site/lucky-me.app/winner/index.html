@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>LuckyMe Winner Card</title>
+    <meta name="description" content="Share a verified LuckyMe Solana pool win." />
+    <link rel="icon" type="image/png" href="/assets/brand/favicon.png" />
+    <style>
+      :root {
+        --bg: #05070c;
+        --panel: rgba(255, 255, 255, 0.1);
+        --line: rgba(255, 255, 255, 0.18);
+        --text: #ffffff;
+        --muted: rgba(255, 255, 255, 0.74);
+        --cyan: #00d1ff;
+        --violet: #9945ff;
+        --green: #14f195;
+        --gold: #ffd166;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(18px, env(safe-area-inset-top)) 14px max(26px, env(safe-area-inset-bottom));
+        background:
+          linear-gradient(135deg, rgba(153, 69, 255, 0.28), transparent 34%),
+          linear-gradient(225deg, rgba(0, 209, 255, 0.18), transparent 40%),
+          linear-gradient(180deg, #101426 0%, #05070c 78%);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      }
+
+      .winner-page {
+        width: 100%;
+        max-width: 1200px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .winner-card {
+        width: 100%;
+        max-width: 1200px;
+        aspect-ratio: 1200 / 630;
+        position: relative;
+        overflow: hidden;
+        border-radius: clamp(16px, 2.8vw, 34px);
+        border: 1px solid var(--line);
+        padding: clamp(14px, 3.7vw, 44px);
+        background:
+          linear-gradient(110deg, rgba(20, 241, 149, 0.14), transparent 28%),
+          linear-gradient(250deg, rgba(153, 69, 255, 0.22), transparent 34%),
+          linear-gradient(135deg, #080a18 0%, #12183f 50%, #060812 100%);
+        box-shadow: 0 26px 90px rgba(0, 0, 0, 0.52), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      }
+
+      .winner-card::before {
+        content: "";
+        position: absolute;
+        inset: clamp(8px, 1.35vw, 16px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: clamp(12px, 2.2vw, 26px);
+        pointer-events: none;
+      }
+
+      .winner-card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent),
+          repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 58px);
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .winner-content {
+        position: relative;
+        z-index: 1;
+        height: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: clamp(10px, 3vw, 34px);
+        align-items: center;
+      }
+
+      .winner-left,
+      .winner-panel {
+        min-width: 0;
+      }
+
+      .winner-left {
+        display: grid;
+        align-content: center;
+        gap: clamp(7px, 1.5vw, 18px);
+      }
+
+      .winner-logo {
+        width: clamp(88px, 24vw, 320px);
+        max-height: clamp(58px, 14vw, 156px);
+        object-fit: contain;
+        object-position: left center;
+        filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.45));
+      }
+
+      .winner-badge {
+        width: fit-content;
+        max-width: 100%;
+        padding: clamp(5px, 1vw, 10px) clamp(8px, 1.3vw, 15px);
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.08);
+        color: #eaffff;
+        font-size: clamp(8px, 1.15vw, 13px);
+        line-height: 1.1;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-transform: uppercase;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .winner-title {
+        margin: 0;
+        max-width: 9.2em;
+        font-size: clamp(20px, 5vw, 60px);
+        line-height: 0.98;
+        font-weight: 950;
+        letter-spacing: 0;
+        text-wrap: balance;
+      }
+
+      .winner-title span {
+        color: transparent;
+        background: linear-gradient(90deg, #fff 0%, #fff4b8 35%, #5cf8ff 72%, #fff 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+      }
+
+      .winner-subtitle {
+        margin: 0;
+        max-width: 34em;
+        color: var(--muted);
+        font-size: clamp(9.5px, 1.65vw, 20px);
+        line-height: 1.35;
+        font-weight: 720;
+      }
+
+      .winner-panel {
+        border-radius: clamp(14px, 2.5vw, 30px);
+        padding: clamp(13px, 2.5vw, 30px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.055));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 20px 48px rgba(0, 0, 0, 0.32);
+      }
+
+      .winner-label {
+        color: rgba(255, 255, 255, 0.68);
+        font-size: clamp(8px, 1.15vw, 14px);
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 1.1;
+        text-transform: uppercase;
+      }
+
+      .winner-amount {
+        margin-top: clamp(4px, 1vw, 10px);
+        color: transparent;
+        background: linear-gradient(180deg, #fff7b9, var(--gold) 54%, var(--cyan));
+        -webkit-background-clip: text;
+        background-clip: text;
+        font-size: clamp(23px, 6.2vw, 76px);
+        line-height: 0.92;
+        font-weight: 950;
+        letter-spacing: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .winner-amount small {
+        font-size: 0.43em;
+      }
+
+      .winner-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: clamp(6px, 1.25vw, 13px);
+        margin-top: clamp(10px, 2vw, 24px);
+      }
+
+      .winner-mini {
+        min-width: 0;
+        border-radius: clamp(9px, 1.5vw, 18px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(0, 0, 0, 0.22);
+        padding: clamp(7px, 1.25vw, 15px);
+      }
+
+      .winner-mini.wallet {
+        grid-column: 1 / -1;
+      }
+
+      .winner-mini b,
+      .winner-mini strong {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .winner-mini b {
+        margin-bottom: clamp(3px, 0.5vw, 6px);
+        color: rgba(255, 255, 255, 0.58);
+        font-size: clamp(7.5px, 1vw, 13px);
+        line-height: 1.1;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .winner-mini strong {
+        color: #fff;
+        font-size: clamp(10px, 1.8vw, 22px);
+        line-height: 1.15;
+      }
+
+      .winner-trust {
+        margin-top: clamp(8px, 1.6vw, 19px);
+        color: #dbffe9;
+        font-size: clamp(8px, 1.35vw, 16px);
+        line-height: 1.2;
+        font-weight: 900;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .share-title {
+        text-align: center;
+        color: #eaffff;
+        font-size: 15px;
+        font-weight: 950;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .share-row {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .share-button {
+        min-width: 150px;
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 15px;
+        padding: 0 15px;
+        color: #fff;
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-decoration: none;
+        cursor: pointer;
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+      }
+
+      .share-button svg {
+        width: 21px;
+        height: 21px;
+        fill: currentColor;
+        flex: 0 0 auto;
+      }
+
+      .share-button.whatsapp { background: linear-gradient(135deg, #128c7e, #25d366); }
+      .share-button.x { background: linear-gradient(135deg, #070707, #2c2c2c); }
+      .share-button.telegram { background: linear-gradient(135deg, #178bc9, #2aabee); }
+      .share-button.download { background: linear-gradient(135deg, var(--violet), var(--cyan)); }
+
+      .share-button:active {
+        transform: scale(0.98);
+      }
+
+      @media (max-width: 520px) {
+        body { padding-left: 10px; padding-right: 10px; }
+        .winner-page { gap: 12px; }
+        .winner-card { border-radius: 17px; padding: 12px; }
+        .winner-content { grid-template-columns: 0.9fr 1.1fr; gap: 8px; }
+        .winner-logo { width: clamp(74px, 25vw, 106px); max-height: 72px; }
+        .winner-subtitle { max-width: 18em; }
+        .share-button { min-width: 156px; min-height: 48px; }
+      }
+
+      @media (hover: hover) {
+        .share-button:hover {
+          filter: brightness(1.08);
+          transform: translateY(-1px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="winner-page">
+      <section class="winner-card" id="winnerCard" aria-label="LuckyMe winner card">
+        <div class="winner-content">
+          <div class="winner-left">
+            <img class="winner-logo" id="winnerLogo" src="/assets/brand/luckyme-mark.webp" alt="LuckyMe" />
+            <div class="winner-badge">Solana Winner Card</div>
+            <h1 class="winner-title"><span>Lucky win.<br />Real SOL.</span></h1>
+            <p class="winner-subtitle">Won the <strong id="poolText">Mini Pool</strong> on LuckyMe.</p>
+          </div>
+          <div class="winner-panel">
+            <div class="winner-label">Prize won</div>
+            <div class="winner-amount"><span id="amountText">2.45</span> <small>SOL</small></div>
+            <div class="winner-info">
+              <div class="winner-mini"><b>Pool</b><strong id="poolMini">Mini Pool</strong></div>
+              <div class="winner-mini"><b>Round</b><strong>#<span id="roundText">1284</span></strong></div>
+              <div class="winner-mini wallet"><b>Winner</b><strong id="walletText">7xA9...pQ3L</strong></div>
+            </div>
+            <div class="winner-trust">Provably fair. Powered by Solana.</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="share-title">SHARE ON</div>
+      <nav class="share-row" aria-label="Share winner card">
+        <a class="share-button whatsapp" id="whatsappButton" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.52 3.48A11.86 11.86 0 0 0 12.08 0C5.53 0 .2 5.33.2 11.88c0 2.1.55 4.14 1.6 5.94L0 24l6.33-1.66a11.88 11.88 0 0 0 5.75 1.46h.01c6.55 0 11.88-5.33 11.88-11.88 0-3.17-1.23-6.15-3.45-8.44ZM12.09 21.8h-.01a9.9 9.9 0 0 1-5.04-1.38l-.36-.21-3.76.99 1-3.66-.24-.38a9.86 9.86 0 0 1-1.52-5.28c0-5.46 4.45-9.9 9.92-9.9 2.65 0 5.14 1.03 7.01 2.91A9.86 9.86 0 0 1 22 11.92c0 5.46-4.45 9.88-9.91 9.88Zm5.43-7.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.48-1.75-1.65-2.05-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>
+          WhatsApp
+        </a>
+        <a class="share-button x" id="xButton" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 1.2h3.68l-8.04 9.2L24 22.8h-7.4l-5.8-7.58-6.63 7.58H.49l8.6-9.84L0 1.2h7.59l5.24 6.93L18.9 1.2Zm-1.29 19.42h2.04L6.48 3.26H4.29l13.32 17.36Z"/></svg>
+          X
+        </a>
+        <a class="share-button telegram" id="telegramButton" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.64 2.18c.32-1.32-.47-1.84-1.38-1.46L.96 8.93c-1.45.57-1.43 1.37-.26 1.73l5.46 1.7L18.8 4.4c.6-.36 1.15-.17.7.22L9.25 13.88l-.38 5.63c.55 0 .8-.25 1.1-.55l2.65-2.58 5.52 4.08c1.02.56 1.75.27 2-.94l3.5-17.34Z"/></svg>
+          Telegram
+        </a>
+        <button class="share-button download" id="downloadButton" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16.5 5.5 10h4V1h5v9h4L12 16.5ZM4 20h16v-4h2v6H2v-6h2v4Z"/></svg>
+          Download PNG
+        </button>
+      </nav>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const winnerData = {
+        pool: cleanText(params.get("pool") || "Mini Pool"),
+        round: cleanText(params.get("round") || "1284"),
+        amount: cleanAmount(params.get("amount") || "2.45"),
+        wallet: shortenWallet(cleanText(params.get("wallet") || "7xA9...pQ3L")),
+        shareUrl: cleanUrl(params.get("shareUrl") || params.get("url") || "https://lucky-me.app/play/"),
+      };
+
+      setText("poolText", winnerData.pool);
+      setText("poolMini", winnerData.pool);
+      setText("roundText", winnerData.round);
+      setText("amountText", winnerData.amount);
+      setText("walletText", winnerData.wallet);
+      document.title = `LuckyMe Winner - ${winnerData.amount} SOL`;
+
+      const shareText = `I just won ${winnerData.amount} SOL on LuckyMe! 🏆\nPool: ${winnerData.pool}\nRound #${winnerData.round}\nTry your luck: ${winnerData.shareUrl}`;
+      document.querySelector("#whatsappButton").href = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+      document.querySelector("#xButton").href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+      document.querySelector("#telegramButton").href = `https://t.me/share/url?url=${encodeURIComponent(winnerData.shareUrl)}&text=${encodeURIComponent(shareText)}`;
+      document.querySelector("#downloadButton").addEventListener("click", downloadWinnerPng);
+
+      function setText(id, value) {
+        document.getElementById(id).textContent = value;
+      }
+
+      function cleanText(value) {
+        return String(value).replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+      }
+
+      function cleanAmount(value) {
+        const text = cleanText(value).replace(/[^0-9.]/g, "");
+        return text || "0";
+      }
+
+      function cleanUrl(value) {
+        try {
+          const url = new URL(String(value));
+          return url.protocol === "https:" ? url.toString() : "https://lucky-me.app/play/";
+        } catch {
+          return "https://lucky-me.app/play/";
+        }
+      }
+
+      function shortenWallet(value) {
+        if (value.includes("...") || value.length <= 14) {
+          return value;
+        }
+        return `${value.slice(0, 6)}...${value.slice(-6)}`;
+      }
+
+      async function downloadWinnerPng() {
+        try {
+          const canvas = document.createElement("canvas");
+          const width = 1200;
+          const height = 630;
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          const logo = document.getElementById("winnerLogo");
+          await logo.decode().catch(() => {});
+
+          const base = ctx.createLinearGradient(0, 0, width, height);
+          base.addColorStop(0, "#080a18");
+          base.addColorStop(0.5, "#12183f");
+          base.addColorStop(1, "#060812");
+          ctx.fillStyle = base;
+          ctx.fillRect(0, 0, width, height);
+
+          fillLinear(ctx, 0, 0, width, height, ["rgba(20,241,149,0.17)", "rgba(0,0,0,0)"], 0, 0, 560, 310);
+          fillLinear(ctx, 0, 0, width, height, ["rgba(153,69,255,0.24)", "rgba(0,0,0,0)"], width, 0, 650, 360);
+
+          ctx.strokeStyle = "rgba(255,255,255,0.22)";
+          ctx.lineWidth = 2;
+          roundRect(ctx, 24, 24, width - 48, height - 48, 34);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(255,255,255,0.12)";
+          roundRect(ctx, 48, 48, width - 96, height - 96, 26);
+          ctx.stroke();
+
+          if (logo.complete && logo.naturalWidth > 0) {
+            drawContainedImage(ctx, logo, 70, 58, 330, 150);
+          }
+
+          pill(ctx, 74, 244, 260, 44, "SOLANA WINNER CARD");
+
+          const titleGradient = ctx.createLinearGradient(74, 314, 520, 430);
+          titleGradient.addColorStop(0, "#ffffff");
+          titleGradient.addColorStop(0.35, "#fff4b8");
+          titleGradient.addColorStop(0.72, "#5cf8ff");
+          titleGradient.addColorStop(1, "#ffffff");
+          ctx.fillStyle = titleGradient;
+          ctx.font = "950 72px Arial, sans-serif";
+          ctx.fillText("Lucky win.", 72, 375);
+          ctx.fillText("Real SOL.", 72, 455);
+          ctx.fillStyle = "rgba(255,255,255,0.78)";
+          ctx.font = "720 26px Arial, sans-serif";
+          fitText(ctx, `Won the ${winnerData.pool} on LuckyMe.`, 72, 512, 480, 26);
+
+          const panelX = 620;
+          const panelY = 118;
+          const panelW = 510;
+          const panelH = 394;
+          ctx.fillStyle = "rgba(255,255,255,0.105)";
+          roundRect(ctx, panelX, panelY, panelW, panelH, 30);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.20)";
+          ctx.stroke();
+
+          ctx.fillStyle = "rgba(255,255,255,0.68)";
+          ctx.font = "900 18px Arial, sans-serif";
+          ctx.fillText("PRIZE WON", panelX + 36, panelY + 58);
+          const amountGradient = ctx.createLinearGradient(panelX + 36, panelY + 76, panelX + 430, panelY + 152);
+          amountGradient.addColorStop(0, "#fff7b9");
+          amountGradient.addColorStop(0.54, "#ffd166");
+          amountGradient.addColorStop(1, "#00d1ff");
+          ctx.fillStyle = amountGradient;
+          fitText(ctx, `${winnerData.amount} SOL`, panelX + 36, panelY + 148, 430, 82, 44, "950");
+
+          drawMini(ctx, panelX + 36, panelY + 202, 204, 74, "POOL", winnerData.pool);
+          drawMini(ctx, panelX + 266, panelY + 202, 204, 74, "ROUND", `#${winnerData.round}`);
+          drawMini(ctx, panelX + 36, panelY + 296, 434, 74, "WINNER", winnerData.wallet);
+          ctx.fillStyle = "#dbffe9";
+          ctx.font = "900 22px Arial, sans-serif";
+          fitText(ctx, "Provably fair. Powered by Solana.", panelX + 36, panelY + 388, 430, 22);
+
+          const link = document.createElement("a");
+          link.download = `luckyme-round-${winnerData.round}-winner.png`;
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+        } catch {
+          window.alert("PNG download is not available in this browser.");
+        }
+      }
+
+      function fillLinear(ctx, x, y, width, height, stops, x0, y0, x1, y1) {
+        const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
+        stops.forEach((color, index) => gradient.addColorStop(index / (stops.length - 1), color));
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, y, width, height);
+      }
+
+      function pill(ctx, x, y, width, height, text) {
+        ctx.fillStyle = "rgba(255,255,255,0.10)";
+        roundRect(ctx, x, y, width, height, height / 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.16)";
+        ctx.stroke();
+        ctx.fillStyle = "#eaffff";
+        ctx.font = "900 18px Arial, sans-serif";
+        ctx.fillText(text, x + 20, y + 29);
+      }
+
+      function drawMini(ctx, x, y, width, height, label, value) {
+        ctx.fillStyle = "rgba(0,0,0,0.22)";
+        roundRect(ctx, x, y, width, height, 16);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.58)";
+        ctx.font = "900 14px Arial, sans-serif";
+        ctx.fillText(label, x + 16, y + 26);
+        ctx.fillStyle = "#ffffff";
+        fitText(ctx, value, x + 16, y + 56, width - 32, 24, 14, "900");
+      }
+
+      function fitText(ctx, text, x, y, maxWidth, size, minSize = 12, weight = "720") {
+        let nextSize = size;
+        do {
+          ctx.font = `${weight} ${nextSize}px Arial, sans-serif`;
+          if (ctx.measureText(text).width <= maxWidth || nextSize <= minSize) {
+            break;
+          }
+          nextSize -= 2;
+        } while (nextSize > minSize);
+        ctx.fillText(text, x, y);
+      }
+
+      function drawContainedImage(ctx, image, x, y, width, height) {
+        const ratio = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+        const drawWidth = image.naturalWidth * ratio;
+        const drawHeight = image.naturalHeight * ratio;
+        ctx.drawImage(image, x, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+      }
+
+      function roundRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.arcTo(x + width, y, x + width, y + height, radius);
+        ctx.arcTo(x + width, y + height, x, y + height, radius);
+        ctx.arcTo(x, y + height, x, y, radius);
+        ctx.arcTo(x, y, x + width, y, radius);
+        ctx.closePath();
+      }
+    </script>
+  </body>
+</html>

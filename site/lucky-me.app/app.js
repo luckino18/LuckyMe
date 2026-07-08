@@ -18,6 +18,7 @@ const WALLETCONNECT_SOLANA_METHODS = [
 const WALLETCONNECT_PROVIDER_URL = "https://unpkg.com/@walletconnect/universal-provider@2.23.9/dist/index.umd.js";
 const WALLETCONNECT_MODAL_URL = "https://unpkg.com/@walletconnect/modal@2.7.0/dist/cdn/bundle.js";
 const OPERATOR_MODE = new URLSearchParams(window.location.search).has("operator");
+const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
 const MOBILE_WALLET_BROWSERS = [
   { id: "phantom", name: "Phantom" },
   { id: "solflare", name: "Solflare" },
@@ -151,6 +152,15 @@ function formatSolFromLamports(lamports) {
   return fraction ? `${whole}.${fraction}` : `${whole}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function formatDuration(seconds) {
   const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
   const hours = Math.floor(safeSeconds / 3600);
@@ -259,6 +269,20 @@ function renderPools() {
 }
 
 function renderActivity() {
+  const winnerItems = winnerShareItems();
+  if (winnerItems.length) {
+    dom.activityList.innerHTML = winnerItems.map((item) => `
+      <div class="list-row">
+        <div>
+          <span class="label">${escapeHtml(item.poolName)} round #${escapeHtml(item.roundId)}</span>
+          <p>${escapeHtml(item.amountSol)} SOL won by ${escapeHtml(formatAddress(item.wallet))}</p>
+        </div>
+        <a class="secondary-button" href="${escapeHtml(item.href)}" target="_blank" rel="noopener">Share card</a>
+      </div>
+    `).join("");
+    return;
+  }
+
   const rows = [
     ["Latest settlement", "Pending", "Loaded from verified state"],
     ["Open rounds", state.onchainAvailable ? "Live" : "Pending", "Backend /pools"],
@@ -275,6 +299,52 @@ function renderActivity() {
       <strong class="mono ${value === "Pending" ? "warning" : "success"}">${value}</strong>
     </div>
   `).join("");
+}
+
+function winnerShareItems() {
+  return state.pools
+    .flatMap((pool) => {
+      const poolName = winnerPoolName(pool);
+      return (pool.recentRounds || [])
+        .filter((round) => round?.settled && Array.isArray(round.winners) && round.winners.length > 0)
+        .flatMap((round) => round.winners
+          .filter((winner) => winner?.winner && winner.winner !== DEFAULT_PUBLIC_KEY)
+          .map((winner) => {
+            const amountSol = winnerPrizeSol(pool, round, winner.rank);
+            const params = new URLSearchParams({
+              pool: poolName,
+              round: String(round.roundId),
+              amount: amountSol,
+              wallet: winner.winner,
+              shareUrl: "https://lucky-me.app/play/",
+            });
+            return {
+              poolName,
+              roundId: round.roundId,
+              amountSol,
+              wallet: winner.winner,
+              href: `/winner/?${params.toString()}`,
+            };
+          }));
+    })
+    .slice(0, 8);
+}
+
+function winnerPoolName(pool) {
+  const label = pool?.label || poolById(pool?.id)?.name || "LuckyMe";
+  return /pool$/i.test(label) ? label : `${label} Pool`;
+}
+
+function winnerPrizeSol(pool, round, rank = 1) {
+  try {
+    const totalLamports = BigInt(round.totalLamports || 0);
+    const mainPrizeBps = BigInt(pool.mainPrizeBps ?? 9500);
+    const splitBps = BigInt(pool.prizeSplitBps?.[Number(rank) - 1] ?? (Number(rank) === 1 ? 10000 : 0));
+    const prizeLamports = (totalLamports * mainPrizeBps * splitBps) / 100_000_000n;
+    return formatSolFromLamports(prizeLamports);
+  } catch {
+    return "0";
+  }
 }
 
 function renderStatus() {
