@@ -19,6 +19,8 @@ export const POOLS = [
     label: "Mini",
     ticketPriceLamports: new BN(5_000_000),
     winnerCount: 1,
+    minimumTickets: 25,
+    minimumDistinctEntrants: 1,
     prizeSplitBps: [10_000, 0, 0],
     maxTicketsPerEntry: 1_000,
   },
@@ -28,6 +30,8 @@ export const POOLS = [
     label: "Normal",
     ticketPriceLamports: new BN(10_000_000),
     winnerCount: 1,
+    minimumTickets: 13,
+    minimumDistinctEntrants: 1,
     prizeSplitBps: [10_000, 0, 0],
     maxTicketsPerEntry: 1_000,
   },
@@ -37,6 +41,8 @@ export const POOLS = [
     label: "High",
     ticketPriceLamports: new BN(50_000_000),
     winnerCount: 1,
+    minimumTickets: 3,
+    minimumDistinctEntrants: 1,
     prizeSplitBps: [10_000, 0, 0],
     maxTicketsPerEntry: 1_000,
   },
@@ -46,10 +52,33 @@ export const POOLS = [
     label: "Premium",
     ticketPriceLamports: new BN(100_000_000),
     winnerCount: 3,
+    minimumTickets: 3,
+    minimumDistinctEntrants: 3,
     prizeSplitBps: [7_000, 2_000, 1_000],
     maxTicketsPerEntry: 1,
   },
 ];
+
+export function poolMinimums(poolIdOrSpec) {
+  const poolSpec = typeof poolIdOrSpec === "object"
+    ? poolIdOrSpec
+    : POOLS.find((candidate) =>
+      candidate.id === Number(poolIdOrSpec) || candidate.slug === String(poolIdOrSpec).toLowerCase(),
+    );
+  if (!poolSpec) {
+    throw new Error(`Unknown pool: ${String(poolIdOrSpec)}`);
+  }
+  return {
+    minimumTickets: Number(poolSpec.minimumTickets),
+    minimumDistinctEntrants: Number(poolSpec.minimumDistinctEntrants),
+  };
+}
+
+export function roundMeetsMinimums(poolIdOrSpec, totalTickets, entrantCount) {
+  const { minimumTickets, minimumDistinctEntrants } = poolMinimums(poolIdOrSpec);
+  return BigInt(totalTickets) >= BigInt(minimumTickets) &&
+    Number(entrantCount) >= minimumDistinctEntrants;
+}
 
 class ReadonlyWallet {
   constructor(publicKey = PublicKey.default) {
@@ -86,6 +115,13 @@ export function readKeypair() {
 
 export function deriveConfig() {
   return PublicKey.findProgramAddressSync([Buffer.from("config")], PROGRAM_ID)[0];
+}
+
+export function deriveKeeperConfig(config = deriveConfig()) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("keeper_config"), config.toBuffer()],
+    PROGRAM_ID,
+  )[0];
 }
 
 export function derivePool(config, poolId) {

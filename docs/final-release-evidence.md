@@ -1,5 +1,9 @@
 # Final Release Evidence
 
+> Historical v1.0 evidence. Its APK and July 7 active-round entries are not the
+> 1.1.0 minimum-ticket release candidate and do not describe current live pool
+> state. See the dated July 11 release-candidate report for current evidence.
+
 Fill this file with the final production artifacts before submitting the APK in
 the Publisher Portal.
 

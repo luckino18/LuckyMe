@@ -6,6 +6,7 @@ import test from "node:test";
 const SCRIPT = "app-seeker/scripts/validate-production-env.mjs";
 const LUCKYME_SCREEN = "app-seeker/src/LuckyMeScreen.tsx";
 const STITCH_SCREENS = "app-seeker/src/stitchScreens.ts";
+const APP_JSON = "app-seeker/app.json";
 
 test("Seeker production env validation rejects missing env", () => {
   const result = runValidation({});
@@ -74,6 +75,35 @@ test("Seeker static UI reflects upgraded pool economics", () => {
   assert.doesNotMatch(content, /Win Chance/i);
 });
 
+test("Seeker publishes the approved ticket targets and automatic-refund copy", () => {
+  const content = readFileSync(STITCH_SCREENS, "utf8");
+
+  assert.match(content, /name: "Mini"[\s\S]*?minimumTickets: 25/);
+  assert.match(content, /name: "Normal"[\s\S]*?minimumTickets: 13/);
+  assert.match(content, /name: "High"[\s\S]*?minimumTickets: 3/);
+  assert.match(
+    content,
+    /name: "Premium"[\s\S]*?minimumTickets: 3[\s\S]*?minimumDistinctEntrants: 3/,
+  );
+  assert.match(content, /\$\{hasRound \? threshold\.sold : "&mdash;"\} \/ \$\{threshold\.minimumTickets\} tickets sold/);
+  assert.match(content, /100% of the ticket purchase amount is automatically returned/);
+  assert.match(content, /Solana network fees are not refundable/);
+  assert.match(content, /No claim button is required/);
+  assert.match(content, /Mini needs 25 tickets sold in total, not 25 different players/);
+  assert.doesNotMatch(content, /25 players/i);
+  assert.doesNotMatch(content, /no loss|zero cost/i);
+});
+
+test("Seeker release metadata advances without changing the Android package", () => {
+  const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
+
+  assert.equal(app.version, "1.1.0");
+  assert.equal(app.android.package, "com.luckyme.seeker");
+  assert.equal(app.android.versionCode, 3);
+  assert.equal(app.icon, "./assets/icon.png");
+  assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
+});
+
 test("Seeker APK includes opt-in notification and winner card surfaces", () => {
   const screen = readFileSync(LUCKYME_SCREEN, "utf8");
   const stitch = readFileSync(STITCH_SCREENS, "utf8");
@@ -91,6 +121,24 @@ test("Seeker APK includes opt-in notification and winner card surfaces", () => {
   assert.match(stitch, /SHARE ON/);
   assert.match(stitch, /WhatsApp/);
   assert.match(stitch, /Download PNG/);
+});
+
+test("Seeker entry readiness is evaluated for the selected pool", () => {
+  const screen = readFileSync(LUCKYME_SCREEN, "utf8");
+  const stitch = readFileSync(STITCH_SCREENS, "utf8");
+
+  assert.match(stitch, /function hasLivePoolState\(poolId: string/);
+  assert.match(stitch, /export function isLivePoolEntryReady/);
+  assert.match(stitch, /export function hasVerifiedMinimumPolicy/);
+  assert.match(stitch, /!hasVerifiedMinimumPolicy\(pool\)/);
+  assert.match(stitch, /numberValue\(round\.minimumTickets, Number\.NaN\)/);
+  assert.match(stitch, /startTs === 0 && endTs === 0/);
+  assert.match(stitch, /isLivePoolEntryReady\(facts\.live\)/);
+  assert.match(screen, /isLivePoolEntryReady\(livePool\)/);
+  assert.match(screen, /setOnchainAvailable\(hasMainnetState\)/);
+  assert.match(screen, /setLivePools\(hasMainnetState \? pools\.pools : \[\]\)/);
+  assert.match(screen, /expectedRoundId/);
+  assert.match(screen, /expectedTotalTickets/);
 });
 
 function mainnetReleaseEnv(overrides = {}) {

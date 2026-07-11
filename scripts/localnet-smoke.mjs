@@ -45,7 +45,7 @@ let signature = await program.methods
 console.log(`Opened round: ${signature}`);
 
 signature = await program.methods
-  .buyTickets(new BN(3))
+  .buyTickets(new BN(3), new BN(0))
   .accounts({
     player: payer.publicKey,
     config,

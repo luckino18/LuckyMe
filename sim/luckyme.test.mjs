@@ -6,6 +6,7 @@ import {
   DEFAULT_ROUND_DURATION_SECONDS,
   FIXED_POOLS,
   chanceForPlayer,
+  classifyExpiredRound,
   commitmentForReveal,
   lamportsToSol,
   refundEntryAfterTimeout,
@@ -24,6 +25,78 @@ test("fixed pools use the intended ticket prices", () => {
       ["premium", "0.1"],
     ],
   );
+});
+
+test("fixed pools use the approved ticket and wallet minimums", () => {
+  assert.deepEqual(
+    FIXED_POOLS.map((pool) => [
+      pool.id,
+      Number(pool.minimumTickets),
+      pool.minimumDistinctEntrants,
+    ]),
+    [
+      ["mini", 25, 1],
+      ["normal", 13, 1],
+      ["high", 3, 1],
+      ["premium", 3, 3],
+    ],
+  );
+});
+
+test("expired rounds below each total-ticket minimum refund without ORAO", () => {
+  const cases = [
+    ["mini", 24n],
+    ["normal", 12n],
+    ["high", 2n],
+  ];
+  for (const [poolId, tickets] of cases) {
+    const pool = FIXED_POOLS.find((candidate) => candidate.id === poolId);
+    const decision = classifyExpiredRound({
+      pool,
+      entries: [{ player: `${poolId}-buyer`, tickets }],
+    });
+    assert.equal(decision.action, "refund", poolId);
+    assert.equal(decision.roundOutcome, "cancelled_below_minimum", poolId);
+    assert.equal(decision.requestOrao, false, poolId);
+    assert.equal(decision.refundLamports, tickets * pool.ticketPriceLamports, poolId);
+  }
+
+  const premium = FIXED_POOLS.find((candidate) => candidate.id === "premium");
+  const premiumDecision = classifyExpiredRound({
+    pool: premium,
+    entries: [
+      { player: "premium-a", tickets: 1n },
+      { player: "premium-b", tickets: 1n },
+    ],
+  });
+  assert.equal(premiumDecision.action, "refund");
+  assert.equal(premiumDecision.requestOrao, false);
+  assert.equal(premiumDecision.refundLamports, 2n * premium.ticketPriceLamports);
+});
+
+test("minimum totals enter the draw path and one wallet can satisfy non-Premium pools", () => {
+  for (const poolId of ["mini", "normal", "high"]) {
+    const pool = FIXED_POOLS.find((candidate) => candidate.id === poolId);
+    const decision = classifyExpiredRound({
+      pool,
+      entries: [{ player: `${poolId}-single-wallet`, tickets: pool.minimumTickets }],
+    });
+    assert.equal(decision.action, "request_orao", poolId);
+    assert.equal(decision.roundOutcome, "eligible_for_draw", poolId);
+    assert.equal(decision.requestOrao, true, poolId);
+  }
+
+  const premium = FIXED_POOLS.find((candidate) => candidate.id === "premium");
+  const premiumDecision = classifyExpiredRound({
+    pool: premium,
+    entries: [
+      { player: "premium-a", tickets: 1n },
+      { player: "premium-b", tickets: 1n },
+      { player: "premium-c", tickets: 1n },
+    ],
+  });
+  assert.equal(premiumDecision.action, "request_orao");
+  assert.equal(premiumDecision.requestOrao, true);
 });
 
 test("default economics use hourly rounds and a 95/2/3 split", () => {
@@ -154,7 +227,7 @@ test("premium rejects fewer than three entrants", () => {
         ],
         randomSeed: "premium-too-few",
       }),
-    /requires at least 3 entrants/,
+    /requires at least 3 (?:total tickets|distinct entrants)/,
   );
 });
 

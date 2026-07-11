@@ -6,7 +6,7 @@
     <title>LuckyMe — Solana mainnet luck pools</title>
     <meta
       name="description"
-      content="Fixed-entry luck pools on Solana mainnet. Connect a browser wallet, review the unsigned transaction, and approve only inside your wallet."
+      content="LuckyMe one-hour Solana pools with clear total-ticket targets and automatic refunds when a target is missed."
     />
     <link rel="icon" type="image/png" href="/assets/brand/favicon.png" />
     <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
@@ -15,7 +15,7 @@
     <meta property="og:image" content="https://lucky-me.app/assets/brand/og-image.png" />
     <meta property="og:url" content="https://lucky-me.app/" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260707-wc3" />
+    <link rel="stylesheet" href="/styles.css?v=20260711-minimum-ticket-targets" />
   </head>
   <body>
     <header class="site-nav">
@@ -24,6 +24,7 @@
         <span>LuckyMe</span>
       </a>
       <nav class="navlinks" aria-label="Main navigation">
+        <a class="nav-how" href="/how-to-play/">How to Play</a>
         <a href="/terms/">Terms</a>
         <a href="/privacy/">Privacy</a>
         <a href="/support/">Support</a>
@@ -37,18 +38,18 @@
           <p class="eyebrow">Solana mainnet pools</p>
           <h1>Rounds you can verify.</h1>
           <p class="lead">
-            Fixed-entry luck pools on Solana. Connect a browser wallet, choose
-            a pool, review the unsigned transaction, and approve only inside
-            your wallet.
+            Choose a pool and help it reach its total-ticket target. If the
+            target is missed before the hour ends, ticket purchases are
+            returned automatically.
           </p>
           <div class="chip-row" aria-label="Round rules">
             <span class="chip">95% main prize</span>
             <span class="chip">1 hour rounds</span>
-            <span class="chip">ORAO VRF</span>
+            <span class="chip">Automatic refunds</span>
           </div>
           <div class="actions">
             <a class="button" href="/play/">Play</a>
-            <a class="button secondary" href="#pools">See the pools</a>
+            <a class="button secondary" href="/how-to-play/">How to Play</a>
           </div>
         </div>
         <div class="landing-art">
@@ -77,18 +78,22 @@
             <article class="mini-card">
               <span>Mini</span>
               <strong>0.005 SOL</strong>
+              <small>25 total tickets</small>
             </article>
             <article class="mini-card">
               <span>Normal</span>
               <strong>0.01 SOL</strong>
+              <small>13 total tickets</small>
             </article>
             <article class="mini-card">
               <span>High</span>
               <strong>0.05 SOL</strong>
+              <small>3 total tickets</small>
             </article>
             <article class="mini-card premium">
               <span>Premium</span>
               <strong>0.1 SOL</strong>
+              <small>3 tickets · 3 wallets</small>
             </article>
           </div>
         </div>
@@ -98,28 +103,48 @@
         <div class="section-inner steps-grid">
           <article class="step-card">
             <span class="step-num">1</span>
-            <h3>Connect a wallet</h3>
+            <h3>Choose a pool</h3>
             <p>
-              LuckyMe shows only Solana wallets already detected in your
-              browser. It never asks for seed phrases or private keys.
+              Compare each ticket price and total-ticket target before you
+              enter.
             </p>
           </article>
           <article class="step-card">
             <span class="step-num">2</span>
-            <h3>Review the transaction</h3>
+            <h3>Buy tickets</h3>
             <p>
-              The backend builds an unsigned transaction and simulates it
-              first. You see the full summary before any wallet prompt.
+              The first confirmed ticket starts the one-hour clock. Each
+              ticket has an equal chance.
             </p>
           </article>
           <article class="step-card">
             <span class="step-num">3</span>
-            <h3>Approve in your wallet</h3>
+            <h3>Draw or automatic refund</h3>
             <p>
-              Signing happens only inside your wallet. The website never
-              custodies funds and the backend never signs player transactions.
+              A round that reaches its target draws a winner. If it misses,
+              ticket purchases are returned automatically.
             </p>
           </article>
+        </div>
+      </section>
+
+      <section class="section-band">
+        <div class="section-inner two-col">
+          <div>
+            <p class="eyebrow">Ticket targets</p>
+            <h2>Total tickets, not total players.</h2>
+            <p>
+              Mini needs 25 tickets sold in total, not 25 different players.
+              One wallet may buy multiple tickets in Mini, Normal, and High.
+              Premium allows one ticket per wallet and requires three distinct
+              wallets.
+            </p>
+          </div>
+          <div class="refund-explainer">
+            <strong>If a round misses its target</strong>
+            <p>100% of the ticket purchase amount is automatically returned to the wallet that bought the tickets.</p>
+            <p>No claim button is required. Solana network fees are not refundable.</p>
+          </div>
         </div>
       </section>
 
@@ -154,6 +179,7 @@
       <span>LuckyMe · Solana mainnet</span>
       <span>
         <a href="/play/">Play</a>
+        <a href="/how-to-play/">How to Play</a>
         <a href="/terms/">Terms</a>
         <a href="/privacy/">Privacy</a>
         <a href="/support/">Support</a>

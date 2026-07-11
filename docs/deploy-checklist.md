@@ -29,6 +29,42 @@ storage provider, Publisher Policy, and Developer Agreement.
 - First production rounds opened for all four pools after backend and app env
   were already configured.
 
+## 2.1 July 11 lifecycle completion
+
+The lifecycle program upgrade, production `KeeperConfig` initialization, and
+approved Stage 2 cleanup are complete. All 18 eligible legacy empty Round
+accounts were closed in batches of at most four, returning exactly
+`0.05211648 SOL` to treasury. The funded Mini round was excluded. The upload
+buffer was closed and its remainder swept back to the Ledger authority.
+
+Execution evidence:
+
+- `docs/mainnet-stage1-execution-2026-07-11.md`
+- `docs/mainnet-stage1-upgrade-evidence-2026-07-11.json`
+- `docs/mainnet-stage2-rent-recovery-execution-2026-07-11.md`
+- `docs/mainnet-stage2-rent-recovery-evidence-2026-07-11.json`
+
+Current live state is deliberately idle: `activeRound: null` for every pool,
+the keeper timer is disabled and inactive, and no new waiting round was opened.
+
+## 2.2 Pending minimum-ticket/refund upgrade (not authorized)
+
+The later release candidate adds fixed targets `25 / 13 / 3 / 3`, Premium's
+three-wallet rule, no-ORAO refund mode, automatic keeper-only refunds, API/UI
+progress, How to Play, and Seeker `1.1.0`. It is not deployed by the completed
+lifecycle work above.
+
+Before any live write, follow
+`docs/mainnet-minimum-tickets-upgrade-approval-plan-2026-07-11.md`: recheck the
+program binary hash and ProgramData capacity, fund the temporary upgrade buffer
+only after explicit approval, use the Ledger authority for the upgrade, deploy
+the matching backend/site/keeper, run read-only smoke checks, and keep the
+keeper timer disabled. Opening the four next rounds and enabling keeper writes
+are separate actions requiring separate approval.
+
+No upgrade, SOL transfer, live service deployment, round opening, keeper start,
+or other mainnet transaction is authorized merely by this checklist.
+
 ## 3. Backend HTTPS Deployment
 
 - Set backend production env:
@@ -47,7 +83,8 @@ npm run backend:start
 
 - Deployed behind production HTTPS URL `https://api.lucky-me.app`.
 - Confirmed `GET /config` and `GET /pools` respond from the production URL with
-  `source: onchain`; `GET /pools` reports active round `1` for all four pools.
+  `source: onchain`; after Stage 2, `GET /pools` reports `activeRound: null` for
+  all four pools until separately approved rounds are opened.
 - Keep `POST /transactions/submit` disabled unless there is a deliberate
   production relay policy.
 

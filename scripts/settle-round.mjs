@@ -1,34 +1,62 @@
 import crypto from "node:crypto";
 import {
   POOLS,
+  PROGRAM_ID,
   SystemProgram,
+  accountExists,
   createClient,
   deriveConfig,
+  deriveKeeperConfig,
   deriveJackpotVault,
   derivePool,
   derivePoolVault,
   deriveRound,
   mainPrizePayouts,
+  poolMinimums,
   randomModDomain,
+  roundMeetsMinimums,
   selectWinnerTickets,
   u64Le,
 } from "./anchor-client.mjs";
 
-const DRY_RUN = process.env.DRY_RUN === "true";
+const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+const RPC_URL = process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
+const DRY_RUN = process.env.DRY_RUN !== "false" || process.argv.includes("--dry-run");
 const POOL = process.env.POOL?.toLowerCase() ?? "normal";
-const ROUND_ID = parsePositiveInteger(process.env.ROUND_ID, "ROUND_ID");
-const REVEAL = parseReveal(process.env.RANDOMNESS_REVEAL);
 const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.slug, pool]));
 
 if (!POOL_BY_SLUG.has(POOL)) {
   throw new Error(`Unknown POOL=${POOL}. Use one of: ${[...POOL_BY_SLUG.keys()].join(", ")}`);
 }
+if (looksLikeMainnetUrl(RPC_URL)) {
+  throw new Error(
+    "Commit-reveal settlement is disabled on mainnet. Use ORAO provider settlement through settlement:keeper.",
+  );
+}
+const ROUND_ID = parsePositiveInteger(process.env.ROUND_ID, "ROUND_ID");
+const REVEAL = parseReveal(process.env.RANDOMNESS_REVEAL);
 
-const { payer, program, url } = createClient();
-requireMainnetConfirmation(url);
+const readonly = createClient({ requireSigner: false, url: RPC_URL });
+const genesisHash = await readonly.connection.getGenesisHash();
+if (genesisHash === MAINNET_GENESIS_HASH) {
+  throw new Error(
+    "Commit-reveal settlement is disabled on mainnet. Use ORAO provider settlement through settlement:keeper.",
+  );
+}
+const { connection, payer, program, url } = DRY_RUN
+  ? readonly
+  : createClient({ requireSigner: true, url: RPC_URL });
 
 const configAddress = deriveConfig();
+const keeperConfig = deriveKeeperConfig(configAddress);
+if (!(await accountExists(connection, keeperConfig))) {
+  throw new Error(`KeeperConfig account does not exist: ${keeperConfig.toBase58()}`);
+}
 const config = await program.account.config.fetch(configAddress);
+const configuredKeeper = (await program.account.keeperConfig.fetch(keeperConfig)).keeper;
+if (!DRY_RUN) {
+  assertConfiguredKeeper(payer, configuredKeeper);
+}
 const poolSpec = POOL_BY_SLUG.get(POOL);
 const pool = derivePool(configAddress, poolSpec.id);
 const poolVault = derivePoolVault(pool);
@@ -42,8 +70,13 @@ if (roundAccount.settled) {
 }
 
 const totalTickets = BigInt(roundAccount.totalTickets.toString());
-if (totalTickets === 0n) {
-  throw new Error("Round has no tickets");
+const entrantCount = Number(roundAccount.entrantCount);
+if (!roundMeetsMinimums(poolSpec, totalTickets, entrantCount)) {
+  const { minimumTickets, minimumDistinctEntrants } = poolMinimums(poolSpec);
+  throw new Error(
+    `Round is below the valid-draw minimum: tickets=${totalTickets.toString()}/${minimumTickets} ` +
+    `entrants=${entrantCount}/${minimumDistinctEntrants}`,
+  );
 }
 
 const expectedCommitment = commitmentForReveal(REVEAL);
@@ -77,7 +110,10 @@ const prizePayouts = mainPrizePayouts(mainPrize, poolConfig);
 const winnerEntry = winnerEntries[0];
 
 console.log(`Cluster: ${url}`);
-console.log(`Settler: ${payer.publicKey.toBase58()}`);
+console.log(`Genesis hash: ${genesisHash}`);
+console.log(`Program: ${PROGRAM_ID.toBase58()}`);
+console.log(`Settler: ${configuredKeeper.toBase58()}`);
+console.log(`KeeperConfig: ${keeperConfig.toBase58()}`);
 console.log(`Pool: ${poolSpec.label} (${pool.toBase58()})`);
 console.log(`Round: ${ROUND_ID} (${round.toBase58()})`);
 console.log(`Total tickets: ${totalTickets.toString()}`);
@@ -98,11 +134,12 @@ if (DRY_RUN) {
   process.exit(0);
 }
 
-const signature = await program.methods
+const method = program.methods
   .settleRound([...REVEAL])
   .accounts({
     keeper: payer.publicKey,
     config: configAddress,
+    keeperConfig,
     pool,
     round,
     poolVault,
@@ -114,8 +151,23 @@ const signature = await program.methods
     treasury: config.treasury,
     systemProgram: SystemProgram.programId,
   })
-  .remainingAccounts(remainingWinnerAccounts(winnerEntries))
-  .rpc();
+  .remainingAccounts(remainingWinnerAccounts(winnerEntries));
+
+const simulation = await method.simulate();
+console.log(`Commit-reveal settlement simulation: ok (${simulation?.raw?.length ?? "unknown"} logs)`);
+await recheckConfiguredKeeper(program, keeperConfig, payer.publicKey);
+const latestRound = await program.account.round.fetch(round);
+if (
+  latestRound.settled ||
+  !roundMeetsMinimums(
+    poolSpec,
+    BigInt(latestRound.totalTickets.toString()),
+    Number(latestRound.entrantCount),
+  )
+) {
+  throw new Error("Round became ineligible before commit-reveal settlement submission");
+}
+const signature = await method.rpc();
 
 console.log(`Settled round: ${signature}`);
 
@@ -214,8 +266,21 @@ function parsePositiveInteger(value, name) {
   return parsed;
 }
 
-function requireMainnetConfirmation(url) {
-  if (/mainnet|api\.mainnet-beta\.solana\.com/i.test(url) && process.env.CONFIRM_MAINNET !== "true") {
-    throw new Error("Refusing mainnet settlement without CONFIRM_MAINNET=true");
+function assertConfiguredKeeper(payer, configuredKeeper) {
+  if (!payer?.publicKey.equals(configuredKeeper)) {
+    throw new Error(
+      `Signer ${payer?.publicKey.toBase58() ?? "missing"} is not configured keeper ${configuredKeeper.toBase58()}`,
+    );
   }
+}
+
+async function recheckConfiguredKeeper(program, keeperConfig, keeper) {
+  const latest = await program.account.keeperConfig.fetch(keeperConfig);
+  if (!latest.keeper.equals(keeper)) {
+    throw new Error(`On-chain keeper changed to ${latest.keeper.toBase58()} before submission`);
+  }
+}
+
+function looksLikeMainnetUrl(value) {
+  return /mainnet|api\.mainnet-beta\.solana\.com|helius-rpc/i.test(value);
 }

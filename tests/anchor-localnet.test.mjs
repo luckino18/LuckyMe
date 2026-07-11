@@ -10,6 +10,7 @@ import {
   SystemProgram,
   deriveConfig,
   deriveEntry,
+  deriveKeeperConfig,
   deriveOraoRandomnessAccount,
   deriveJackpotVault,
   derivePool,
@@ -27,7 +28,11 @@ const POOL_ID = 1;
 const TICKET_PRICE_LAMPORTS = 5_000_000;
 const PREMIUM_POOL_ID = 4;
 const PREMIUM_TICKET_PRICE_LAMPORTS = 100_000_000;
-const ROUND_DURATION_SECONDS = 2;
+const HIGH_POOL_ID = 3;
+const HIGH_TICKET_PRICE_LAMPORTS = 50_000_000;
+// Leave enough local-validator time for the three sequential premium buys.
+// Two seconds made the third transaction race the on-chain end timestamp.
+const ROUND_DURATION_SECONDS = 5;
 const REFUND_DELAY_SECONDS = 2;
 
 test("localnet buy, settlement, and refund-mode state machine", async () => {
@@ -37,20 +42,36 @@ test("localnet buy, settlement, and refund-mode state machine", async () => {
   const idl = readIdl();
   const program = new anchor.Program(idl, provider);
   const authority = provider.wallet.payer;
-  const treasury = authority.publicKey;
+  const treasuryWallet = Keypair.generate();
+  await fund(provider, treasuryWallet.publicKey);
+  const treasury = treasuryWallet.publicKey;
   const config = deriveConfig();
+  const keeperConfig = deriveKeeperConfig(config);
   const pool = derivePool(config, POOL_ID);
   const poolVault = derivePoolVault(pool);
   const jackpotVault = deriveJackpotVault(pool);
   const premiumPool = derivePool(config, PREMIUM_POOL_ID);
   const premiumPoolVault = derivePoolVault(premiumPool);
   const premiumJackpotVault = deriveJackpotVault(premiumPool);
+  const highPool = derivePool(config, HIGH_POOL_ID);
+  const highPoolVault = derivePoolVault(highPool);
+  const highJackpotVault = deriveJackpotVault(highPool);
 
   await program.methods
     .initializeConfig(treasury, 200, 300, 1, new BN(ROUND_DURATION_SECONDS))
     .accounts({
       authority: authority.publicKey,
       config,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  await program.methods
+    .initializeKeeperConfig(authority.publicKey)
+    .accounts({
+      authority: authority.publicKey,
+      config,
+      keeperConfig,
       systemProgram: SystemProgram.programId,
     })
     .rpc();
@@ -79,23 +100,45 @@ test("localnet buy, settlement, and refund-mode state machine", async () => {
     })
     .rpc();
 
-  await testSettlementFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault });
+  await program.methods
+    .initializePool(HIGH_POOL_ID, new BN(HIGH_TICKET_PRICE_LAMPORTS))
+    .accounts({
+      authority: authority.publicKey,
+      config,
+      pool: highPool,
+      poolVault: highPoolVault,
+      jackpotVault: highJackpotVault,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  await testSettlementFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault });
   await testPremiumSettlementFlow({
     program,
     provider,
     authority,
     treasury,
     config,
+    keeperConfig,
     pool: premiumPool,
     poolVault: premiumPoolVault,
     jackpotVault: premiumJackpotVault,
   });
-  await testRefundModeFlow({ program, provider, authority, config, pool, poolVault, jackpotVault });
-  await testPauseAndEmptyRoundFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault });
-  await testProviderRandomnessRequestAndRefundFlow({ program, provider, authority, config, pool, poolVault, jackpotVault });
+  await testRefundModeFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault });
+  await testProviderRandomnessRequestAndRefundFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault });
+  await testPauseAndEmptyRoundFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault });
+  await testEligibleProviderRequestGuard({
+    program,
+    provider,
+    authority,
+    config,
+    keeperConfig,
+    pool: highPool,
+    poolVault: highPoolVault,
+  });
 });
 
-async function testSettlementFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault }) {
+async function testSettlementFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault }) {
   const player = Keypair.generate();
   const playerTwo = Keypair.generate();
   const oversizedBuyer = Keypair.generate();
@@ -120,14 +163,51 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
     .accounts({
       keeper: authority.publicKey,
       config,
+          keeperConfig,
       pool,
+      previousRound: deriveRound(pool, 0),
       round,
       systemProgram: SystemProgram.programId,
     })
     .rpc();
 
+  const nextRound = deriveRound(pool, 2);
+  await expectAnchorError(
+    () =>
+      program.methods
+        .openRound([...commitmentForReveal(Buffer.alloc(32, 5))])
+        .accounts({
+          keeper: oversizedBuyer.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          previousRound: round,
+          round: nextRound,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([oversizedBuyer])
+        .rpc(),
+    "UnauthorizedKeeper",
+  );
+  await expectAnchorError(
+    () =>
+      program.methods
+        .openRound([...commitmentForReveal(Buffer.alloc(32, 6))])
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          previousRound: round,
+          round: nextRound,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "PreviousRoundStillExists",
+  );
+
   await program.methods
-    .buyTickets(new BN(2))
+    .buyTickets(new BN(24), new BN(0))
     .accounts({
       player: player.publicKey,
       config,
@@ -140,8 +220,30 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
     .signers([player])
     .rpc();
 
+  const startedRound = await program.account.round.fetch(round);
+  assert.ok(Number(startedRound.startTs) > 0);
+  assert.equal(Number(startedRound.endTs) - Number(startedRound.startTs), ROUND_DURATION_SECONDS);
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .buyTickets(new BN(1), new BN(23))
+        .accounts({
+          player: playerTwo.publicKey,
+          config,
+          pool,
+          round,
+          entry: entryTwo,
+          poolVault,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([playerTwo])
+        .rpc(),
+    "ReviewedRoundChanged",
+  );
+
   await program.methods
-    .buyTickets(new BN(1))
+    .buyTickets(new BN(1), new BN(24))
     .accounts({
       player: playerTwo.publicKey,
       config,
@@ -154,10 +256,10 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
     .signers([playerTwo])
     .rpc();
 
-  await expectAnchorError(
+  await expectFailure(
     () =>
       program.methods
-        .buyTickets(new BN(1))
+        .buyTickets(new BN(1), new BN(25))
         .accounts({
           player: player.publicKey,
           config,
@@ -175,7 +277,7 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
   await expectAnchorError(
     () =>
       program.methods
-        .buyTickets(new BN(1_001))
+        .buyTickets(new BN(1_001), new BN(25))
         .accounts({
           player: oversizedBuyer.publicKey,
           config,
@@ -191,12 +293,37 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
   );
 
   let roundAccount = await program.account.round.fetch(round);
-  assert.equal(roundAccount.totalTickets.toString(), "3");
-  assert.equal(roundAccount.totalLamports.toString(), String(TICKET_PRICE_LAMPORTS * 3));
+  assert.equal(roundAccount.startTs.toString(), startedRound.startTs.toString());
+  assert.equal(roundAccount.endTs.toString(), startedRound.endTs.toString());
+  assert.equal(roundAccount.totalTickets.toString(), "25");
+  assert.equal(roundAccount.totalLamports.toString(), String(TICKET_PRICE_LAMPORTS * 25));
   assert.equal(roundAccount.entrantCount, 2);
-  assert.equal(await provider.connection.getBalance(poolVault), vaultBefore + TICKET_PRICE_LAMPORTS * 3);
+  assert.equal(await provider.connection.getBalance(poolVault), vaultBefore + TICKET_PRICE_LAMPORTS * 25);
 
-  await waitForClock(provider, Number(roundAccount.endTs), "settlement");
+  await waitForClock(
+    provider,
+    Number(roundAccount.endTs) + REFUND_DELAY_SECONDS,
+    "eligible round refund guard",
+  );
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .refundEntryAfterTimeout()
+        .accounts({
+          keeper: authority.publicKey,
+          player: player.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          round,
+          entry,
+          poolVault,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "RoundEligibleForDraw",
+  );
 
   await expectAnchorError(
     () =>
@@ -205,8 +332,10 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
+          treasury,
         })
         .rpc(),
     "RoundHasEntries",
@@ -217,18 +346,18 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
       address: entry,
       player: player.publicKey,
       ticketStart: 0n,
-      ticketEndExclusive: 2n,
+      ticketEndExclusive: 24n,
     },
     {
       address: entryTwo,
       player: playerTwo.publicKey,
-      ticketStart: 2n,
-      ticketEndExclusive: 3n,
+      ticketStart: 24n,
+      ticketEndExclusive: 25n,
     },
   ];
-  const randomness = deriveRoundRandomness(round, 3n, reveal);
-  const [winnerTicket] = selectWinnerTickets(randomness, 3n, 1);
-  const jackpotTicket = randomModDomain(randomness, "jackpot-winner", 0, 3n);
+  const randomness = deriveRoundRandomness(round, 25n, reveal);
+  const [winnerTicket] = selectWinnerTickets(randomness, 25n, 1);
+  const jackpotTicket = randomModDomain(randomness, "jackpot-winner", 0, 25n);
   const winnerEntry = findEntryByTicket(entries, winnerTicket);
   const jackpotEntry = findEntryByTicket(entries, jackpotTicket);
   const wrongWinnerEntry = otherEntry(entries, winnerEntry).address;
@@ -241,6 +370,7 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           poolVault,
@@ -263,6 +393,7 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           poolVault,
@@ -285,6 +416,7 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           poolVault,
@@ -307,6 +439,7 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           poolVault,
@@ -327,6 +460,7 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
     .accounts({
       keeper: authority.publicKey,
       config,
+          keeperConfig,
       pool,
       round,
       poolVault,
@@ -363,8 +497,10 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
       program.methods
         .refundEntryAfterTimeout()
         .accounts({
+          keeper: authority.publicKey,
           player: player.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           entry,
@@ -374,9 +510,24 @@ async function testSettlementFlow({ program, provider, authority, treasury, conf
         .rpc(),
     "RoundSettled",
   );
+
+  await closeSettledRoundAccounts({
+    program,
+    provider,
+    authority,
+    treasury,
+    config,
+    keeperConfig,
+    pool,
+    round,
+    entries: [
+      { address: entry, player: player.publicKey },
+      { address: entryTwo, player: playerTwo.publicKey },
+    ],
+  });
 }
 
-async function testPremiumSettlementFlow({ program, provider, authority, treasury, config, pool, poolVault, jackpotVault }) {
+async function testPremiumSettlementFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault }) {
   const players = [Keypair.generate(), Keypair.generate(), Keypair.generate()];
   const oversizedBuyer = Keypair.generate();
   await Promise.all([
@@ -398,7 +549,9 @@ async function testPremiumSettlementFlow({ program, provider, authority, treasur
     .accounts({
       keeper: authority.publicKey,
       config,
+          keeperConfig,
       pool,
+      previousRound: deriveRound(pool, 0),
       round,
       systemProgram: SystemProgram.programId,
     })
@@ -407,7 +560,7 @@ async function testPremiumSettlementFlow({ program, provider, authority, treasur
   await expectAnchorError(
     () =>
       program.methods
-        .buyTickets(new BN(2))
+        .buyTickets(new BN(2), new BN(0))
         .accounts({
           player: oversizedBuyer.publicKey,
           config,
@@ -471,6 +624,7 @@ async function testPremiumSettlementFlow({ program, provider, authority, treasur
     .accounts({
       keeper: authority.publicKey,
       config,
+          keeperConfig,
       pool,
       round,
       poolVault,
@@ -511,15 +665,27 @@ async function testPremiumSettlementFlow({ program, provider, authority, treasur
     const after = BigInt(await provider.connection.getBalance(player.publicKey));
     assert.equal(after - balancesBefore.get(key), expectedDeltas.get(key));
   }
+
+  await closeSettledRoundAccounts({
+    program,
+    provider,
+    authority,
+    treasury,
+    config,
+    keeperConfig,
+    pool,
+    round,
+    entries: entries.map((entry) => ({ address: entry.address, player: entry.player })),
+  });
 }
 
-async function testPauseAndEmptyRoundFlow({ program, provider, authority, config, pool, poolVault }) {
+async function testPauseAndEmptyRoundFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault }) {
   const player = Keypair.generate();
   await fund(provider, player.publicKey);
 
   const reveal = Buffer.from("pause-round-reveal-0000000000000", "utf8");
   const commitment = commitmentForReveal(reveal);
-  const round = deriveRound(pool, 3);
+  const round = deriveRound(pool, 4);
   const entry = deriveEntry(round, player.publicKey);
 
   await program.methods
@@ -527,7 +693,9 @@ async function testPauseAndEmptyRoundFlow({ program, provider, authority, config
     .accounts({
       keeper: authority.publicKey,
       config,
+          keeperConfig,
       pool,
+      previousRound: deriveRound(pool, 3),
       round,
       systemProgram: SystemProgram.programId,
     })
@@ -544,7 +712,7 @@ async function testPauseAndEmptyRoundFlow({ program, provider, authority, config
   await expectAnchorError(
     () =>
       program.methods
-        .buyTickets(new BN(1))
+        .buyTickets(new BN(1), new BN(0))
         .accounts({
           player: player.publicKey,
           config,
@@ -566,8 +734,10 @@ async function testPauseAndEmptyRoundFlow({ program, provider, authority, config
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
-          round: deriveRound(pool, 4),
+          previousRound: round,
+          round: deriveRound(pool, 5),
           systemProgram: SystemProgram.programId,
         })
         .rpc(),
@@ -589,17 +759,19 @@ async function testPauseAndEmptyRoundFlow({ program, provider, authority, config
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
+          treasury,
         })
         .rpc(),
-    "RoundStillOpen",
+    "RoundNotStarted",
   );
 
   await expectAnchorError(
     () =>
       program.methods
-        .buyTickets(new BN(0))
+        .buyTickets(new BN(0), new BN(0))
         .accounts({
           player: player.publicKey,
           config,
@@ -614,44 +786,40 @@ async function testPauseAndEmptyRoundFlow({ program, provider, authority, config
     "InvalidTicketCount",
   );
 
-  const roundAccount = await program.account.round.fetch(round);
-  await waitForClock(provider, Number(roundAccount.endTs), "empty round settlement");
+  const waitingRound = await program.account.round.fetch(round);
+  assert.equal(Number(waitingRound.startTs), 0);
+  assert.equal(Number(waitingRound.endTs), 0);
+  assert.equal(waitingRound.settled, false);
 
-  await program.methods
-    .closeEmptyRoundAfterTimeout()
-    .accounts({
-      keeper: authority.publicKey,
-      config,
-      pool,
-      round,
-    })
-    .rpc();
-
-  const closedRound = await program.account.round.fetch(round);
-  assert.equal(closedRound.settled, true);
-  assert.equal(closedRound.totalTickets.toString(), "0");
-  assert.equal(closedRound.totalLamports.toString(), "0");
-  assert.equal(closedRound.entrantCount, 0);
-  assert.equal(closedRound.winner.toBase58(), PublicKey.default.toBase58());
-  assert.equal(closedRound.jackpotWinner.toBase58(), PublicKey.default.toBase58());
-  assert.deepEqual(closedRound.randomness, Array(32).fill(0));
-
+  const roundRandomness = deriveRoundRandomnessAccount(round);
   await expectAnchorError(
     () =>
       program.methods
-        .closeEmptyRoundAfterTimeout()
+        .requestRandomness()
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
+          roundRandomness,
+          systemProgram: SystemProgram.programId,
         })
         .rpc(),
-    "RoundSettled",
+    "RoundNotStarted",
   );
+  assert.equal(await provider.connection.getAccountInfo(roundRandomness, "confirmed"), null);
+
+  await new Promise((resolve) => setTimeout(resolve, (ROUND_DURATION_SECONDS + 1) * 1_000));
+  const samePool = await program.account.pool.fetch(pool);
+  const stillWaiting = await program.account.round.fetch(round);
+  assert.equal(samePool.currentRound.toString(), "4");
+  assert.equal(Number(stillWaiting.startTs), 0);
+  assert.equal(Number(stillWaiting.endTs), 0);
+  assert.equal(stillWaiting.settled, false);
 }
 
-async function testRefundModeFlow({ program, provider, authority, config, pool, poolVault, jackpotVault }) {
+async function testRefundModeFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault }) {
   const playerOne = Keypair.generate();
   const playerTwo = Keypair.generate();
   await Promise.all([
@@ -671,20 +839,41 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
     .accounts({
       keeper: authority.publicKey,
       config,
+          keeperConfig,
       pool,
+      previousRound: deriveRound(pool, 1),
       round,
       systemProgram: SystemProgram.programId,
     })
     .rpc();
 
   await buyTickets({ program, player: playerOne, config, pool, round, entry: entryOne, poolVault, ticketCount: 1 });
-  await buyTickets({ program, player: playerTwo, config, pool, round, entry: entryTwo, poolVault, ticketCount: 3 });
+  await buyTickets({ program, player: playerTwo, config, pool, round, entry: entryTwo, poolVault, ticketCount: 23 });
 
   let roundAccount = await program.account.round.fetch(round);
-  assert.equal(roundAccount.totalTickets.toString(), "4");
-  assert.equal(roundAccount.totalLamports.toString(), String(TICKET_PRICE_LAMPORTS * 4));
+  assert.equal(roundAccount.totalTickets.toString(), "24");
+  assert.equal(roundAccount.totalLamports.toString(), String(TICKET_PRICE_LAMPORTS * 24));
   assert.equal(roundAccount.entrantCount, 2);
-  assert.equal(await provider.connection.getBalance(poolVault), vaultBefore + TICKET_PRICE_LAMPORTS * 4);
+  assert.equal(await provider.connection.getBalance(poolVault), vaultBefore + TICKET_PRICE_LAMPORTS * 24);
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .refundEntryAfterTimeout()
+        .accounts({
+          keeper: authority.publicKey,
+          player: playerOne.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          round,
+          entry: entryOne,
+          poolVault,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "RefundNotAvailable",
+  );
 
   await waitForClock(
     provider,
@@ -692,11 +881,59 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
     "refund timeout",
   );
 
+  await expectAnchorError(
+    () =>
+      program.methods
+        .settleRound([...reveal])
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          round,
+          poolVault,
+          jackpotVault,
+          winner: playerOne.publicKey,
+          winnerEntry: entryOne,
+          jackpotWinner: playerOne.publicKey,
+          jackpotEntry: entryOne,
+          treasury,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "MinimumTicketsNotReached",
+  );
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .refundEntryAfterTimeout()
+        .accounts({
+          keeper: playerOne.publicKey,
+          player: playerOne.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          round,
+          entry: entryOne,
+          poolVault,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([playerOne])
+        .rpc(),
+    "UnauthorizedKeeper",
+  );
+
+  const entryOneRent = await provider.connection.getBalance(entryOne);
+  const playerOneBeforeRefund = await provider.connection.getBalance(playerOne.publicKey);
+
   await program.methods
     .refundEntryAfterTimeout()
     .accounts({
+      keeper: authority.publicKey,
       player: playerOne.publicKey,
       config,
+      keeperConfig,
       pool,
       round,
       entry: entryOne,
@@ -704,6 +941,13 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
       systemProgram: SystemProgram.programId,
     })
     .rpc();
+
+  const playerOneAfterRefund = await provider.connection.getBalance(playerOne.publicKey);
+  assert.equal(
+    playerOneAfterRefund - playerOneBeforeRefund,
+    TICKET_PRICE_LAMPORTS + entryOneRent,
+    "refund returns exact ticket principal plus the Entry rent to the player",
+  );
 
   roundAccount = await program.account.round.fetch(round);
   assert.equal(roundAccount.settled, true);
@@ -713,13 +957,44 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
   assert.equal(roundAccount.winnerThird.toBase58(), PublicKey.default.toBase58());
   assert.equal(roundAccount.jackpotWinner.toBase58(), PublicKey.default.toBase58());
   assert.deepEqual(roundAccount.randomness, Array(32).fill(0));
-  assert.equal(roundAccount.totalTickets.toString(), "3");
-  assert.equal(roundAccount.totalLamports.toString(), String(TICKET_PRICE_LAMPORTS * 3));
+  assert.equal(roundAccount.totalTickets.toString(), "23");
+  assert.equal(roundAccount.totalLamports.toString(), String(TICKET_PRICE_LAMPORTS * 23));
   assert.equal(roundAccount.entrantCount, 1);
 
-  const refundedEntry = await program.account.entry.fetch(entryOne);
-  assert.equal(refundedEntry.ticketCount.toString(), "0");
-  assert.equal(refundedEntry.lamports.toString(), "0");
+  assert.equal(await provider.connection.getAccountInfo(entryOne), null);
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .closeSettledEntry()
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          keeperConfig,
+          player: playerTwo.publicKey,
+          round,
+          entry: entryTwo,
+        })
+        .rpc(),
+    "RefundsPending",
+  );
+
+  await expectAnchorError(
+    () =>
+      program.methods
+        .closeSettledRound()
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          round,
+          roundRandomness: deriveRoundRandomnessAccount(round),
+          treasury,
+        })
+        .rpc(),
+    "RefundsPending",
+  );
 
   await expectAnchorError(
     () =>
@@ -728,6 +1003,7 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           poolVault,
@@ -736,7 +1012,7 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
           winnerEntry: entryTwo,
           jackpotWinner: playerTwo.publicKey,
           jackpotEntry: entryTwo,
-          treasury: authority.publicKey,
+          treasury,
           systemProgram: SystemProgram.programId,
         })
         .rpc(),
@@ -746,8 +1022,10 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
   await program.methods
     .refundEntryAfterTimeout()
     .accounts({
+      keeper: authority.publicKey,
       player: playerTwo.publicKey,
       config,
+      keeperConfig,
       pool,
       round,
       entry: entryTwo,
@@ -762,13 +1040,15 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
   assert.equal(roundAccount.entrantCount, 0);
   assert.equal(await provider.connection.getBalance(poolVault), vaultBefore);
 
-  await expectAnchorError(
+  await expectFailure(
     () =>
       program.methods
         .refundEntryAfterTimeout()
         .accounts({
+          keeper: authority.publicKey,
           player: playerOne.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           entry: entryOne,
@@ -776,17 +1056,28 @@ async function testRefundModeFlow({ program, provider, authority, config, pool, 
           systemProgram: SystemProgram.programId,
         })
         .rpc(),
-    "NothingToRefund",
+    "closed refunded entry cannot be refunded twice",
   );
+
+  await closeSettledRoundAccounts({
+    program,
+    provider,
+    authority,
+    treasury,
+    config,
+    keeperConfig,
+    pool,
+    round,
+  });
 }
 
-async function testProviderRandomnessRequestAndRefundFlow({ program, provider, authority, config, pool, poolVault, jackpotVault }) {
+async function testProviderRandomnessRequestAndRefundFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault }) {
   const player = Keypair.generate();
   await fund(provider, player.publicKey);
 
   const reveal = Buffer.from("provider-round-reveal-0000000000", "utf8");
   const commitment = commitmentForReveal(reveal);
-  const roundId = 4;
+  const roundId = 3;
   const round = deriveRound(pool, roundId);
   const entry = deriveEntry(round, player.publicKey);
   const roundRandomness = deriveRoundRandomnessAccount(round);
@@ -797,11 +1088,32 @@ async function testProviderRandomnessRequestAndRefundFlow({ program, provider, a
     .accounts({
       keeper: authority.publicKey,
       config,
+          keeperConfig,
       pool,
+      previousRound: deriveRound(pool, roundId - 1),
       round,
       systemProgram: SystemProgram.programId,
     })
     .rpc();
+
+  const poolAfterRefundReplacement = await program.account.pool.fetch(pool);
+  assert.equal(poolAfterRefundReplacement.currentRound.toString(), String(roundId));
+  await expectAnchorError(
+    () =>
+      program.methods
+        .openRound([...commitmentForReveal(Buffer.alloc(32, 12))])
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          previousRound: round,
+          round: deriveRound(pool, roundId + 1),
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "PreviousRoundStillExists",
+  );
 
   await buyTickets({ program, player, config, pool, round, entry, poolVault, ticketCount: 2 });
 
@@ -812,6 +1124,7 @@ async function testProviderRandomnessRequestAndRefundFlow({ program, provider, a
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           roundRandomness,
@@ -824,73 +1137,26 @@ async function testProviderRandomnessRequestAndRefundFlow({ program, provider, a
   let roundAccount = await program.account.round.fetch(round);
   await waitForClock(provider, Number(roundAccount.endTs), "provider randomness request");
 
-  await program.methods
-    .requestRandomness()
-    .accounts({
-      keeper: authority.publicKey,
-      config,
-      pool,
-      round,
-      roundRandomness,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
-
-  const sidecar = await program.account.roundRandomness.fetch(roundRandomness);
-  assert.equal(sidecar.round.toBase58(), round.toBase58());
-  assert.deepEqual(sidecar.provider, { oraoVrf: {} });
-  assert.deepEqual(sidecar.status, { requested: {} });
-  const seed = Buffer.from(sidecar.randomnessSeed);
-  const request = deriveOraoRandomnessAccount(seed);
-  assert.equal(sidecar.request.toBase58(), request.toBase58());
-  assert.notDeepEqual(seed, Buffer.alloc(32));
-
-  await expectFailure(
-    () =>
-      program.methods
-        .settleRoundWithProviderRandomness()
-        .accounts({
-          keeper: authority.publicKey,
-          config,
-          pool,
-          round,
-          roundRandomness,
-          providerRandomness: request,
-          poolVault,
-          jackpotVault,
-          winner: player.publicKey,
-          winnerEntry: entry,
-          jackpotWinner: player.publicKey,
-          jackpotEntry: entry,
-          treasury: authority.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc(),
-    "provider settlement without ORAO fulfillment fails",
-  );
-
   await expectAnchorError(
     () =>
       program.methods
-        .settleRoundWithProviderRandomness()
+        .requestRandomness()
         .accounts({
           keeper: authority.publicKey,
           config,
+          keeperConfig,
           pool,
           round,
           roundRandomness,
-          providerRandomness: authority.publicKey,
-          poolVault,
-          jackpotVault,
-          winner: player.publicKey,
-          winnerEntry: entry,
-          jackpotWinner: player.publicKey,
-          jackpotEntry: entry,
-          treasury: authority.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc(),
-    "InvalidRandomnessProviderAccount",
+    "MinimumTicketsNotReached",
+  );
+  assert.equal(
+    await provider.connection.getAccountInfo(roundRandomness, "confirmed"),
+    null,
+    "below-minimum request rolls back LuckyMe sidecar creation",
   );
 
   roundAccount = await program.account.round.fetch(round);
@@ -903,8 +1169,10 @@ async function testProviderRandomnessRequestAndRefundFlow({ program, provider, a
   await program.methods
     .refundEntryAfterTimeout()
     .accounts({
+      keeper: authority.publicKey,
       player: player.publicKey,
       config,
+      keeperConfig,
       pool,
       round,
       entry,
@@ -920,36 +1188,186 @@ async function testProviderRandomnessRequestAndRefundFlow({ program, provider, a
   assert.equal(roundAccount.entrantCount, 0);
   assert.equal(await provider.connection.getBalance(poolVault), vaultBefore);
 
-  await expectAnchorError(
-    () =>
-      program.methods
-        .settleRoundWithProviderRandomness()
-        .accounts({
-          keeper: authority.publicKey,
-          config,
-          pool,
-          round,
-          roundRandomness,
-          providerRandomness: authority.publicKey,
-          poolVault,
-          jackpotVault,
-          winner: player.publicKey,
-          winnerEntry: entry,
-          jackpotWinner: player.publicKey,
-          jackpotEntry: entry,
-          treasury: authority.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc(),
-    "RoundSettled",
-  );
+  await closeSettledRoundAccounts({
+    program,
+    provider,
+    authority,
+    treasury,
+    config,
+    keeperConfig,
+    pool,
+    round,
+  });
 
   assert.equal(ORAO_VRF_PROGRAM_ID.toBase58(), "VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y");
 }
 
-async function buyTickets({ program, player, config, pool, round, entry, poolVault, ticketCount }) {
+async function testEligibleProviderRequestGuard({
+  program,
+  provider,
+  authority,
+  config,
+  keeperConfig,
+  pool,
+  poolVault,
+}) {
+  const player = Keypair.generate();
+  await fund(provider, player.publicKey);
+  const reveal = Buffer.from("high-provider-request-reveal-000", "utf8");
+  const round = deriveRound(pool, 1);
+  const entry = deriveEntry(round, player.publicKey);
+  const roundRandomness = deriveRoundRandomnessAccount(round);
+
   await program.methods
-    .buyTickets(new BN(ticketCount))
+    .openRound([...commitmentForReveal(reveal)])
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      keeperConfig,
+      pool,
+      previousRound: deriveRound(pool, 0),
+      round,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+  await buyTickets({
+    program,
+    player,
+    config,
+    pool,
+    round,
+    entry,
+    poolVault,
+    ticketCount: 3,
+  });
+
+  const roundAccount = await program.account.round.fetch(round);
+  assert.equal(roundAccount.totalTickets.toString(), "3");
+  assert.equal(roundAccount.entrantCount, 1);
+  await waitForClock(provider, Number(roundAccount.endTs), "eligible High ORAO gate");
+
+  await program.methods
+    .requestRandomness()
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      keeperConfig,
+      pool,
+      round,
+      roundRandomness,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+  await expectFailure(
+    () =>
+      program.methods
+        .requestRandomness()
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          round,
+          roundRandomness,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "at most one LuckyMe randomness sidecar can be created",
+  );
+
+  const sidecar = await program.account.roundRandomness.fetch(roundRandomness);
+  const seed = Buffer.from(sidecar.randomnessSeed);
+  assert.equal(sidecar.round.toBase58(), round.toBase58());
+  assert.deepEqual(sidecar.provider, { oraoVrf: {} });
+  assert.deepEqual(sidecar.status, { requested: {} });
+  assert.equal(
+    sidecar.request.toBase58(),
+    deriveOraoRandomnessAccount(seed).toBase58(),
+  );
+}
+
+async function closeSettledRoundAccounts({
+  program,
+  provider,
+  authority,
+  treasury,
+  config,
+  keeperConfig,
+  pool,
+  round,
+  entries = [],
+  closeRandomness = false,
+}) {
+  await waitForNextConfirmedSlot(provider);
+  for (const entry of entries) {
+    const info = await provider.connection.getAccountInfo(entry.address, "confirmed");
+    if (!info) {
+      continue;
+    }
+    const playerBefore = await provider.connection.getBalance(entry.player, "confirmed");
+    await program.methods
+      .closeSettledEntry()
+      .accounts({
+        keeper: authority.publicKey,
+        config,
+        keeperConfig,
+        player: entry.player,
+        round,
+        entry: entry.address,
+      })
+      .rpc();
+    await waitForAccountClosed(provider, entry.address, "settled Entry cleanup");
+    const playerAfter = await provider.connection.getBalance(entry.player, "confirmed");
+    assert.equal(playerAfter - playerBefore, info.lamports);
+  }
+
+  const roundRandomness = deriveRoundRandomnessAccount(round);
+  const randomnessInfo = await provider.connection.getAccountInfo(roundRandomness, "confirmed");
+  if (closeRandomness) {
+    assert.ok(randomnessInfo, "round randomness sidecar exists before cleanup");
+    const treasuryBefore = await provider.connection.getBalance(treasury, "confirmed");
+    await program.methods
+      .closeSettledRandomness()
+      .accounts({
+        keeper: authority.publicKey,
+        config,
+        keeperConfig,
+        round,
+        roundRandomness,
+        treasury,
+      })
+      .rpc();
+    await waitForAccountClosed(provider, roundRandomness, "RoundRandomness cleanup");
+    const treasuryAfter = await provider.connection.getBalance(treasury, "confirmed");
+    assert.equal(treasuryAfter - treasuryBefore, randomnessInfo.lamports);
+  } else {
+    assert.equal(randomnessInfo, null, "no sidecar may remain before Round closure");
+  }
+
+  const roundInfo = await provider.connection.getAccountInfo(round, "confirmed");
+  assert.ok(roundInfo, "round account exists before cleanup");
+  const treasuryBefore = await provider.connection.getBalance(treasury, "confirmed");
+  await program.methods
+    .closeSettledRound()
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      keeperConfig,
+      pool,
+      round,
+      roundRandomness,
+      treasury,
+    })
+    .rpc();
+  await waitForAccountClosed(provider, round, "Round cleanup");
+  const treasuryAfter = await provider.connection.getBalance(treasury, "confirmed");
+  assert.equal(treasuryAfter - treasuryBefore, roundInfo.lamports);
+}
+
+async function buyTickets({ program, player, config, pool, round, entry, poolVault, ticketCount }) {
+  const reviewedRound = await program.account.round.fetch(round);
+  await program.methods
+    .buyTickets(new BN(ticketCount), new BN(reviewedRound.totalTickets.toString()))
     .accounts({
       player: player.publicKey,
       config,
@@ -982,6 +1400,29 @@ async function waitForClock(provider, targetUnixTs, label) {
   throw new Error(
     `Timed out waiting for ${label}: clock=${clock.unixTimestamp.toString()} target=${targetUnixTs}`,
   );
+}
+
+async function waitForAccountClosed(provider, address, label) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 10_000) {
+    if (!(await provider.connection.getAccountInfo(address, "confirmed"))) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error(`Timed out waiting for ${label}: ${address.toBase58()}`);
+}
+
+async function waitForNextConfirmedSlot(provider) {
+  const initial = await provider.connection.getSlot("confirmed");
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 10_000) {
+    if (await provider.connection.getSlot("confirmed") > initial) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error("Timed out waiting for the next confirmed localnet slot");
 }
 
 async function readClock(provider) {

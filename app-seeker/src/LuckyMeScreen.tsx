@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Linking,
   Modal,
   Platform,
@@ -20,7 +21,13 @@ import { useMobileWallet } from "@wallet-ui/react-native-web3js";
 import { Transaction } from "@solana/web3.js";
 import { Buffer } from "@craftzdog/react-native-buffer";
 
-import { renderStitchScreen, stitchDefaultTab, STITCH_SCREENS } from "./stitchScreens";
+import {
+  hasVerifiedMinimumPolicy,
+  isLivePoolEntryReady,
+  renderStitchScreen,
+  stitchDefaultTab,
+  STITCH_SCREENS,
+} from "./stitchScreens";
 import type {
   LivePool,
   StitchScreenId,
@@ -52,6 +59,7 @@ const WINNER_SCREEN: StitchScreenId = "winner";
 const API_URL =
   process.env.EXPO_PUBLIC_LUCKYME_API_URL ?? "https://api.lucky-me.app";
 const UI_PREVIEW_ENABLED = process.env.EXPO_PUBLIC_LUCKYME_UI_PREVIEW === "true";
+const LIVE_POOL_REFRESH_INTERVAL_MS = 15_000;
 const NOTIFICATION_PROMPT_KEY = "luckyme.notifications.prompt.v3";
 const PUSH_TOKEN_KEY = "luckyme.notifications.expoPushToken.v1";
 const ROUND_ALERTS_CHANNEL_ID = "luckyme-round-alerts";
@@ -76,17 +84,20 @@ const LEGAL_LINKS: Record<LegalLinkKey, string> = {
 const SCREEN_BY_LABEL: Record<string, StitchScreenId> = {
   activity: "activity",
   home: "home",
+  "how to": "how-to-play",
+  "how to play": "how-to-play",
   links: "links",
   pools: "pools",
   settings: "links",
   wallet: "wallet",
 };
 const UNAVAILABLE_ALLOWED_SCREENS = new Set<StitchScreenId>([
+  "how-to-play",
   "links",
   "wallet",
   "winner",
 ]);
-const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "wallet", "links"];
+const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "wallet", "how-to-play"];
 const NAV_TABS = new Set<StitchScreenId>(NAV_ITEMS);
 
 function isLegalLinkKey(value: unknown): value is LegalLinkKey {
@@ -203,7 +214,7 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
         for (const label in labels) {
           if (text === label || text.endsWith(label)) {
             const route = labels[label];
-            return canNavigateOnchainScreens || route === 'links' || route === 'wallet' ? route : null;
+            return canNavigateOnchainScreens || route === 'how-to-play' || route === 'links' || route === 'wallet' ? route : null;
           }
         }
 
@@ -296,6 +307,11 @@ type InitialScreenResult = {
 type PoolsResult = {
   onchainAvailable: boolean;
   pools: LivePool[];
+};
+
+type RefreshOptions = {
+  allowScreenChange?: boolean;
+  targetScreen?: StitchScreenId;
 };
 
 async function loadInitialScreen() {
@@ -469,6 +485,10 @@ function parseAppRoute(value: string): AppRoute {
       return { screen: "pools", pool: url.searchParams.get("pool") ?? undefined };
     }
 
+    if (screenName === "how-to-play" || screenName === "how" || screenName === "guide") {
+      return { screen: "how-to-play" };
+    }
+
     if (
       screenName === "home" ||
       screenName === "activity" ||
@@ -504,13 +524,16 @@ export function LuckyMeScreen() {
   const [transactionStatus, setTransactionStatus] = useState<TransactionStatus>({
     state: "idle",
   });
+  const mountedRef = useRef(false);
   const wallet = useMobileWallet();
   const walletAddress = walletAddressToString(wallet.account?.address);
+  const liveStateReady = livePools.length > 0 || UI_PREVIEW_ENABLED;
+  const mainnetReady = onchainAvailable && liveStateReady;
 
   const html = useMemo(
     () =>
       renderStitchScreen(screen, {
-        onchainAvailable,
+        onchainAvailable: mainnetReady,
         activeTab: screen === UNAVAILABLE_SCREEN ? requestedTab : undefined,
         livePools,
         selectedPool,
@@ -521,7 +544,7 @@ export function LuckyMeScreen() {
       }),
     [
       livePools,
-      onchainAvailable,
+      mainnetReady,
       requestedTab,
       screen,
       selectedPool,
@@ -536,43 +559,101 @@ export function LuckyMeScreen() {
     screen === UNAVAILABLE_SCREEN ? requestedTab : stitchDefaultTab(screen);
 
   const injectedJavaScript = useMemo(
-    () => injectedNavigation(screen, onchainAvailable),
-    [onchainAvailable, screen],
+    () => injectedNavigation(screen, mainnetReady),
+    [mainnetReady, screen],
   );
 
-  const refreshFromBackend = useCallback(() => {
-    let active = true;
-
-    Promise.all([loadInitialScreen(), loadPoolsForWallet(walletAddress)])
-      .then(([next, pools]) => {
-        if (active) {
-          setOnchainAvailable(next.onchainAvailable || pools.onchainAvailable);
-          setScreen((current) =>
-            current === UNAVAILABLE_SCREEN || current === INITIAL_SCREEN ? next.screen : current,
-          );
-          setLivePools(pools.pools);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setOnchainAvailable(UI_PREVIEW_ENABLED);
-          setScreen((current) =>
-            current === UNAVAILABLE_SCREEN || current === INITIAL_SCREEN
-              ? UI_PREVIEW_ENABLED
-                ? INITIAL_SCREEN
-                : UNAVAILABLE_SCREEN
-              : current,
-          );
-          setLivePools([]);
-        }
-      });
+  useEffect(() => {
+    mountedRef.current = true;
 
     return () => {
-      active = false;
+      mountedRef.current = false;
     };
-  }, [walletAddress]);
+  }, []);
 
-  useEffect(() => refreshFromBackend(), [refreshFromBackend]);
+  const refreshFromBackend = useCallback(async (options: RefreshOptions = {}) => {
+    const allowScreenChange = options.allowScreenChange ?? true;
+    const targetScreen = options.targetScreen ?? requestedTab;
+
+    try {
+      const [nextResult, poolsResult] = await Promise.allSettled([
+        loadInitialScreen(),
+        loadPoolsForWallet(walletAddress),
+      ]);
+      const next = nextResult.status === "fulfilled"
+        ? nextResult.value
+        : { onchainAvailable: false, screen: UNAVAILABLE_SCREEN };
+      const pools = poolsResult.status === "fulfilled"
+        ? poolsResult.value
+        : { onchainAvailable: false, pools: [] };
+
+      if (!mountedRef.current) {
+        return pools.pools;
+      }
+
+      const hasFreshPools = pools.pools.length > 0;
+      const hasMainnetState = UI_PREVIEW_ENABLED || (
+        next.onchainAvailable && pools.onchainAvailable && hasFreshPools
+      );
+
+      setOnchainAvailable(hasMainnetState);
+      setLivePools(hasMainnetState ? pools.pools : []);
+
+      if (allowScreenChange) {
+        setScreen((current) => {
+          if (hasMainnetState) {
+            if (current === UNAVAILABLE_SCREEN) {
+              return targetScreen;
+            }
+            if (current === INITIAL_SCREEN) {
+              return next.screen;
+            }
+            return current;
+          }
+
+          return current === INITIAL_SCREEN ? UNAVAILABLE_SCREEN : current;
+        });
+      }
+
+      return pools.pools;
+    } catch {
+      if (mountedRef.current) {
+        setOnchainAvailable(UI_PREVIEW_ENABLED);
+        setLivePools([]);
+        if (UI_PREVIEW_ENABLED && allowScreenChange) {
+          setScreen((current) =>
+            current === UNAVAILABLE_SCREEN || current === INITIAL_SCREEN ? INITIAL_SCREEN : current,
+          );
+        }
+      }
+
+      return [];
+    }
+  }, [requestedTab, walletAddress]);
+
+  useEffect(() => {
+    void refreshFromBackend();
+
+    const interval = setInterval(() => {
+      void refreshFromBackend({ allowScreenChange: false });
+    }, LIVE_POOL_REFRESH_INTERVAL_MS);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [refreshFromBackend]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void refreshFromBackend({ allowScreenChange: false });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [refreshFromBackend]);
 
   useEffect(() => {
     let active = true;
@@ -645,12 +726,16 @@ export function LuckyMeScreen() {
       setRequestedTab(nextScreen);
     }
 
-    if (onchainAvailable || UNAVAILABLE_ALLOWED_SCREENS.has(nextScreen)) {
+    if (nextScreen === "home" || nextScreen === "pools" || nextScreen === "activity") {
+      void refreshFromBackend({ allowScreenChange: true, targetScreen: nextScreen });
+    }
+
+    if (mainnetReady || UNAVAILABLE_ALLOWED_SCREENS.has(nextScreen)) {
       setScreen(nextScreen);
     } else {
       setScreen(UNAVAILABLE_SCREEN);
     }
-  }, [onchainAvailable]);
+  }, [mainnetReady, refreshFromBackend]);
 
   const handleAppUrl = useCallback((url: string) => {
     const route = parseAppRoute(url);
@@ -708,18 +793,53 @@ export function LuckyMeScreen() {
   }, [handleAppUrl]);
 
   const refreshLivePools = useCallback(async (player = walletAddress) => {
-    const pools = await loadPoolsForWallet(player);
-    setOnchainAvailable((current) => current || pools.onchainAvailable);
-    setLivePools(pools.pools);
-    return pools.pools;
+    try {
+      const pools = await loadPoolsForWallet(player);
+      const verified = UI_PREVIEW_ENABLED || (pools.onchainAvailable && pools.pools.length > 0);
+      setOnchainAvailable(verified);
+      setLivePools(verified ? pools.pools : []);
+      return pools.pools;
+    } catch {
+      setOnchainAvailable(UI_PREVIEW_ENABLED);
+      setLivePools([]);
+      return [];
+    }
   }, [walletAddress]);
 
   const buyEntry = useCallback(async (pool = selectedPool) => {
     const poolId = pool || selectedPool;
     const count = clampTicketCount(poolId, ticketCount);
+    const livePool = livePools.find((candidate) => candidate.id === poolId);
     setSelectedPool(poolId);
     setTicketCount(count);
     setRequestedTab("pools");
+
+    if (!isLivePoolEntryReady(livePool)) {
+      setTransactionStatus({
+        state: "error",
+        message: "This pool does not currently have a verified round open for entries.",
+      });
+      setScreen("review");
+      return;
+    }
+
+    const reviewedRound = livePool?.activeRound;
+    const expectedRoundId = Number(reviewedRound?.id ?? reviewedRound?.roundId);
+    const expectedTotalTickets = String(reviewedRound?.totalTickets ?? "");
+    if (
+      !hasVerifiedMinimumPolicy(livePool) ||
+      !Number.isSafeInteger(expectedRoundId) ||
+      expectedRoundId < 1 ||
+      !/^\d+$/.test(expectedTotalTickets)
+    ) {
+      setTransactionStatus({
+        state: "error",
+        message: "Verified round progress changed. Refresh and review the purchase again.",
+      });
+      setScreen("review");
+      return;
+    }
+
     setScreen("syncing");
     setTransactionStatus({
       state: "building",
@@ -744,12 +864,15 @@ export function LuckyMeScreen() {
           player,
           pool: poolId,
           ticketCount: count,
+          expectedRoundId,
+          expectedTotalTickets,
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
         message?: string;
         simulation?: { ok?: boolean; err?: unknown };
+        summary?: { roundId?: number; totalTicketsBefore?: string | number };
         transactionBase64?: string;
       };
 
@@ -761,6 +884,12 @@ export function LuckyMeScreen() {
       }
       if (payload.simulation?.ok === false) {
         throw new Error(`Backend simulation failed: ${JSON.stringify(payload.simulation.err)}`);
+      }
+      if (
+        Number(payload.summary?.roundId) !== expectedRoundId ||
+        String(payload.summary?.totalTicketsBefore ?? "") !== expectedTotalTickets
+      ) {
+        throw new Error("Round progress changed while preparing the transaction. Refresh and review again.");
       }
 
       const transaction = Transaction.from(Buffer.from(payload.transactionBase64, "base64"));
@@ -803,7 +932,7 @@ export function LuckyMeScreen() {
       });
       setScreen("syncing");
     }
-  }, [refreshLivePools, selectedPool, ticketCount, wallet]);
+  }, [livePools, refreshLivePools, selectedPool, ticketCount, wallet]);
 
   const enableNotifications = useCallback(async () => {
     setNotificationBusy(true);

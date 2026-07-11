@@ -3,6 +3,7 @@ export type StitchScreenId =
   | "pools"
   | "activity"
   | "wallet"
+  | "how-to-play"
   | "links"
   | "review"
   | "syncing"
@@ -60,6 +61,19 @@ export type LiveRound = {
   entrantCount?: string | number;
   startTs?: string | number;
   endTs?: string | number;
+  minimumTickets?: string | number;
+  ticketsRemaining?: string | number;
+  minimumReached?: boolean;
+  minimumDistinctEntrants?: string | number;
+  refundStatus?: "none" | "pending" | "completed" | string;
+  roundOutcome?:
+    | "waiting"
+    | "open"
+    | "eligible_for_draw"
+    | "cancelled_below_minimum"
+    | "settling"
+    | "settled"
+    | string;
   userEntry?: LiveUserEntry | null;
   randomnessProof?: {
     status?: string;
@@ -73,6 +87,12 @@ export type LivePool = {
   ticketPriceLamports?: string | number;
   ticketPriceSol?: string | number;
   currentRound?: number;
+  minimumTickets?: string | number;
+  ticketsRemaining?: string | number;
+  minimumReached?: boolean;
+  minimumDistinctEntrants?: string | number;
+  refundStatus?: "none" | "pending" | "completed" | string;
+  roundOutcome?: string;
   activeRound?: LiveRound | null;
   recentRounds?: LiveRound[];
   onchain?: {
@@ -90,6 +110,8 @@ type PoolSpec = {
   prize: string;
   winners: string;
   limits: string;
+  minimumTickets: number;
+  minimumDistinctEntrants: number;
   note: string;
   tone: PoolTone;
 };
@@ -103,6 +125,8 @@ const POOLS: PoolSpec[] = [
     prize: "95% prize pool",
     winners: "1 winner",
     limits: "1,000 tickets max",
+    minimumTickets: 25,
+    minimumDistinctEntrants: 1,
     note: "3% builds the reserve jackpot. 2% goes to treasury.",
     tone: "cyan",
   },
@@ -114,6 +138,8 @@ const POOLS: PoolSpec[] = [
     prize: "95% prize pool",
     winners: "1 winner",
     limits: "1,000 tickets max",
+    minimumTickets: 13,
+    minimumDistinctEntrants: 1,
     note: "3% builds the reserve jackpot. 2% goes to treasury.",
     tone: "purple",
   },
@@ -125,6 +151,8 @@ const POOLS: PoolSpec[] = [
     prize: "95% prize pool",
     winners: "1 winner",
     limits: "1,000 tickets max",
+    minimumTickets: 3,
+    minimumDistinctEntrants: 1,
     note: "3% builds the reserve jackpot. 2% goes to treasury.",
     tone: "violet",
   },
@@ -136,6 +164,8 @@ const POOLS: PoolSpec[] = [
     prize: "70 / 20 / 10 split",
     winners: "3 winners",
     limits: "1 ticket per wallet",
+    minimumTickets: 3,
+    minimumDistinctEntrants: 3,
     note: "Minimum 3 wallets required. Main prize splits 70 / 20 / 10.",
     tone: "prime",
   },
@@ -194,8 +224,12 @@ function livePool(poolId: string, options: StitchRenderOptions) {
   return options.livePools?.find((pool) => pool.id === poolId);
 }
 
-function activeRound(pool?: LivePool | null) {
-  return pool?.activeRound ?? pool?.recentRounds?.[0] ?? null;
+function hasLivePoolState(poolId: string, options: StitchRenderOptions) {
+  return Boolean(livePool(poolId, options));
+}
+
+function roundForPool(pool?: LivePool | null, includeRecent = false) {
+  return pool?.activeRound ?? (includeRecent ? pool?.recentRounds?.[0] : null) ?? null;
 }
 
 function selectedPool(options: StitchRenderOptions) {
@@ -221,32 +255,153 @@ function totalSol(pool: PoolSpec, options: StitchRenderOptions) {
   return (Number(priceSol(pool, live)) * ticketCountFor(pool, options)).toFixed(3).replace(/\.?0+$/, "");
 }
 
-function roundStatus(round?: LiveRound | null) {
+function booleanValue(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function thresholdState(pool: PoolSpec, live?: LivePool, round?: LiveRound | null) {
+  const minimumTickets = Math.max(
+    1,
+    Math.trunc(numberValue(round?.minimumTickets ?? live?.minimumTickets, pool.minimumTickets)),
+  );
+  const sold = Math.max(0, Math.trunc(numberValue(round?.totalTickets)));
+  const players = Math.max(0, Math.trunc(numberValue(round?.entrantCount)));
+  const minimumDistinctEntrants = Math.max(
+    1,
+    Math.trunc(
+      numberValue(
+        round?.minimumDistinctEntrants ?? live?.minimumDistinctEntrants,
+        pool.minimumDistinctEntrants,
+      ),
+    ),
+  );
+  const backendMinimumReached = booleanValue(
+    round?.minimumReached ?? live?.minimumReached,
+    sold >= minimumTickets,
+  );
+  const minimumReached =
+    backendMinimumReached && players >= minimumDistinctEntrants;
+  const backendRemaining = numberValue(
+    round?.ticketsRemaining ?? live?.ticketsRemaining,
+    Math.max(minimumTickets - sold, 0),
+  );
+  const ticketsRemaining = minimumReached
+    ? 0
+    : Math.max(0, Math.trunc(backendRemaining));
+  const refundStatus = String(round?.refundStatus ?? live?.refundStatus ?? "none");
+  const roundOutcome = String(round?.roundOutcome ?? live?.roundOutcome ?? "");
+
+  return {
+    minimumDistinctEntrants,
+    minimumReached,
+    minimumTickets,
+    players,
+    refundStatus,
+    roundOutcome,
+    sold,
+    ticketsRemaining,
+  };
+}
+
+function roundStatus(
+  round: LiveRound | null | undefined,
+  threshold?: ReturnType<typeof thresholdState>,
+) {
   if (!round) {
-    return "Waiting";
+    return "Maintenance required";
   }
-  if (round.settled || round.status === "settled") {
+  if (threshold?.refundStatus === "completed") {
+    return "Refund complete";
+  }
+  if (
+    threshold?.refundStatus === "pending" ||
+    threshold?.roundOutcome === "cancelled_below_minimum"
+  ) {
+    return "Refunding";
+  }
+  if (
+    round.settled ||
+    round.status === "settled" ||
+    threshold?.roundOutcome === "settled"
+  ) {
     return "Settled";
   }
   const tickets = numberValue(round.totalTickets);
+  const startTs = numberValue(round.startTs);
   const endTs = numberValue(round.endTs);
   const now = Math.floor(Date.now() / 1000);
-  if (tickets <= 0) {
+  if (tickets <= 0 && startTs === 0 && endTs === 0) {
     return "Waiting first ticket";
   }
+  if (tickets <= 0) {
+    return "Maintenance required";
+  }
   if (endTs > 0 && now >= endTs) {
-    return "Settlement pending";
+    return threshold?.minimumReached ? "Draw pending" : "Refund pending";
+  }
+  if (threshold?.minimumReached) {
+    return "Minimum reached";
   }
   return "Live";
 }
 
-function roundFacts(pool: PoolSpec, options: StitchRenderOptions) {
+export function isLivePoolEntryReady(pool?: LivePool | null, now = Math.floor(Date.now() / 1000)) {
+  const round = pool?.activeRound;
+  if (!round || !hasVerifiedMinimumPolicy(pool) || round.settled || round.status === "settled") {
+    return false;
+  }
+  const tickets = numberValue(round.totalTickets);
+  const startTs = numberValue(round.startTs);
+  const endTs = numberValue(round.endTs);
+  if (tickets <= 0) {
+    return startTs === 0 && endTs === 0;
+  }
+  return endTs > now;
+}
+
+export function hasVerifiedMinimumPolicy(pool?: LivePool | null) {
+  const spec = POOLS.find((candidate) => candidate.id === pool?.id);
+  const round = pool?.activeRound;
+  return Boolean(
+    spec &&
+    round &&
+    numberValue(pool?.minimumTickets, Number.NaN) === spec.minimumTickets &&
+    numberValue(pool?.minimumDistinctEntrants, Number.NaN) === spec.minimumDistinctEntrants &&
+    numberValue(round.minimumTickets, Number.NaN) === spec.minimumTickets &&
+    numberValue(round.minimumDistinctEntrants, Number.NaN) === spec.minimumDistinctEntrants &&
+    typeof round.minimumReached === "boolean" &&
+    Number.isFinite(numberValue(round.ticketsRemaining, Number.NaN)) &&
+    typeof round.roundOutcome === "string" &&
+    typeof round.refundStatus === "string"
+  );
+}
+
+function roundFacts(
+  pool: PoolSpec,
+  options: StitchRenderOptions,
+  includeRecent = false,
+) {
+  if (!hasLivePoolState(pool.id, options)) {
+    const status = options.onchainAvailable ? "Unavailable" : "Syncing";
+    return {
+      live: undefined,
+      round: null,
+      tickets: status,
+      players: status,
+      myTickets: "0",
+      status,
+      statusTone: "neutral",
+      threshold: thresholdState(pool),
+    };
+  }
+
   const live = livePool(pool.id, options);
-  const round = activeRound(live);
+  const round = roundForPool(live, includeRecent);
   const tickets = round?.totalTickets ?? "0";
   const players = round?.entrantCount ?? "0";
   const myTickets = round?.userEntry?.ticketCount ?? "0";
-  const status = roundStatus(round);
+  const threshold = thresholdState(pool, live, round);
+  const status = roundStatus(round, threshold);
   return {
     live,
     round,
@@ -254,7 +409,13 @@ function roundFacts(pool: PoolSpec, options: StitchRenderOptions) {
     players: String(players),
     myTickets: String(myTickets),
     status,
-    statusTone: status === "Live" ? "emerald" : status === "Settlement pending" ? "amber" : "neutral",
+    statusTone:
+      status === "Live" || status === "Minimum reached" || status === "Refund complete"
+        ? "emerald"
+        : status === "Draw pending" || status === "Refund pending" || status === "Refunding"
+          ? "amber"
+          : "neutral",
+    threshold,
   };
 }
 
@@ -277,6 +438,7 @@ const ICONS = {
   pools: `<svg ${SVG}><path d="m12 3.5 7.5 4.2L12 11.9 4.5 7.7Z"/><path d="m4.5 12.2 7.5 4.2 7.5-4.2"/><path d="m4.5 16.4 7.5 4.2 7.5-4.2"/></svg>`,
   activity: `<svg ${SVG}><path d="M3.5 12.5h3.6l2.6-7 4.6 13 2.6-6h3.6"/></svg>`,
   wallet: `<svg ${SVG}><rect x="3.2" y="6" width="17.6" height="13" rx="3"/><path d="M3.2 10h17.6"/><path d="M16.4 14.6h.01"/></svg>`,
+  help: `<svg ${SVG}><circle cx="12" cy="12" r="8.6"/><path d="M9.7 9.2a2.5 2.5 0 0 1 4.8 1c0 1.8-2.5 2.1-2.5 3.8"/><path d="M12 17.4h.01"/></svg>`,
   links: `<svg ${SVG}><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.8 12.8 5a3.6 3.6 0 0 1 5.1 5.1L16.1 12"/><path d="M13 17.2 11.2 19a3.6 3.6 0 0 1-5.1-5.1L7.9 12"/></svg>`,
   shield: `<svg ${SVG}><path d="M12 3.4 19 6v5.4c0 4.4-2.9 7.7-7 9.2-4.1-1.5-7-4.8-7-9.2V6Z"/><path d="m9.3 12 2 2 3.6-3.7"/></svg>`,
   clock: `<svg ${SVG}><circle cx="12" cy="12" r="8.4"/><path d="M12 7.6V12l3 2"/></svg>`,
@@ -618,6 +780,90 @@ function page(
     .fact strong { display: block; color: #fff; font-size: 12.5px; line-height: 1.2; overflow-wrap: anywhere; }
 
     .pool-note { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+    .target-box {
+      display: grid;
+      gap: 9px;
+      padding: 12px;
+      border: 1px solid var(--accent-line, var(--line-cyan));
+      border-radius: 12px;
+      background: var(--accent-soft, rgba(0, 209, 255, 0.06));
+    }
+    .target-box.refund { border-color: rgba(245, 158, 11, 0.34); background: rgba(245, 158, 11, 0.075); }
+    .target-box.complete { border-color: rgba(20, 241, 149, 0.32); background: rgba(20, 241, 149, 0.065); }
+    .target-heading { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+    .target-count { color: #fff; font-size: 17px; font-weight: 850; }
+    .target-message { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+    .target-message.success { color: var(--emerald); }
+    .target-message.warning { color: #FBD38D; }
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.15);
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent, var(--cyan)), var(--emerald));
+      box-shadow: 0 0 14px var(--accent-glow, rgba(0, 209, 255, 0.2));
+    }
+
+    .refund-copy {
+      display: grid;
+      gap: 7px;
+      padding: 13px;
+      border: 1px solid rgba(245, 158, 11, 0.26);
+      border-radius: 12px;
+      background: rgba(245, 158, 11, 0.055);
+    }
+    .refund-copy strong { color: #fff; font-size: 14px; }
+    .refund-copy p { font-size: 12.5px; }
+
+    .how-steps {
+      display: grid;
+      gap: 10px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+      counter-reset: how-step;
+    }
+    .how-step {
+      counter-increment: how-step;
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 11px;
+      align-items: start;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    .how-step::before {
+      content: counter(how-step);
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-purple);
+      border-radius: 10px;
+      background: rgba(153, 69, 255, 0.12);
+      color: var(--violet);
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .how-step h3 { margin-bottom: 4px; }
+    .how-step p { font-size: 13.5px; }
+
+    .pool-rules-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+    .pool-rules-table { width: 100%; min-width: 570px; border-collapse: collapse; }
+    .pool-rules-table th,
+    .pool-rules-table td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; font-size: 12.5px; }
+    .pool-rules-table th { color: var(--soft); font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; }
+    .pool-rules-table td { color: var(--muted); }
+    .pool-rules-table td:first-child { color: #fff; font-weight: 800; }
+    .pool-rules-table tr:last-child td { border-bottom: 0; }
 
     /* ---------- buttons ---------- */
 
@@ -1021,6 +1267,15 @@ function page(
       .badge-grid { grid-template-columns: 1fr; }
       h1 { font-size: 26px; }
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1056,7 +1311,7 @@ function bottomNav(active: StitchScreenId) {
     ["pools", ICONS.pools, "Pools"],
     ["activity", ICONS.activity, "Activity"],
     ["wallet", ICONS.wallet, "Wallet"],
-    ["links", ICONS.links, "Links"],
+    ["how-to-play", ICONS.help, "How To"],
   ];
 
   // aria-hidden: the native wrapper renders the accessible tab controls
@@ -1091,15 +1346,85 @@ function rulesPanel() {
 function trustBadges() {
   return String.raw`<section class="badge-grid">
   <div class="badge"><span class="icon-chip chip-purplebox">${ICONS.key}</span><h3>Self-custody</h3><p>Keys never leave your wallet. App custody is none.</p></div>
-  <div class="badge"><span class="icon-chip chip-cyanbox">${ICONS.dice}</span><h3>Verifiable draws</h3><p>Settlement randomness comes from ORAO VRF.</p></div>
+  <div class="badge"><span class="icon-chip chip-cyanbox">${ICONS.dice}</span><h3>Verifiable draws</h3><p>Eligible rounds use independently verifiable randomness.</p></div>
   <div class="badge"><span class="icon-chip chip-emeraldbox">${ICONS.shield}</span><h3>Nothing simulated</h3><p>Only confirmed on-chain state is ever displayed.</p></div>
   <div class="badge"><span class="icon-chip chip-purplebox">${ICONS.chain}</span><h3>On-chain settlement</h3><p>Rounds settle on Solana mainnet, wallet-approved.</p></div>
 </section>`;
 }
 
+function ticketWord(value: number) {
+  return value === 1 ? "ticket" : "tickets";
+}
+
+function minimumProgressPanel(
+  pool: PoolSpec,
+  facts: ReturnType<typeof roundFacts>,
+) {
+  const { threshold } = facts;
+  const hasRound = Boolean(facts.round);
+  const percentage = hasRound
+    ? Math.max(0, Math.min(100, (threshold.sold / threshold.minimumTickets) * 100))
+    : 0;
+  const refundComplete = threshold.refundStatus === "completed";
+  const refundPending =
+    threshold.refundStatus === "pending" ||
+    threshold.roundOutcome === "cancelled_below_minimum" ||
+    facts.status === "Refund pending" ||
+    facts.status === "Refunding";
+  const boxClass = refundComplete ? "target-box complete" : refundPending ? "target-box refund" : "target-box";
+  const distinctWalletsRemaining = Math.max(
+    threshold.minimumDistinctEntrants - threshold.players,
+    0,
+  );
+  const message = !hasRound
+    ? `<span class="target-message warning">Maintenance required — no verified current round is available.</span>`
+    : refundComplete
+      ? `<span class="target-message success">Refund complete — ticket purchase amount returned.</span>`
+      : refundPending
+        ? `<span class="target-message warning">Round cancelled — automatic refunds in progress.</span>`
+        : threshold.minimumReached
+          ? `<span class="target-message success">Minimum reached — this round will draw ${pool.winners === "1 winner" ? "a winner" : "three winners"}.</span>`
+          : threshold.ticketsRemaining === 0 && distinctWalletsRemaining > 0
+            ? `<span class="target-message">${distinctWalletsRemaining} distinct ${distinctWalletsRemaining === 1 ? "wallet is" : "wallets are"} still needed for a valid Premium draw.</span>`
+            : `<span class="target-message">${threshold.ticketsRemaining} ${ticketWord(threshold.ticketsRemaining)} still needed. The first confirmed ticket starts the 1-hour clock.</span>`;
+  const distinctWalletCopy = threshold.minimumDistinctEntrants > 1
+    ? `<span class="target-message">Premium also requires ${threshold.minimumDistinctEntrants} distinct wallets.</span>`
+    : `<span class="target-message">The target counts total tickets sold, not players.</span>`;
+
+  return String.raw`<section class="${boxClass}" aria-label="${pool.name} minimum ticket progress">
+    <span class="target-heading">Minimum for a valid draw</span>
+    <strong class="target-count mono">${hasRound ? threshold.sold : "&mdash;"} / ${threshold.minimumTickets} tickets sold</strong>
+    <div class="progress-track" role="progressbar" aria-label="${pool.name} tickets sold" aria-valuemin="0" aria-valuemax="${threshold.minimumTickets}" aria-valuenow="${hasRound ? Math.min(threshold.sold, threshold.minimumTickets) : 0}">
+      <div class="progress-fill" style="width: ${percentage.toFixed(2)}%"></div>
+    </div>
+    ${message}
+    ${distinctWalletCopy}
+  </section>`;
+}
+
+function refundPolicyPanel() {
+  return String.raw`<section class="refund-copy" aria-label="Automatic refund policy">
+    <strong>If the ticket target is not reached before the round ends, no winner is drawn.</strong>
+    <p>100% of the ticket purchase amount is automatically returned to the wallet that bought the tickets. Any refundable account deposit created for the entry is returned too.</p>
+    <p>Solana network fees are not refundable. No claim button is required.</p>
+  </section>`;
+}
+
 function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: StitchRenderOptions = {}) {
   const facts = roundFacts(pool, options);
-  const buttonLabel = facts.myTickets !== "0" ? "View entry" : `Join ${pool.name}`;
+  const poolReady = hasLivePoolState(pool.id, options);
+  const entryReady = isLivePoolEntryReady(facts.live);
+  const alreadyEntered = facts.myTickets !== "0";
+  const canOpen = poolReady && (entryReady || alreadyEntered);
+  const buttonLabel = !poolReady
+    ? facts.status
+    : alreadyEntered
+      ? "View entry"
+      : entryReady
+        ? `Join ${pool.name}`
+        : facts.status;
+  const buttonClass = canOpen ? "primary-button" : "primary-button button-disabled";
+  const disabledAttr = canOpen ? "" : " disabled";
   return String.raw`<article class="pool-card tone-${pool.tone}">
   <div class="row">
     <div class="row-left">
@@ -1115,10 +1440,11 @@ function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: Stitch
     <div class="fact"><span class="label">Players</span><strong>${escapeHtml(facts.players)}</strong></div>
     ${facts.myTickets !== "0" ? `<div class="fact"><span class="label">My tickets</span><strong>${escapeHtml(facts.myTickets)}</strong></div>` : `<div class="fact"><span class="label">Limit</span><strong>${pool.limits}</strong></div>`}
   </div>
+  ${minimumProgressPanel(pool, facts)}
   <div class="pool-note">
     <p class="soft" style="font-size: 12.5px;">${pool.note} Live values load from verified chain state.</p>
   </div>
-  <button class="primary-button" data-route="${joinRoute}" data-pool="${pool.id}">${buttonLabel}</button>
+  <button class="${buttonClass}" data-route="${joinRoute}" data-pool="${pool.id}"${disabledAttr}>${buttonLabel}</button>
 </article>`;
 }
 
@@ -1127,13 +1453,22 @@ function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: Stitch
 /* ------------------------------------------------------------------ */
 
 function homeBody(options: StitchRenderOptions = {}) {
+  const knownPoolCount = options.livePools?.length ?? 0;
+  const activeRoundCount = options.livePools?.filter((pool) => Boolean(pool.activeRound)).length ?? 0;
+  const statusTitle = knownPoolCount === 0
+    ? "Syncing verified state"
+    : activeRoundCount === 0
+      ? "Maintenance required"
+      : `${activeRoundCount} active ${activeRoundCount === 1 ? "round" : "rounds"}`;
+  const statusTone = knownPoolCount > 0 && activeRoundCount > 0 ? "emerald" : "amber";
+  const statusLabel = knownPoolCount === 0 ? "Syncing" : activeRoundCount === 0 ? "Unavailable" : "Live";
   return String.raw`<main class="stack">
   <section class="hero-card">
     <img class="hero-art" src="${LOGO_HERO}" alt="LuckyMe" />
     <div class="hero-copy">
       <p class="eyebrow">Solana mainnet pools</p>
-      <h1>Rounds you can verify</h1>
-      <p>Fixed entry tiers. External wallet signing. Verifiable VRF settlement.</p>
+      <h1>Pick a pool. Reach the ticket target.</h1>
+      <p>The first confirmed ticket starts a 1-hour round. Valid draws happen only after the pool's total-ticket target is reached.</p>
       <div class="chip-row">
         <span class="chip chip-p">95% prize</span>
         <span class="chip chip-e">3% jackpot</span>
@@ -1142,10 +1477,21 @@ function homeBody(options: StitchRenderOptions = {}) {
       </div>
       <div class="cta-row">
         <button class="primary-button" data-route="pools">View pools</button>
-        <button class="secondary-button" data-route="links">Links</button>
+        <button class="secondary-button" data-route="how-to-play">How to play</button>
       </div>
     </div>
   </section>
+  <section class="panel glow-purple">
+    <div class="row-left">
+      <span class="icon-chip chip-purplebox">${ICONS.dice}</span>
+      <div>
+        <span class="label">Valid draw targets</span>
+        <h2 style="margin-top: 3px;">Mini 25 · Normal 13 · High 3 · Premium 3</h2>
+        <p class="muted" style="margin-top: 4px;">Targets count total tickets sold, not the number of players. Premium separately requires three distinct wallets.</p>
+      </div>
+    </div>
+  </section>
+  ${refundPolicyPanel()}
   <section class="panel glow-cyan">
     <div class="row">
       <div>
@@ -1159,10 +1505,10 @@ function homeBody(options: StitchRenderOptions = {}) {
     <div class="row">
       <div>
         <span class="label">On-chain pool status</span>
-        <h2>Pending</h2>
-        <p class="muted" style="margin-top: 4px;">Live values appear only after the backend confirms the deployed program.</p>
+        <h2>${statusTitle}</h2>
+        <p class="muted" style="margin-top: 4px;">Live values appear only after confirmed pool state is available. Missing current rounds stay closed to purchases.</p>
       </div>
-      <span class="status-pill amber">Syncing</span>
+      <span class="status-pill ${statusTone}">${statusLabel}</span>
     </div>
   </section>
   ${rulesPanel()}
@@ -1187,31 +1533,36 @@ function poolsBody(options: StitchRenderOptions = {}) {
   <section class="section-header">
     <div>
       <span class="label">Entry tiers</span>
-      <h2>Payout rules</h2>
+      <h2>Live ticket targets</h2>
     </div>
     <span class="status-pill neutral">Fixed rules</span>
   </section>
   <section class="pool-grid two">
     ${POOLS.map((pool) => poolCard(pool, "review", options)).join("\n    ")}
   </section>
+  ${refundPolicyPanel()}
+  <button class="secondary-button" data-route="how-to-play">Read the full How to Play guide</button>
   ${rulesPanel()}
 </main>`;
 }
 
 function activityBody(options: StitchRenderOptions = {}) {
   const rows = POOLS.map((pool) => {
-    const facts = roundFacts(pool, options);
+    const facts = roundFacts(pool, options, true);
     const round = facts.round;
     const roundLabel = round?.roundId ?? round?.id ?? "-";
-    const value = `${facts.tickets} tickets`;
+    const value = round
+      ? `${facts.threshold.sold} / ${facts.threshold.minimumTickets} tickets`
+      : "No current round";
     const detail = `Round #${roundLabel} · ${facts.players} players · ${facts.status}`;
+    const tone = facts.statusTone === "amber" ? "warning" : facts.statusTone === "emerald" ? "success" : "";
     return String.raw`<div class="list-row">
       <div><span class="label">${pool.name}</span><p class="soft" style="font-size: 13px;">${escapeHtml(detail)}</p></div>
-      <strong class="mono ${facts.status === "Settlement pending" ? "warning" : facts.status === "Live" ? "success" : ""}">${escapeHtml(value)}</strong>
+      <strong class="mono ${tone}">${escapeHtml(value)}</strong>
     </div>`;
   }).join("\n    ");
   const myRows = POOLS.map((pool) => {
-    const facts = roundFacts(pool, options);
+    const facts = roundFacts(pool, options, true);
     if (facts.myTickets === "0") {
       return "";
     }
@@ -1234,10 +1585,11 @@ function activityBody(options: StitchRenderOptions = {}) {
     ${rows}
     ${myRows}
     <div class="list-row">
-      <div><span class="label">Randomness provider</span><p class="soft" style="font-size: 13px;">Settlement waits for keeper + ORAO fulfillment</p></div>
-      <strong class="mono">ORAO VRF</strong>
+      <div><span class="label">Below-target rounds</span><p class="soft" style="font-size: 13px;">No winner is drawn; refunds are processed automatically</p></div>
+      <strong class="mono">No manual claim</strong>
     </div>
   </section>
+  ${refundPolicyPanel()}
   ${trustBadges()}
 </main>`;
 }
@@ -1450,6 +1802,74 @@ function walletBody() {
 </main>`;
 }
 
+function howToPlayBody() {
+  const tableRows = POOLS.map((pool) => String.raw`<tr>
+    <td>${pool.name}</td>
+    <td class="mono">${pool.entry}</td>
+    <td class="mono">${pool.minimumTickets} total</td>
+    <td>${pool.winners}</td>
+    <td>${pool.limits}</td>
+  </tr>`).join("\n    ");
+
+  return String.raw`<main class="stack">
+  <section class="hero-card">
+    <div class="hero-copy">
+      <p class="eyebrow">How to Play</p>
+      <h1>Simple 1-hour pool rounds</h1>
+      <p>Choose a pool, approve your tickets in your own wallet, and follow the live total-ticket target.</p>
+      <div class="cta-row">
+        <button class="primary-button" data-route="pools">Choose a pool</button>
+        <button class="secondary-button" data-route="wallet">Connect wallet</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="how-steps-title">
+    <div class="section-header" style="margin-bottom: 10px;">
+      <div>
+        <span class="label">The basics</span>
+        <h2 id="how-steps-title">Nine things to know</h2>
+      </div>
+    </div>
+    <ol class="how-steps">
+      <li class="how-step"><div><h3>Choose a pool</h3><p>Mini costs 0.005 SOL per ticket, Normal 0.01 SOL, High 0.05 SOL, and Premium 0.1 SOL.</p></div></li>
+      <li class="how-step"><div><h3>Connect your wallet</h3><p>The connection is self-custody. LuckyMe never asks for your seed phrase or stores your private keys.</p></div></li>
+      <li class="how-step"><div><h3>Buy tickets</h3><p>Every ticket has an equal chance. Buying more tickets gives you more chances in Mini, Normal, and High.</p></div></li>
+      <li class="how-step"><div><h3>The first ticket starts the clock</h3><p>The 1-hour countdown starts only when the first ticket is confirmed. An empty pool waits without running a timer.</p></div></li>
+      <li class="how-step"><div><h3>Reach the ticket target</h3><p>Mini needs 25 total tickets, Normal 13, High 3, and Premium 3.</p></div></li>
+      <li class="how-step"><div><h3>Valid draw</h3><p>If the target is reached, the winner or winners are selected after the 1-hour round ends.</p></div></li>
+      <li class="how-step"><div><h3>Automatic refund</h3><p>If the target is missed, no winner is drawn. The ticket purchase amount returns automatically to the wallet that paid. No claim button is needed. Solana network fees are not refundable.</p></div></li>
+      <li class="how-step"><div><h3>Total tickets, not players</h3><p>Mini needs 25 tickets sold in total, not 25 different players. One wallet can buy all 25 in one entry. The same total-ticket rule applies to Normal and High.</p></div></li>
+      <li class="how-step"><div><h3>Premium rules</h3><p>Premium allows one ticket per wallet, requires three distinct wallets, selects three winners, and splits the main prize 70 / 20 / 10.</p></div></li>
+    </ol>
+  </section>
+
+  <section class="panel glow-cyan" aria-labelledby="pool-rules-title">
+    <div class="row" style="margin-bottom: 12px;">
+      <div>
+        <span class="label">Pool guide</span>
+        <h2 id="pool-rules-title">Prices and targets</h2>
+      </div>
+    </div>
+    <div class="pool-rules-wrap" tabindex="0" aria-label="Pool price and target table">
+      <table class="pool-rules-table">
+        <thead><tr><th scope="col">Pool</th><th scope="col">Ticket</th><th scope="col">Target tickets</th><th scope="col">Winners</th><th scope="col">Wallet limit</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
+  </section>
+
+  ${refundPolicyPanel()}
+  <section class="panel">
+    <div class="row-left">
+      <span class="icon-chip chip-emeraldbox">${ICONS.shield}</span>
+      <div><h3>Confirm before signing</h3><p style="margin-top: 4px;">Your wallet shows the transaction before approval. LuckyMe cannot approve it for you.</p></div>
+    </div>
+  </section>
+  <button class="secondary-button" data-route="links">Official and legal links</button>
+</main>`;
+}
+
 function linksBody() {
   return String.raw`<main class="stack">
   <section class="section-header">
@@ -1476,11 +1896,24 @@ function reviewBody(options: StitchRenderOptions = {}) {
   const facts = roundFacts(pool, options);
   const count = ticketCountFor(pool, options);
   const alreadyEntered = facts.myTickets !== "0";
-  const canBuy = facts.status !== "Settlement pending" && !alreadyEntered;
+  const poolReady = hasLivePoolState(pool.id, options);
+  const hasRound = Boolean(facts.round);
+  const canBuy = poolReady && isLivePoolEntryReady(facts.live) && !alreadyEntered;
   const total = totalSol(pool, options);
+  const ticketsAfterPurchase = facts.threshold.sold + count;
+  const remainingAfterPurchase = Math.max(
+    facts.threshold.minimumTickets - ticketsAfterPurchase,
+    0,
+  );
   const wallet = options.walletAddress ? shortAddress(options.walletAddress) : "Connect in wallet";
   const buttonClass = canBuy ? "primary-button" : "primary-button button-disabled";
-  const buttonLabel = alreadyEntered ? "Entry already confirmed" : "Sign in wallet";
+  const buttonLabel = !poolReady
+    ? facts.status === "Syncing" ? "Syncing live state" : "Pool unavailable"
+    : alreadyEntered
+      ? "Entry already confirmed"
+      : canBuy
+        ? "Sign in wallet"
+        : facts.status;
   return String.raw`<main class="stack">
   <section class="section-header">
     <div>
@@ -1493,8 +1926,11 @@ function reviewBody(options: StitchRenderOptions = {}) {
     <div class="kv">
       <div class="row"><span class="label">Pool</span><strong class="mono">${pool.name}</strong></div>
       <div class="row"><span class="label">Ticket price</span><strong class="mono">${escapeHtml(priceSol(pool, facts.live))} SOL</strong></div>
-      <div class="row"><span class="label">Round status</span><strong class="mono ${facts.status === "Live" ? "success" : facts.status === "Settlement pending" ? "warning" : ""}">${facts.status}</strong></div>
-      <div class="row"><span class="label">Sold</span><strong class="mono">${escapeHtml(facts.tickets)} tickets</strong></div>
+      <div class="row"><span class="label">Round status</span><strong class="mono ${facts.statusTone === "emerald" ? "success" : facts.statusTone === "amber" ? "warning" : ""}">${facts.status}</strong></div>
+      <div class="row"><span class="label">Valid draw target</span><strong class="mono">${facts.threshold.minimumTickets} total tickets</strong></div>
+      <div class="row"><span class="label">Sold now</span><strong class="mono">${hasRound ? `${facts.threshold.sold} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
+      <div class="row"><span class="label">After this purchase</span><strong class="mono">${hasRound ? `${ticketsAfterPurchase} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
+      <div class="row"><span class="label">Still needed after</span><strong class="mono">${hasRound ? `${remainingAfterPurchase} ${ticketWord(remainingAfterPurchase)}` : "Unavailable"}</strong></div>
       <div class="row"><span class="label">Players</span><strong class="mono">${escapeHtml(facts.players)}</strong></div>
       ${alreadyEntered ? `<div class="row"><span class="label">My tickets</span><strong class="mono success">${escapeHtml(facts.myTickets)}</strong></div>` : ""}
       <div class="row"><span class="label">Wallet</span><strong class="mono">${escapeHtml(wallet)}</strong></div>
@@ -1512,14 +1948,19 @@ function reviewBody(options: StitchRenderOptions = {}) {
       <div class="ticket-value mono">${count}</div>
       <button class="ticket-step" data-action="ticket-inc" data-pool="${pool.id}">+</button>
     </div>
+    <p class="muted" style="font-size: 12.5px; margin-top: 10px;">${pool.id === "premium"
+      ? "Premium allows one ticket per wallet and needs three distinct wallets."
+      : `The target is based on total tickets sold, not the number of players. One wallet can buy multiple ${pool.name} tickets in this entry.`}</p>
   </section>
+  ${minimumProgressPanel(pool, facts)}
+  ${refundPolicyPanel()}
   <section class="panel">
     <div class="row-left">
       <span class="icon-chip chip-purplebox">${ICONS.shield}</span>
       <p style="font-size: 14px;">Your wallet shows the full transaction before anything is signed.</p>
     </div>
   </section>
-  <button class="${buttonClass}" data-action="buy-entry" data-pool="${pool.id}">${buttonLabel}</button>
+  <button class="${buttonClass}" data-action="buy-entry" data-pool="${pool.id}"${canBuy ? "" : " disabled"}>${buttonLabel}</button>
   <button class="secondary-button" data-route="pools">Back to pools</button>
 </main>`;
 }
@@ -1642,6 +2083,7 @@ const TITLES: Record<StitchScreenId, string> = {
   pools: "LuckyMe | Pools",
   activity: "LuckyMe | Activity",
   wallet: "LuckyMe | Wallet",
+  "how-to-play": "LuckyMe | How to Play",
   links: "LuckyMe | Links",
   review: "LuckyMe | Review",
   syncing: "LuckyMe | Wallet Request",
@@ -1656,6 +2098,7 @@ const BODIES: Record<StitchScreenId, (options?: StitchRenderOptions) => string> 
   pools: poolsBody,
   activity: activityBody,
   wallet: walletBody,
+  "how-to-play": howToPlayBody,
   links: linksBody,
   review: reviewBody,
   syncing: syncingBody,
@@ -1670,7 +2113,8 @@ const DEFAULT_TAB: Record<StitchScreenId, StitchScreenId> = {
   pools: "pools",
   activity: "activity",
   wallet: "wallet",
-  links: "links",
+  "how-to-play": "how-to-play",
+  links: "how-to-play",
   review: "pools",
   syncing: "pools",
   success: "activity",
@@ -1701,6 +2145,7 @@ export const STITCH_SCREENS: Record<StitchScreenId, string> = {
   pools: renderStitchScreen("pools"),
   activity: renderStitchScreen("activity"),
   wallet: renderStitchScreen("wallet"),
+  "how-to-play": renderStitchScreen("how-to-play"),
   links: renderStitchScreen("links"),
   review: renderStitchScreen("review"),
   syncing: renderStitchScreen("syncing"),

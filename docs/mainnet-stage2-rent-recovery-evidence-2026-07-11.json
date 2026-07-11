@@ -1,0 +1,153 @@
+{
+  "event": "mainnet_stage2_rent_recovery_complete",
+  "completedAt": "2026-07-11T14:52:00Z",
+  "cluster": "mainnet-beta",
+  "genesisHash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  "programId": "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3",
+  "approval": {
+    "approvedPlanHash": "51dac6fd3ff23acfa93392e52509c30477e7a42d13088b4cdfc64bac6463e47c",
+    "maxActionsPerBatch": 4,
+    "approvedEligibleRoundAccounts": 18
+  },
+  "accounts": {
+    "authority": "AApgoYncyfpadcMwZBvbCtzp3L9QdocgsYTmrPR2wEds",
+    "temporaryFeePayer": "9DvCoJTwdf8CcQUPiLBWEu5Zx4GiYCg8G7LwKaZtZbFc",
+    "upgradeBuffer": "9qCNwcWU2HRhJKbNHLKDF7RBLib1HTQ9iuA5cdi9Hf5E",
+    "keeper": "6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N",
+    "keeperConfig": "8sHT2tgHikQiHdKhtwhpmrXdznoLDjaNRBr7rC6RZR6Y",
+    "treasury": "87jw8LSagc3NdcyPixwXFYZRNPYes7YqFFmqU5WUeJtd"
+  },
+  "temporaryFeePayerReturn": {
+    "signature": "67qGDis4BZHDJzSzd8CEjbhXjKdfZaiAmvnkLwMmGFumqvSULQvfZ2gYoZ1k5675LJSn2DBqqwP6jUEzfFjDg6SJ",
+    "sourceLamportsBefore": 2544523520,
+    "sourceLamportsAfter": 0,
+    "destinationLamportsBefore": 1486920,
+    "destinationLamportsAfter": 2546005440,
+    "transferredLamports": 2544518520,
+    "feeLamports": 5000,
+    "upgradeBufferLamportsAfter": 0
+  },
+  "rentRecovery": {
+    "estimatedRecoverableLamports": 52116480,
+    "actualRecoveredLamports": 52116480,
+    "transactionFeeLamports": 90000,
+    "treasuryLamportsBefore": 52579335,
+    "treasuryLamportsAfter": 104695815,
+    "keeperLamportsBefore": 1527625,
+    "keeperLamportsAfter": 1437625,
+    "archiveRecordCountAfter": 15,
+    "batches": [
+      {
+        "batch": 1,
+        "planHash": "51dac6fd3ff23acfa93392e52509c30477e7a42d13088b4cdfc64bac6463e47c",
+        "treasuryLamportsBefore": 52579335,
+        "treasuryLamportsAfter": 64160775,
+        "recoveredLamports": 11581440,
+        "transactions": [
+          { "pool": "mini", "roundId": 1, "round": "2BK6NQatCWVRhBgy7As8JT5v4Qh4wgGnus24iy9LBXJQ", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "5jPsRUCpnfKX8qgXqPTwYHd1yDiib6KtcUC9tspkGVBFjEr1yTjJm2SCtU1G5mWQzU8p4cXmKKbGLq6Jg74GC9dx" },
+          { "pool": "mini", "roundId": 3, "round": "Ey2ka5S8Zq4Cxj1RGxLXrTNPohT4B4QtCxn86NP2MDML", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "pHxgMTsSjFUyZKdt3WnnyYRadrM6NkSGauUxhMd7jZuhzpui87KbBZT5jaSHZpZvWYuPAxuCB1STTjL7igSQqed" },
+          { "pool": "mini", "roundId": 4, "round": "5L9Q41T8BdM2X94sDrfE3cUKNQ51RUZFVgcu8S5zrT48", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "4wn6ViFo6JiPrQYGXeEXMrUk52ziqtKB9PvywkcmexuMECEQWZztn3ep95hA3sP5eW9rncUby7vUsbSPzgqvBzJ9" },
+          { "pool": "normal", "roundId": 1, "round": "72HXXcYyfAVF4bhCfh7owvET1JuCi9LnE8hUsBFSKxwm", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "2HVrP5ninKByXZdTH2jGsHMkB7iDnL6cvTVvSPNC6TeRQX358avDZTVUNWkUYVU4mkRayS88wMt642nHoekPwCr" }
+        ]
+      },
+      {
+        "batch": 2,
+        "planHash": "650988cc39b81ba068873eb8cadbf9ad7b2666a1a4b275f36d383746c68456c5",
+        "treasuryLamportsBefore": 64160775,
+        "treasuryLamportsAfter": 75742215,
+        "recoveredLamports": 11581440,
+        "transactions": [
+          { "pool": "normal", "roundId": 2, "round": "GoTQV3fBDrsMTdJgaXDBUSRzaqZTMADfKHiaJBjRHKLy", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "43h8ehPSUpVcmTk1mXv2HGMcKteAXRw1kE7bFFEX76dmwcJzP1fGMwWFzAJCz3gfrBh22Ph3uEXCPhM4mwm6k763" },
+          { "pool": "normal", "roundId": 3, "round": "8NrycNmUaGdnnq1mCySohuhK8937tC6Po84QwnUqHdgm", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "3KRoVnKqK1SuBSiWyR3p7NZLp5Jb85hZw5D6uEKmuqjf5EEoDy8jSiXCL2idVUam9y8p4SMyDMt8XZQj3ssyYh2P" },
+          { "pool": "normal", "roundId": 4, "round": "7FmKMaRhcyNv1PGFabDNGA6a37QqWJo6J5iKhLKEtiwa", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "2N4EcxtyqQ4qXbJR6JSQR6GQxdqoowtk6ESizyuj3bj2SmRGkGywcoWf8Q1JdvtSXApZRoZeSACDuomEZTRBhDc6" },
+          { "pool": "normal", "roundId": 5, "round": "CKXKvHMYi7vEawqwnzXhSgggvUHm5SaQaCBAp3p4H2gc", "action": "close_empty_round_after_timeout", "recoveredLamports": 2895360, "signature": "9NDhjm7KdkCAPar8xJmzVzMTBcu3QSxzhsksRAzX8rvLrkPHXpnvzgbLnw9ixB58UxjfewgZabBQnDSC1yP1uDd" }
+        ]
+      },
+      {
+        "batch": 3,
+        "planHash": "6ecb44cab4d8117f2e4bccd6ad863a73e7ca70c6c83757aba7979cba47ec6875",
+        "treasuryLamportsBefore": 75742215,
+        "treasuryLamportsAfter": 87323655,
+        "recoveredLamports": 11581440,
+        "transactions": [
+          { "pool": "high", "roundId": 1, "round": "CLDvMi4FvVqSBx995t5GZjbRVueVYGc39Leqyif3gwgm", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "5oNgMkKRzVDEeLzDBFZ5myJ527zAP2K8ccLdiQnH2NjAAx36oCnkoium4Jn3BVr37e15yrwm3aRnfrvRVrVmkcq2" },
+          { "pool": "high", "roundId": 2, "round": "7VuZ3XjwXrH9pRC4gzd2KFCNwkx2hnYEzHTQ6Wshik54", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "5UGVTagSzwnXGT9TLPvthqqUEaCbPR361yhskXBPGPMrduHBSa93zis2PN9GvXb3gKcT7DcDcJMfERAt9ZQwbfRi" },
+          { "pool": "high", "roundId": 3, "round": "9TSQj9j7VLo7biTw6sH89m2qCRHXihCCvJYBuNUojUuG", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "44UiBKCeyANTRYUgvoEeB8zWn1kB3X4oDpYNmREgY55T6u3hE242Jay3LSomZhMmcFBRF9ySMC2nyf5nzXahSASE" },
+          { "pool": "high", "roundId": 4, "round": "6ACEjrns3btvf3Jd8qgZmxURARxfYh6WvnBDtAsyzFy1", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "2UpCAWGNTpADd6fY6LZQBZFZLRP33urkEpvr6NKy9KzeHvcGQZMLf6tjPXhzgrxHKsp8bXAeb6wmfM9pUYcwxYRd" }
+        ]
+      },
+      {
+        "batch": 4,
+        "planHash": "ea46912853cd781023db714b76b615dfb751508d8cbe2c228eb9d3f235d9ec93",
+        "treasuryLamportsBefore": 87323655,
+        "treasuryLamportsAfter": 98905095,
+        "recoveredLamports": 11581440,
+        "transactions": [
+          { "pool": "high", "roundId": 5, "round": "46WY8ViCB83HsMNnhcf4DZWwCwVYLMyGE1RjFvYaQiis", "action": "close_empty_round_after_timeout", "recoveredLamports": 2895360, "signature": "wBuucH1bfdCzoYJk1tZtBRuC2tK31nYPRkjAEzLgT9tpJVcQDi4kSzCkAa2qN2LXo921HLAeFesowVbn4ezV23c" },
+          { "pool": "premium", "roundId": 1, "round": "5RMJjRpt9ekAaYDcDzm2A7AjrKh8Umrvf4fe4MmivENJ", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "2eUSN7qERECGsG5JVDsmrRBmEv696p3X8ctq8XYDqHN17AviictVswcYGP1TdwpXYFZ3EFKDnGUWHFG3sSq1KgeX" },
+          { "pool": "premium", "roundId": 2, "round": "9APrYfkuDiGqfBpMEyLEAVCna2bGnb4NeWmkEsF2ZQ2d", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "3ELeNQinFJpW5ZNsN1vRvmFXR9xmNZ3Qzq9hixvwfLihF5rjyokyLMj2RFL4rEgzRxN4EyWH7xs4BCGPy2YFzeQr" },
+          { "pool": "premium", "roundId": 3, "round": "FNZmAe3W4x1EnTuNdiVkJbDyBsAxKxoys7HFRvSc19WX", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "BpwcoFRNaPVXo5vH9i2fbGb2prBnKrBhkqKgUJ4DhrdzsYjFvi7EeYaWoojfjtgU3SL8dQ2dHYMWPjxhcG79Yuf" }
+        ]
+      },
+      {
+        "batch": 5,
+        "planHash": "3e6c4bf8ec8b3c510b72f8da1c85cd4dbf03061671ee662aa07fba301e0f4fb6",
+        "treasuryLamportsBefore": 98905095,
+        "treasuryLamportsAfter": 104695815,
+        "recoveredLamports": 5790720,
+        "transactions": [
+          { "pool": "premium", "roundId": 4, "round": "89W4ZWbJbRw4vaegiNy1EzQmnQNSe78i8Cg6ZcSpR36Q", "action": "close_settled_round", "recoveredLamports": 2895360, "signature": "26Dn6HK3mNZJMMwgKsaZb1GRJsLQffkTT1j3NngxkYSvr8t4KV2AEZEUN67M1mBzxTQkkQ4wBeztgYGpuoUYg9xF" },
+          { "pool": "premium", "roundId": 5, "round": "64n5Dca4TRqXrf5FdZehQDYzpTMsXbXw9DHrpR7s8nti", "action": "close_empty_round_after_timeout", "recoveredLamports": 2895360, "signature": "5vJ6ohWabHVrXeyGPGjG4ZvWt9zLV98oDyxpLdmZGFBitSnHTA8uUPmX7Hmp8D34ZS1vXeTtb4yNMjnS42mDCkQF" }
+        ]
+      }
+    ]
+  },
+  "finalInventory": {
+    "checkedAt": "2026-07-11T14:36:36.940Z",
+    "planHash": "103954be389d3033470caf275cbb181fb1a7a071f03708913c9eac562fbdbc96",
+    "expectedRoundAccounts": 19,
+    "existingRoundAccounts": 1,
+    "missingOrClosedRoundAccounts": 18,
+    "eligibleRoundAccounts": 0,
+    "estimatedRecoverableLamports": 0,
+    "invalidAccounts": 0,
+    "protectedRound": {
+      "pool": "mini",
+      "roundId": 2,
+      "round": "8oFKiFhyRSfJjF7xHsJba1npVFuVXzf1DSerMk2GjzaG",
+      "rentLamports": 2895360,
+      "totalTickets": 4,
+      "totalLamports": 20000000,
+      "entrantCount": 3,
+      "classification": "contains_tickets_or_funds",
+      "eligible": false
+    }
+  },
+  "keeperDryRun": {
+    "dryRun": true,
+    "executed": [],
+    "plannedWaitingRounds": [
+      { "pool": "mini", "roundId": 5, "round": "E72yxkenV2QmgFch4BPTphzR9T4V39iFctKGr1NcX19S" },
+      { "pool": "normal", "roundId": 6, "round": "7HxPngqLTDmJuePj5TFB2ECG3tQrmVgkm6HA1p8YECyG" },
+      { "pool": "high", "roundId": 6, "round": "6rNBUDzgMMGkMHjqkWxk9iL34qXEz1wefNwidfoV97uf" },
+      { "pool": "premium", "roundId": 6, "round": "6p83YiP3bxhYAMWEUkBpXxCMB8Dn1xAc6JnAL3aV1omd" }
+    ]
+  },
+  "runtime": {
+    "api": "active",
+    "keeperTimerEnabled": "disabled",
+    "keeperTimerActive": "inactive",
+    "gameplayWritesApproved": false,
+    "sitePoolState": "no_active_round_fail_closed",
+    "backendSha256": "42baded5537fb38f5e3f965b59ad54700727503b5c1264532e176839757e63d5",
+    "siteAppSha256": "e2b9c466f9cda9d7724fd4ba972660c16ce6ae0c63f4ae2bef5f9199d5a71d5e",
+    "playIndexSha256": "f64de6e652e24ed711fc81fb4eced80d0218029ff1e26a6fb80d603f146c8a6c",
+    "deploymentBackup": "/opt/backups/luckyme-missing-round-20260711T145125Z",
+    "tests": {
+      "node": "75/75 passed",
+      "typecheck": "passed",
+      "mainnetReleaseAudit": "passed",
+      "liveBrowser": "missing rounds unavailable; wallet modal and WalletConnect option present"
+    }
+  }
+}

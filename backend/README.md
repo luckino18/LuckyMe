@@ -39,8 +39,10 @@ node backend/src/server.mjs
 - `GET /pools?player=<wallet>` - pools, active round, user entry, recent rounds
 - `GET /refunds` - refundable entries discovered by the scanner
 - `GET /rounds/:pool/:roundId/randomness` - ORAO provider sidecar status
-- `POST /transactions/buy-tickets` - builds and simulates an unsigned buy tx
-- `POST /transactions/refund-entry` - builds and simulates an unsigned refund tx
+- `POST /transactions/buy-tickets` - builds and simulates an unsigned buy tx;
+  requires the reviewed round ID and ticket total and binds that total on-chain
+- `POST /transactions/refund-entry` - retired (`410 automatic_refund_only`);
+  refunds run only through the authorized journaled keeper
 - `POST /transactions/request-randomness` - builds an unsigned keeper request tx
 - `POST /transactions/settle-provider-round` - builds an unsigned provider settlement tx
 - `POST /transactions/submit` - disabled by default and should stay disabled for production

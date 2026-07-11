@@ -4,8 +4,10 @@
 - Adaptive foreground: `app-seeker/assets/adaptive-icon.png`
 - Splash image: `app-seeker/assets/splash.png`
 - Android package: `com.luckyme.seeker`
-- Version: `1.0.0`
-- Version code: `1`
+- Version: `1.1.0`
+- Version code: `3`
 
-Replace placeholder artwork with final brand artwork before the signed APK is
-submitted.
+The source icon, adaptive foreground, splash, and regenerated Android launcher
+icon use the LuckyMe brand artwork. Recheck the extracted launcher icon from
+the final signed APK before distributing it; do not accept Expo's generic
+orange placeholder.

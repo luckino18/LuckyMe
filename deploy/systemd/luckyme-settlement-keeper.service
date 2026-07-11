@@ -1,0 +1,25 @@
+[Unit]
+Description=LuckyMe settlement keeper
+After=network-online.target luckyme-api.service
+Wants=network-online.target
+ConditionPathExists=/etc/luckyme/keeper.json
+
+[Service]
+Type=oneshot
+User=luckyme
+Group=luckyme
+WorkingDirectory=/opt/luckyme
+EnvironmentFile=/etc/luckyme/luckyme-api.env
+Environment=ANCHOR_WALLET=/etc/luckyme/keeper.json
+Environment=LUCKYME_EXPECTED_KEEPER_PUBKEY=6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N
+Environment=CONFIRM_MAINNET_SETTLEMENT_KEEPER=false
+Environment=DRY_RUN=true
+Environment=SETTLEMENT_KEEPER_MIN_BALANCE_LAMPORTS=50000000
+Environment=SETTLEMENT_KEEPER_MAX_ACTIONS=1
+Environment=LUCKYME_SETTLEMENT_ARCHIVE_PATH=/var/lib/luckyme/settlements.jsonl
+Environment=NPM_CONFIG_UPDATE_NOTIFIER=false
+StateDirectory=luckyme
+StateDirectoryMode=0750
+ExecStart=/usr/bin/npm run settlement:keeper
+NoNewPrivileges=true
+PrivateTmp=true

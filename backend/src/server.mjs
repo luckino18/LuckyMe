@@ -4,6 +4,7 @@ import { URL } from "node:url";
 import anchor from "@coral-xyz/anchor";
 import oraoVrf from "@orao-network/solana-vrf";
 import { Transaction } from "@solana/web3.js";
+import { readSettlementArchive } from "../../scripts/settlement-archive.mjs";
 import {
   registerPushToken,
   unregisterPushToken,
@@ -28,6 +29,7 @@ import {
   createClient,
   deriveConfig,
   deriveEntry,
+  deriveKeeperConfig,
   deriveOraoRandomnessAccount,
   deriveJackpotVault,
   derivePool,
@@ -49,6 +51,8 @@ const REFUND_SCAN_ROUNDS = Number(process.env.REFUND_SCAN_ROUNDS ?? 20);
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES ?? 100_000);
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 120);
+const PROGRAM_STATE_CACHE_TTL_MS = Number(process.env.PROGRAM_STATE_CACHE_TTL_MS ?? 10_000);
+const SETTLEMENT_ARCHIVE_PATH = process.env.LUCKYME_SETTLEMENT_ARCHIVE_PATH ?? "";
 const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT === "true";
 const RELEASE_MODE = process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE";
 const IS_LOCAL_DEVELOPMENT = RELEASE_MODE === "LOCAL_DEVELOPMENT";
@@ -65,6 +69,9 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN ?? (ALLOW_WILDCARD_CORS ? "*" : "");
 const CORS_ORIGINS = parseCorsOrigins(CORS_ORIGIN);
 const ANCHOR_PROVIDER_URL =
   process.env.ANCHOR_PROVIDER_URL ?? (IS_LOCAL_DEVELOPMENT ? "http://127.0.0.1:8899" : "");
+const DEV_CLUSTER_NAME = ["dev", "net"].join("");
+const TEST_CLUSTER_NAME = ["test", "net"].join("");
+const LOCAL_CLUSTER_NAME = ["local", "net"].join("");
 const RANDOMNESS_MODE =
   process.env.LUCKYME_RANDOMNESS_MODE ?? (IS_LOCAL_DEVELOPMENT ? "commit_reveal_demo" : "orao_vrf");
 const SOLANA_CLUSTER =
@@ -80,9 +87,6 @@ const STRICT_ONCHAIN =
   IS_STORE_BUILD ||
   IS_NODE_PRODUCTION;
 const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
-const DEV_CLUSTER_NAME = ["dev", "net"].join("");
-const TEST_CLUSTER_NAME = ["test", "net"].join("");
-const LOCAL_CLUSTER_NAME = ["local", "net"].join("");
 const NON_MAINNET_RPC_RE = new RegExp(
   `${DEV_CLUSTER_NAME}|${TEST_CLUSTER_NAME}|localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|192\\.168\\.|10\\.`,
   "i",
@@ -91,7 +95,24 @@ const STATIC_POOL_BY_SLUG = new Map(FIXED_POOLS.map((pool) => [pool.id, pool]));
 const ONCHAIN_POOL_BY_SLUG = new Map(
   ONCHAIN_POOLS.map((pool) => [pool.slug, pool]),
 );
+const MINIMUM_POLICY_BY_POOL_ID = Object.freeze({
+  1: Object.freeze({ minimumTickets: 25, minimumDistinctEntrants: 1 }),
+  2: Object.freeze({ minimumTickets: 13, minimumDistinctEntrants: 1 }),
+  3: Object.freeze({ minimumTickets: 3, minimumDistinctEntrants: 1 }),
+  4: Object.freeze({ minimumTickets: 3, minimumDistinctEntrants: 3 }),
+});
+const ROUND_OUTCOMES = new Set([
+  "waiting",
+  "open",
+  "eligible_for_draw",
+  "cancelled_below_minimum",
+  "settling",
+  "settled",
+]);
+const REFUND_STATUSES = new Set(["none", "pending", "completed"]);
 const rateBuckets = new Map();
+const programStateCache = new Map();
+const programStateInflight = new Map();
 
 class ReadonlyPublicKeyWallet {
   constructor(publicKey) {
@@ -150,7 +171,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const playerParam = url.searchParams.get("player");
       const player = playerParam ? parsePublicKey(playerParam, "player") : null;
-      const state = await getProgramState({ player });
+      const state = await getCachedProgramState({ player });
       if (STRICT_ONCHAIN && !state.onchain.available) {
         return json(res, 503, {
           error: "onchain_state_unavailable",
@@ -276,27 +297,17 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/transactions/crank-empty-rounds") {
-    try {
-      const payload = await readJson(req);
-      return json(res, 200, await buildCrankEmptyRoundsTransaction(payload));
-    } catch (error) {
-      return json(res, error.status ?? 500, {
-        error: error.code ?? "transaction_build_failed",
-        message: error.message,
-      });
-    }
+    return json(res, 410, {
+      error: "idle_round_crank_retired",
+      message: "Empty rounds now wait for the first ticket and must not be rotated",
+    });
   }
 
   if (req.method === "POST" && url.pathname === "/transactions/refund-entry") {
-    try {
-      const payload = await readJson(req);
-      return json(res, 200, await buildRefundEntryTransaction(payload));
-    } catch (error) {
-      return json(res, error.status ?? 500, {
-        error: error.code ?? "transaction_build_failed",
-        message: error.message,
-      });
-    }
+    return json(res, 410, {
+      error: "automatic_refund_only",
+      message: "Refunds are processed automatically by the configured keeper; no claim transaction is required",
+    });
   }
 
   if (req.method === "POST" && url.pathname === "/transactions/settle-round") {
@@ -369,9 +380,11 @@ const server = http.createServer(async (req, res) => {
   return json(res, 404, { error: "not found" });
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`LuckyMe API listening on http://${HOST}:${PORT}`);
-});
+if (process.env.LUCKYME_POLICY_TEST_ONLY !== "true") {
+  server.listen(PORT, HOST, () => {
+    console.log(`LuckyMe API listening on http://${HOST}:${PORT}`);
+  });
+}
 
 function buildLocalDevelopmentSimulation(pool, randomSeed) {
   return settleRound({
@@ -398,6 +411,7 @@ async function getProgramState({ player } = {}) {
     const configAddress = deriveConfig();
     const programAccount = await connection.getAccountInfo(PROGRAM_ID, "confirmed");
     const hasConfig = await accountExists(connection, configAddress);
+    const genesisHash = await connection.getGenesisHash();
 
     if (!programAccount || !hasConfig) {
       return {
@@ -445,16 +459,30 @@ async function getProgramState({ player } = {}) {
 
       const pool = await program.account.pool.fetch(poolAddress);
       const currentRound = numberFromAnchor(pool.currentRound);
-      const activeRound = currentRound > 0
-        ? await fetchRound(program, poolAddress, currentRound, player)
+      const fetchedActiveRound = currentRound > 0
+        ? await fetchRound(program, poolAddress, currentRound, player, poolSpec)
         : null;
-      const recentRounds = await fetchRecentRounds(
+      const activeRound = fetchedActiveRound?.missing ? null : fetchedActiveRound;
+      const onchainRecentRounds = await fetchRecentRounds(
         program,
         poolAddress,
         currentRound,
         player,
+        poolSpec,
+      );
+      const recentRounds = mergeArchivedRounds(
+        onchainRecentRounds,
+        slug,
+        currentRound,
+        player,
+        {
+          genesisHash,
+          programId: PROGRAM_ID.toBase58(),
+          poolAddress: poolAddress.toBase58(),
+        },
       );
 
+      const minimumPolicy = minimumPolicyForPool(poolSpec);
       pools.push({
         id: slug,
         label: poolSpec.label,
@@ -474,6 +502,12 @@ async function getProgramState({ player } = {}) {
         jackpotLamports: stringFromAnchor(pool.jackpotLamports),
         jackpotSol: lamportsToSol(bigintFromAnchor(pool.jackpotLamports)),
         jackpotMessage: "Random jackpot can trigger after any completed round.",
+        ...minimumPolicy,
+        totalTickets: activeRound?.totalTickets ?? null,
+        ticketsRemaining: activeRound?.ticketsRemaining ?? null,
+        minimumReached: activeRound?.minimumReached ?? null,
+        refundStatus: activeRound?.refundStatus ?? "none",
+        roundOutcome: activeRound?.roundOutcome ?? null,
         addresses: {
           pool: poolAddress.toBase58(),
           poolVault: poolVault.toBase58(),
@@ -488,6 +522,7 @@ async function getProgramState({ player } = {}) {
       onchain: {
         available: true,
         clusterUrl: publicRpcUrl(url),
+        genesisHash,
         programId: PROGRAM_ID.toBase58(),
       },
       config: {
@@ -516,8 +551,44 @@ async function getProgramState({ player } = {}) {
   }
 }
 
+async function getCachedProgramState({ player } = {}) {
+  if (!Number.isFinite(PROGRAM_STATE_CACHE_TTL_MS) || PROGRAM_STATE_CACHE_TTL_MS <= 0) {
+    return getProgramState({ player });
+  }
+
+  const cacheKey = player ? `player:${player.toBase58()}` : "public";
+  const cached = programStateCache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached && now - cached.storedAt <= PROGRAM_STATE_CACHE_TTL_MS) {
+    return cached.state;
+  }
+
+  const inflight = programStateInflight.get(cacheKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  const promise = getProgramState({ player })
+    .then((state) => {
+      if (state?.onchain?.available) {
+        programStateCache.set(cacheKey, {
+          state,
+          storedAt: Date.now(),
+        });
+      }
+      return state;
+    })
+    .finally(() => {
+      programStateInflight.delete(cacheKey);
+    });
+
+  programStateInflight.set(cacheKey, promise);
+  return promise;
+}
+
 async function getPublicConfig() {
-  const state = await getProgramState();
+  const state = await getCachedProgramState();
   const config = state.config ?? {};
   const onchainPools = state.pools ?? [];
   const firstPool = onchainPools.find((pool) => pool.initialized) ?? onchainPools[0] ?? {};
@@ -563,6 +634,10 @@ async function getPublicConfig() {
       jackpotBps,
       roundDurationSeconds,
       refundDelaySeconds: REFUND_DELAY_SECONDS,
+      poolMinimums: ONCHAIN_POOLS.map((poolSpec) => ({
+        pool: poolSpec.slug,
+        ...minimumPolicyForPool(poolSpec),
+      })),
     },
     treasury: config.treasury ?? null,
     authority: config.authority ?? null,
@@ -584,6 +659,8 @@ async function getPublicConfig() {
 async function buildBuyTicketsTransaction(payload) {
   const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
   const ticketCount = parseTicketCount(payload.ticketCount);
+  const expectedRoundId = parseRoundId(payload.expectedRoundId);
+  const expectedTotalTickets = parseExpectedTotalTickets(payload.expectedTotalTickets);
   const player = parsePublicKey(payload.player, "player");
   enforceSubjectRateLimit(player.toBase58());
   const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
@@ -609,6 +686,13 @@ async function buildBuyTicketsTransaction(payload) {
   if (currentRound <= 0) {
     throw httpError(409, "no_open_round", "Pool has no open round");
   }
+  if (currentRound !== expectedRoundId) {
+    throw httpError(
+      409,
+      "reviewed_round_changed",
+      "The pool advanced to another round. Refresh and review the purchase again.",
+    );
+  }
 
   const round = deriveRound(pool, currentRound);
   const roundAccount = await program.account.round.fetch(round);
@@ -618,7 +702,7 @@ async function buildBuyTicketsTransaction(payload) {
   }
 
   const endTs = numberFromAnchor(roundAccount.endTs);
-  if (Math.floor(Date.now() / 1000) >= endTs) {
+  if (endTs > 0 && Math.floor(Date.now() / 1000) >= endTs) {
     throw httpError(409, "round_closed", "Round is closed");
   }
 
@@ -639,9 +723,28 @@ async function buildBuyTicketsTransaction(payload) {
 
   const ticketPriceLamports = bigintFromAnchor(roundAccount.ticketPriceLamports);
   const amountLamports = ticketPriceLamports * BigInt(ticketCount);
+  const minimumPolicy = minimumPolicyForPool(poolSpec);
+  const totalTicketsBefore = bigintFromAnchor(roundAccount.totalTickets);
+  if (totalTicketsBefore !== expectedTotalTickets) {
+    throw httpError(
+      409,
+      "reviewed_ticket_total_changed",
+      "Tickets sold changed after the review opened. Refresh and review the purchase again.",
+    );
+  }
+  const totalTicketsAfter = totalTicketsBefore + BigInt(ticketCount);
+  const distinctEntrantsAfter = numberFromAnchor(roundAccount.entrantCount) + 1;
+  const ticketsRemainingAfter = Math.max(
+    minimumPolicy.minimumTickets - Number(totalTicketsAfter),
+    0,
+  );
+  const minimumReachedAfter = (
+    totalTicketsAfter >= BigInt(minimumPolicy.minimumTickets) &&
+    distinctEntrantsAfter >= minimumPolicy.minimumDistinctEntrants
+  );
   const latestBlockhash = await connection.getLatestBlockhash("confirmed");
   const transaction = await program.methods
-    .buyTickets(new BN(ticketCount))
+    .buyTickets(new BN(ticketCount), new BN(expectedTotalTickets.toString()))
     .accounts({
       player,
       config,
@@ -674,6 +777,11 @@ async function buildBuyTicketsTransaction(payload) {
       ticketPriceLamports: ticketPriceLamports.toString(),
       amountLamports: amountLamports.toString(),
       amountSol: lamportsToSol(amountLamports),
+      ...minimumPolicy,
+      totalTicketsBefore: totalTicketsBefore.toString(),
+      totalTicketsAfter: totalTicketsAfter.toString(),
+      ticketsRemainingAfter,
+      minimumReachedAfter,
       player: player.toBase58(),
       accounts: {
         config: config.toBase58(),
@@ -690,6 +798,15 @@ async function buildBuyTicketsTransaction(payload) {
 }
 
 async function buildCrankEmptyRoundsTransaction(payload) {
+  throw httpError(
+    410,
+    "idle_round_crank_retired",
+    "Empty rounds wait for the first ticket; the legacy rotation builder is permanently disabled",
+  );
+
+  // Retained temporarily below only to keep this migration diff reviewable.
+  // The unconditional error above makes the old builder non-executable, while
+  // the public route is independently retired with the same HTTP 410 response.
   const keeper = parsePublicKey(payload.keeper, "keeper");
   enforceSubjectRateLimit(keeper.toBase58());
   const requestedPool = payload.pool ? parsePoolSlug(payload.pool) : null;
@@ -701,6 +818,7 @@ async function buildCrankEmptyRoundsTransaction(payload) {
     url: ANCHOR_PROVIDER_URL,
   });
   const config = deriveConfig();
+  const configAccount = await program.account.config.fetch(config);
   const transaction = new Transaction();
   const now = Math.floor(Date.now() / 1000);
   const actions = [];
@@ -730,7 +848,17 @@ async function buildCrankEmptyRoundsTransaction(payload) {
     const empty = bigintFromAnchor(roundAccount.totalTickets) === 0n &&
       bigintFromAnchor(roundAccount.totalLamports) === 0n &&
       Number(roundAccount.entrantCount) === 0;
-    const expired = now >= endTs;
+    const expired = endTs > 0 && now >= endTs;
+
+    if (endTs === 0) {
+      actions.push({
+        action: "skip_waiting_first_ticket",
+        pool: poolSpec.slug,
+        roundId: currentRound,
+        round: round.toBase58(),
+      });
+      continue;
+    }
 
     if (roundAccount.settled) {
       actions.push({
@@ -783,6 +911,7 @@ async function buildCrankEmptyRoundsTransaction(payload) {
           config,
           pool,
           round,
+          treasury: configAccount.treasury,
         })
         .instruction();
       transaction.add(closeInstruction);
@@ -891,95 +1020,12 @@ async function addOpenRoundInstruction({
 }
 
 async function buildRefundEntryTransaction(payload) {
-  const poolSlug = parsePoolSlug(payload.pool ?? payload.poolId);
-  const player = parsePublicKey(payload.player, "player");
-  const feePayer = payload.feePayer
-    ? parsePublicKey(payload.feePayer, "feePayer")
-    : player;
-  enforceSubjectRateLimit(player.toBase58());
-  enforceSubjectRateLimit(feePayer.toBase58());
-  const poolSpec = ONCHAIN_POOL_BY_SLUG.get(poolSlug);
-  const { connection, program, url } = createClient({
-    requireSigner: false,
-    url: ANCHOR_PROVIDER_URL,
-  });
-  const config = deriveConfig();
-  const pool = derivePool(config, poolSpec.id);
-  const poolVault = derivePoolVault(pool);
-  const poolAccount = await program.account.pool.fetch(pool);
-  const currentRound = numberFromAnchor(poolAccount.currentRound);
-  const roundId = parseRoundId(payload.roundId, currentRound);
-  const round = deriveRound(pool, roundId);
-  const roundAccount = await program.account.round.fetch(round);
-  const refundState = getRefundState(roundAccount);
-
-  if (!refundState.refundAvailable) {
-    throw httpError(
-      409,
-      "refund_not_available",
-      "Refund is not available for this round",
-    );
-  }
-
-  const entry = deriveEntry(round, player);
-  const userEntry = await fetchUserEntry(
-    program,
-    round,
-    player,
-    bigintFromAnchor(roundAccount.totalTickets),
+  void payload;
+  throw httpError(
+    410,
+    "automatic_refund_only",
+    "Refunds are processed automatically by the configured keeper; no claim transaction is required",
   );
-  if (!userEntry || BigInt(userEntry.lamports) === 0n) {
-    throw httpError(409, "nothing_to_refund", "Wallet has nothing to refund");
-  }
-
-  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
-  const transaction = await program.methods
-    .refundEntryAfterTimeout()
-    .accounts({
-      player,
-      config,
-      pool,
-      round,
-      entry,
-      poolVault,
-      systemProgram: SystemProgram.programId,
-    })
-    .transaction();
-
-  transaction.feePayer = feePayer;
-  transaction.recentBlockhash = latestBlockhash.blockhash;
-
-  const transactionBase64 = transaction
-    .serialize({ requireAllSignatures: false, verifySignatures: false })
-    .toString("base64");
-  const simulation = await simulateUnsignedTransaction(connection, transactionBase64);
-
-  return {
-    clusterUrl: publicRpcUrl(url),
-    programId: PROGRAM_ID.toBase58(),
-    transactionBase64,
-    summary: {
-      action: "refund_entry_after_timeout",
-      pool: poolSlug,
-      roundId,
-      refundDelaySeconds: REFUND_DELAY_SECONDS,
-      refundAfterTs: refundState.refundAfterTs,
-      amountLamports: userEntry.lamports,
-      amountSol: lamportsToSol(BigInt(userEntry.lamports)),
-      player: player.toBase58(),
-      feePayer: feePayer.toBase58(),
-      accounts: {
-        config: config.toBase58(),
-        pool: pool.toBase58(),
-        round: round.toBase58(),
-        entry: entry.toBase58(),
-        poolVault: poolVault.toBase58(),
-      },
-    },
-    blockhash: latestBlockhash.blockhash,
-    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    simulation,
-  };
 }
 
 async function buildSettleRoundTransaction(payload) {
@@ -1003,6 +1049,7 @@ async function buildSettleRoundTransaction(payload) {
   });
   const configAddress = deriveConfig();
   const config = await program.account.config.fetch(configAddress);
+  const keeperConfig = await assertConfiguredKeeper(program, configAddress, settler);
   const pool = derivePool(configAddress, poolSpec.id);
   const poolVault = derivePoolVault(pool);
   const jackpotVault = deriveJackpotVault(pool);
@@ -1015,6 +1062,9 @@ async function buildSettleRoundTransaction(payload) {
   }
 
   const endTs = numberFromAnchor(roundAccount.endTs);
+  if (endTs <= 0) {
+    throw httpError(409, "round_not_started", "Round is waiting for its first ticket");
+  }
   if (Math.floor(Date.now() / 1000) < endTs) {
     throw httpError(409, "round_still_open", "Round is still open");
   }
@@ -1023,6 +1073,7 @@ async function buildSettleRoundTransaction(payload) {
   if (totalTickets === 0n) {
     throw httpError(409, "empty_round", "Round has no tickets");
   }
+  assertRoundMinimumReached(poolSpec, roundAccount);
 
   const expectedCommitment = commitmentForReveal(reveal);
   const onchainCommitment = Buffer.from(roundAccount.randomnessCommitment);
@@ -1068,6 +1119,7 @@ async function buildSettleRoundTransaction(payload) {
     .accounts({
       keeper: settler,
       config: configAddress,
+      keeperConfig,
       pool,
       round,
       poolVault,
@@ -1175,8 +1227,9 @@ async function buildRequestRandomnessTransaction(payload) {
     roundId,
   );
   const sidecar = deriveRoundRandomnessAccount(round);
+  const keeperConfig = await assertConfiguredKeeper(program, config, keeper);
 
-  assertRoundReadyForProviderRequest(roundAccount);
+  assertRoundReadyForProviderRequest(roundAccount, poolSpec);
   if (await accountExists(connection, sidecar)) {
     throw httpError(
       409,
@@ -1191,6 +1244,7 @@ async function buildRequestRandomnessTransaction(payload) {
     .accounts({
       keeper,
       config,
+      keeperConfig,
       pool,
       round,
       roundRandomness: sidecar,
@@ -1249,7 +1303,7 @@ async function buildRequestOraoRandomnessTransaction(payload) {
     poolSlug,
     roundId,
   );
-  assertRoundReadyForProviderRequest(roundAccount);
+  assertRoundReadyForProviderRequest(roundAccount, poolSpec);
 
   const sidecar = deriveRoundRandomnessAccount(round);
   const sidecarAccount = await fetchRoundRandomnessSidecar(program, sidecar);
@@ -1370,6 +1424,9 @@ async function buildSettleProviderRoundTransaction(payload) {
   }
 
   const endTs = numberFromAnchor(roundAccount.endTs);
+  if (endTs <= 0) {
+    throw httpError(409, "round_not_started", "Round is waiting for its first ticket");
+  }
   if (Math.floor(Date.now() / 1000) < endTs) {
     throw httpError(409, "round_still_open", "Round is still open");
   }
@@ -1378,6 +1435,7 @@ async function buildSettleProviderRoundTransaction(payload) {
   if (totalTickets === 0n) {
     throw httpError(409, "empty_round", "Round has no tickets");
   }
+  assertRoundMinimumReached(poolSpec, roundAccount);
 
   const sidecarAccount = await fetchRoundRandomnessSidecar(program, sidecar);
   if (!sidecarAccount) {
@@ -1452,6 +1510,7 @@ async function buildSettleProviderRoundTransaction(payload) {
     jackpotPayout,
   } = settlement;
   const winnerEntry = winnerEntries[0];
+  const keeperConfig = await assertConfiguredKeeper(program, config, settler);
 
   const latestBlockhash = await connection.getLatestBlockhash("confirmed");
   const transaction = await program.methods
@@ -1459,6 +1518,7 @@ async function buildSettleProviderRoundTransaction(payload) {
     .accounts({
       keeper: settler,
       config,
+      keeperConfig,
       pool,
       round,
       roundRandomness: sidecar,
@@ -1624,12 +1684,12 @@ async function submitSignedTransaction(payload) {
   };
 }
 
-async function fetchRound(program, poolAddress, roundId, player = null) {
+async function fetchRound(program, poolAddress, roundId, player = null, poolSpec = null) {
   const roundAddress = deriveRound(poolAddress, roundId);
   try {
     const round = await program.account.round.fetch(roundAddress);
     const totalTickets = bigintFromAnchor(round.totalTickets);
-    const refundState = getRefundState(round);
+    const refundState = getRefundState(round, poolSpec);
     const providerRandomness = await getRoundRandomnessState(
       program.provider.connection,
       program,
@@ -1637,7 +1697,14 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
       roundAddress,
       roundId,
       totalTickets,
+      round,
     );
+    const minimumFields = poolSpec
+      ? roundPolicyFields(poolSpec, round, {
+          refundState,
+          providerRandomness,
+        })
+      : {};
     return {
       address: roundAddress.toBase58(),
       roundId: numberFromAnchor(round.roundId),
@@ -1670,6 +1737,7 @@ async function fetchRound(program, poolAddress, roundId, player = null) {
       randomnessMode: RANDOMNESS_MODE,
       randomnessProofStatus: randomnessProofStatus(round),
       providerRandomness,
+      ...minimumFields,
       refundDelaySeconds: REFUND_DELAY_SECONDS,
       refundAfterTs: refundState.refundAfterTs,
       refundAvailable: refundState.refundAvailable,
@@ -1694,7 +1762,7 @@ async function getRoundRandomness(poolInput, roundIdInput) {
     requireSigner: false,
     url: ANCHOR_PROVIDER_URL,
   });
-  const { pool, round, roundAccount } = await fetchRoundContext(program, poolSlug, roundId);
+  const { pool, round, roundAccount, poolSpec } = await fetchRoundContext(program, poolSlug, roundId);
   const status = await getRoundRandomnessState(
     connection,
     program,
@@ -1702,8 +1770,13 @@ async function getRoundRandomness(poolInput, roundIdInput) {
     round,
     roundId,
     bigintFromAnchor(roundAccount.totalTickets),
+    roundAccount,
   );
-  const refundState = getRefundState(roundAccount);
+  const refundState = getRefundState(roundAccount, poolSpec);
+  const policyFields = roundPolicyFields(poolSpec, roundAccount, {
+    refundState,
+    providerRandomness: status,
+  });
 
   return {
     clusterUrl: publicRpcUrl(url),
@@ -1717,9 +1790,11 @@ async function getRoundRandomness(poolInput, roundIdInput) {
     pool: poolSlug,
     roundId,
     round: round.toBase58(),
-    roundClosed: Math.floor(Date.now() / 1000) >= numberFromAnchor(roundAccount.endTs),
+    roundClosed: numberFromAnchor(roundAccount.endTs) > 0 &&
+      Math.floor(Date.now() / 1000) >= numberFromAnchor(roundAccount.endTs),
     roundSettled: roundAccount.settled,
     totalTickets: stringFromAnchor(roundAccount.totalTickets),
+    ...policyFields,
     refundAvailable: refundState.refundAvailable,
     refundMode: refundState.refundMode,
     providerRandomness: status,
@@ -1746,11 +1821,78 @@ async function fetchRoundContext(program, poolSlug, roundId) {
   };
 }
 
-async function getRoundRandomnessState(connection, program, pool, round, roundId, totalTickets) {
+async function assertConfiguredKeeper(program, config, candidate) {
+  const keeperConfig = deriveKeeperConfig(config);
+  let account;
+  try {
+    account = await program.account.keeperConfig.fetch(keeperConfig);
+  } catch {
+    throw httpError(
+      503,
+      "keeper_config_missing",
+      "On-chain KeeperConfig must be initialized before operator transactions",
+    );
+  }
+  if (!account.config.equals(config) || !account.keeper.equals(candidate)) {
+    throw httpError(
+      403,
+      "unauthorized_keeper",
+      `Operator wallet must be the configured keeper ${account.keeper.toBase58()}`,
+    );
+  }
+  return keeperConfig;
+}
+
+async function getRoundRandomnessState(connection, program, pool, round, roundId, totalTickets, roundAccount = null) {
   const sidecar = deriveRoundRandomnessAccount(round);
   const sidecarAccount = await fetchRoundRandomnessSidecar(program, sidecar);
 
   if (!sidecarAccount) {
+    if (roundAccount && isRefundMode(roundAccount)) {
+      return {
+        status: "not_requested",
+        provider: "orao_vrf",
+        roundRandomness: sidecar.toBase58(),
+        refundMode: true,
+        oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+      };
+    }
+    const settledSeed = roundAccount?.settled
+      ? Buffer.from(roundAccount.randomnessCommitment ?? [])
+      : null;
+    if (settledSeed?.length === 32 && settledSeed.some((byte) => byte !== 0)) {
+      const request = deriveOraoRandomnessAccount(settledSeed, ORAO_PROGRAM_ID);
+      const providerAccount = await connection.getAccountInfo(request, "confirmed");
+      if (providerAccount?.owner.equals(ORAO_PROGRAM_ID)) {
+        const parsed = parseOraoRandomnessV2(providerAccount.data);
+        if (parsed.status === "fulfilled" && parsed.seed.equals(settledSeed)) {
+          return {
+            status: "settled",
+            provider: "orao_vrf",
+            roundRandomness: sidecar.toBase58(),
+            sidecarClosed: true,
+            request: request.toBase58(),
+            expectedRequest: request.toBase58(),
+            requestMatchesExpected: true,
+            seed: settledSeed.toString("hex"),
+            randomnessValue: Buffer.from(roundAccount.randomness).toString("hex"),
+            oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+            providerStatus: "fulfilled",
+            providerOwner: providerAccount.owner.toBase58(),
+            providerOwnerValid: true,
+            providerClient: parsed.client.toBase58(),
+            providerSeed: parsed.seed.toString("hex"),
+            providerSeedMatches: true,
+            providerRandomnessHash: parsed.randomnessHash.toString("hex"),
+            derivedRoundRandomness: deriveProviderRoundRandomness(
+              round,
+              totalTickets,
+              parsed.randomness,
+            ).toString("hex"),
+          };
+        }
+      }
+    }
     return {
       status: "not_requested",
       provider: "orao_vrf",
@@ -1831,12 +1973,15 @@ async function fetchRoundRandomnessSidecar(program, sidecar) {
   }
 }
 
-function assertRoundReadyForProviderRequest(roundAccount) {
+function assertRoundReadyForProviderRequest(roundAccount, poolSpec) {
   if (roundAccount.settled) {
     throw httpError(409, "round_settled", "Round is already settled");
   }
 
   const endTs = numberFromAnchor(roundAccount.endTs);
+  if (endTs <= 0) {
+    throw httpError(409, "round_not_started", "Round is waiting for its first ticket");
+  }
   if (Math.floor(Date.now() / 1000) < endTs) {
     throw httpError(409, "round_still_open", "Round is still open");
   }
@@ -1844,6 +1989,7 @@ function assertRoundReadyForProviderRequest(roundAccount) {
   if (bigintFromAnchor(roundAccount.totalTickets) === 0n) {
     throw httpError(409, "empty_round", "Round has no tickets");
   }
+  assertRoundMinimumReached(poolSpec, roundAccount);
 }
 
 async function getRefundableEntries(url) {
@@ -1886,7 +2032,7 @@ async function getRefundableEntries(url) {
       const roundAddress = deriveRound(pool, roundId);
       try {
         const round = await program.account.round.fetch(roundAddress);
-        const refundState = getRefundState(round);
+        const refundState = getRefundState(round, poolSpec);
         if (!refundState.refundAvailable) {
           continue;
         }
@@ -1924,7 +2070,7 @@ async function getRefundableEntries(url) {
   };
 }
 
-async function fetchRecentRounds(program, poolAddress, currentRound, player = null) {
+async function fetchRecentRounds(program, poolAddress, currentRound, player = null, poolSpec = null) {
   if (currentRound <= 0) {
     return [];
   }
@@ -1936,8 +2082,112 @@ async function fetchRecentRounds(program, poolAddress, currentRound, player = nu
   }
 
   return Promise.all(
-    roundIds.map((roundId) => fetchRound(program, poolAddress, roundId, player)),
+    roundIds.map((roundId) => fetchRound(program, poolAddress, roundId, player, poolSpec)),
   );
+}
+
+function mergeArchivedRounds(
+  onchainRounds,
+  poolSlug,
+  currentRound,
+  player = null,
+  expectedIdentity = {},
+) {
+  const byRoundId = new Map();
+  for (const round of onchainRounds) {
+    if (!round?.missing) {
+      byRoundId.set(Number(round.roundId), round);
+    }
+  }
+
+  const playerAddress = player?.toBase58?.() ?? null;
+  for (const archived of readSettlementArchive(SETTLEMENT_ARCHIVE_PATH)) {
+    if (archived.pool !== poolSlug || !archiveIdentityMatches(archived, expectedIdentity)) {
+      continue;
+    }
+    const roundId = Number(archived.roundId);
+    if (!Number.isSafeInteger(roundId) || roundId > currentRound || roundId < Math.max(1, currentRound - 4)) {
+      continue;
+    }
+    const onchainRound = byRoundId.get(roundId);
+    if (!onchainRound || onchainRound.settled) {
+      byRoundId.set(roundId, archivedRoundPayload(archived, playerAddress));
+    }
+  }
+
+  return [...byRoundId.values()]
+    .sort((left, right) => Number(right.roundId) - Number(left.roundId))
+    .slice(0, 5);
+}
+
+function archiveIdentityMatches(record, expectedIdentity) {
+  return Boolean(
+    expectedIdentity?.genesisHash &&
+    expectedIdentity?.programId &&
+    expectedIdentity?.poolAddress &&
+    record?.genesisHash === expectedIdentity.genesisHash &&
+    record?.programId === expectedIdentity.programId &&
+    record?.poolAddress === expectedIdentity.poolAddress
+  );
+}
+
+function archivedRoundPayload(record, playerAddress) {
+  const totalTickets = BigInt(record.totalTickets ?? 0);
+  const poolSpec = ONCHAIN_POOL_BY_SLUG.get(record.pool);
+  const cancelledBelowMinimum = record.roundOutcome === "cancelled_below_minimum" ||
+    record.oraoRequested === false;
+  const userArchiveEntry = playerAddress
+    ? (record.entries ?? []).find((entry) => entry.player === playerAddress)
+    : null;
+  const seedHex = String(record.randomnessCommitment ?? "");
+  let request = null;
+  if (!cancelledBelowMinimum && /^[0-9a-f]{64}$/i.test(seedHex) && !/^0+$/.test(seedHex)) {
+    request = deriveOraoRandomnessAccount(Buffer.from(seedHex, "hex"), ORAO_PROGRAM_ID).toBase58();
+  }
+  const providerRandomness = request
+    ? {
+        status: "settled",
+        provider: "orao_vrf",
+        request,
+        seed: seedHex,
+        oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+      }
+    : {
+        status: "not_requested",
+        provider: "orao_vrf",
+        oraoProgramId: ORAO_PROGRAM_ID.toBase58(),
+      };
+  const payload = {
+    ...record,
+    archived: true,
+    totalSol: lamportsToSol(BigInt(record.totalLamports ?? 0)),
+    winners: Array.isArray(record.winners) ? record.winners : [],
+    randomnessProofStatus: cancelledBelowMinimum
+      ? "refund_mode"
+      : totalTickets > 0n
+        ? "revealed"
+        : "empty_closed",
+    providerRandomness,
+    refundDelaySeconds: REFUND_DELAY_SECONDS,
+    refundAfterTs: Number(record.endTs ?? 0) + REFUND_DELAY_SECONDS,
+    refundAvailable: false,
+    refundMode: cancelledBelowMinimum,
+    userEntry: userArchiveEntry
+      ? {
+          ...userArchiveEntry,
+          chancePercent: formatPercentRatio(BigInt(userArchiveEntry.ticketCount ?? 0), totalTickets),
+        }
+      : undefined,
+  };
+  return poolSpec
+    ? {
+        ...payload,
+        ...roundPolicyFields(poolSpec, payload, {
+          archived: true,
+          providerRandomness,
+        }),
+      }
+    : payload;
 }
 
 function recentRoundIds(currentRound, count) {
@@ -2011,6 +2261,7 @@ function buildStaticPools() {
 
 function poolPayloadFromStatic(staticPool, poolSpec) {
   const ticketPriceLamports = staticPool?.ticketPriceLamports ?? BigInt(poolSpec.ticketPriceLamports.toString());
+  const minimumPolicy = minimumPolicyForPool(poolSpec);
   return {
     id: staticPool?.id ?? poolSpec.slug,
     label: staticPool?.label ?? poolSpec.label,
@@ -2024,6 +2275,12 @@ function poolPayloadFromStatic(staticPool, poolSpec) {
     winnerCount: Number(staticPool?.winnerCount ?? poolSpec.winnerCount),
     prizeSplitBps: Array.from(staticPool?.prizeSplitBps ?? poolSpec.prizeSplitBps, Number),
     maxTicketsPerEntry: Number(staticPool?.maxTicketsPerEntry ?? poolSpec.maxTicketsPerEntry),
+    ...minimumPolicy,
+    totalTickets: null,
+    ticketsRemaining: null,
+    minimumReached: null,
+    refundStatus: "none",
+    roundOutcome: null,
     jackpotMessage: "Random jackpot can trigger after any completed round.",
     recentRounds: [],
   };
@@ -2086,6 +2343,27 @@ function parseRoundId(value, fallback) {
   }
 
   return roundId;
+}
+
+function parseExpectedTotalTickets(value) {
+  const normalized = String(value ?? "").trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw httpError(
+      400,
+      "invalid_expected_total_tickets",
+      "expectedTotalTickets must be a non-negative integer from the reviewed round",
+    );
+  }
+
+  const total = BigInt(normalized);
+  if (total > 18_446_744_073_709_551_615n) {
+    throw httpError(
+      400,
+      "invalid_expected_total_tickets",
+      "expectedTotalTickets exceeds the on-chain u64 range",
+    );
+  }
+  return total;
 }
 
 function parseRevealHex(value) {
@@ -2213,6 +2491,7 @@ function buildSettlementPreview({
   const totalTickets = bigintFromAnchor(roundAccount.totalTickets);
   const totalLamports = bigintFromAnchor(roundAccount.totalLamports);
   const poolConfig = poolSettlementConfig(poolAccount, poolSpec);
+  assertRoundMinimumReached(poolSpec, roundAccount);
 
   if (Number(roundAccount.entrantCount) < poolConfig.winnerCount) {
     throw httpError(
@@ -2344,12 +2623,157 @@ function requireOraoMode() {
   }
 }
 
-function getRefundState(round) {
+function minimumPolicyForPool(poolInput) {
+  let poolId;
+  if (typeof poolInput === "string") {
+    poolId = ONCHAIN_POOL_BY_SLUG.get(poolInput)?.id;
+  } else if (typeof poolInput === "number") {
+    poolId = poolInput;
+  } else {
+    poolId = poolInput?.id ?? poolInput?.poolId;
+  }
+
+  const policy = MINIMUM_POLICY_BY_POOL_ID[Number(poolId)];
+  if (!policy) {
+    throw httpError(500, "minimum_policy_missing", "Pool minimum policy is not configured");
+  }
+  return policy;
+}
+
+function roundMinimumState(poolInput, round) {
+  const policy = minimumPolicyForPool(poolInput);
+  const totalTickets = bigintFromAnchor(round.totalTickets);
+  const distinctEntrants = numberFromAnchor(round.entrantCount);
+  const ticketTargetReached = totalTickets >= BigInt(policy.minimumTickets);
+  const minimumDistinctEntrantsReached = distinctEntrants >= policy.minimumDistinctEntrants;
+
+  return {
+    ...policy,
+    ticketsRemaining: Math.max(policy.minimumTickets - Number(totalTickets), 0),
+    minimumReached: ticketTargetReached && minimumDistinctEntrantsReached,
+    ticketTargetReached,
+    minimumDistinctEntrantsReached,
+  };
+}
+
+function assertRoundMinimumReached(poolInput, round) {
+  const state = roundMinimumState(poolInput, round);
+  if (state.minimumReached) {
+    return state;
+  }
+  if (!state.ticketTargetReached) {
+    throw httpError(
+      409,
+      "minimum_tickets_not_reached",
+      `Round requires at least ${state.minimumTickets} total tickets before randomness or settlement`,
+    );
+  }
+  throw httpError(
+    409,
+    "minimum_distinct_entrants_not_reached",
+    `Round requires at least ${state.minimumDistinctEntrants} distinct wallets before randomness or settlement`,
+  );
+}
+
+function roundPolicyFields(poolInput, round, {
+  archived = false,
+  refundState = null,
+  providerRandomness = null,
+  now = Math.floor(Date.now() / 1000),
+} = {}) {
+  const minimumState = roundMinimumState(poolInput, round);
+  const roundOutcome = deriveRoundOutcome(
+    round,
+    minimumState,
+    providerRandomness,
+    now,
+  );
+  const refundStatus = deriveRefundStatus(round, roundOutcome, {
+    archived,
+    refundState,
+  });
+  return {
+    ...minimumState,
+    refundStatus,
+    roundOutcome,
+  };
+}
+
+function deriveRoundOutcome(round, minimumState, providerRandomness, now) {
+  const explicitOutcome = normalizeRoundOutcome(round.roundOutcome ?? round.outcome);
+  if (explicitOutcome) {
+    return explicitOutcome;
+  }
+
+  if (round.settled) {
+    return isRefundMode(round) ? "cancelled_below_minimum" : "settled";
+  }
+
+  const startTs = numberFromAnchor(round.startTs);
+  const endTs = numberFromAnchor(round.endTs);
+  if (startTs === 0 && endTs === 0) {
+    return "waiting";
+  }
+  if (endTs > now) {
+    return "open";
+  }
+  if (!minimumState.minimumReached) {
+    return "cancelled_below_minimum";
+  }
+
+  const providerStatus = String(providerRandomness?.status ?? "not_requested");
+  const providerRequestStatus = String(providerRandomness?.providerStatus ?? "missing");
+  if (
+    providerStatus !== "not_requested" ||
+    !["missing", "not_requested"].includes(providerRequestStatus)
+  ) {
+    return "settling";
+  }
+  return "eligible_for_draw";
+}
+
+function deriveRefundStatus(round, roundOutcome, { archived, refundState }) {
+  const explicitStatus = normalizeRefundStatus(round.refundStatus);
+  if (explicitStatus) {
+    return explicitStatus;
+  }
+  if (roundOutcome !== "cancelled_below_minimum") {
+    return "none";
+  }
+
+  const refundsPending = Number(round.refundsPending ?? 0);
+  const refundsCompleted = Number(round.refundsCompleted ?? 0);
+  if (refundsPending > 0) {
+    return "pending";
+  }
+  if (archived && (refundsCompleted > 0 || bigintFromAnchor(round.totalLamports) === 0n)) {
+    return "completed";
+  }
+  if (refundState?.refundAvailable || bigintFromAnchor(round.totalLamports) > 0n || isRefundMode(round)) {
+    return "pending";
+  }
+  return "none";
+}
+
+function normalizeRoundOutcome(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return ROUND_OUTCOMES.has(normalized) ? normalized : null;
+}
+
+function normalizeRefundStatus(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return REFUND_STATUSES.has(normalized) ? normalized : null;
+}
+
+function getRefundState(round, poolInput = null) {
   const endTs = numberFromAnchor(round.endTs);
   const refundAfterTs = endTs + REFUND_DELAY_SECONDS;
   const refundMode = isRefundMode(round);
+  const belowMinimum = poolInput
+    ? !roundMinimumState(poolInput, round).minimumReached
+    : false;
   const refundAvailable = (
-    (!round.settled || refundMode) &&
+    (refundMode || (!round.settled && belowMinimum)) &&
     Math.floor(Date.now() / 1000) >= refundAfterTs &&
     bigintFromAnchor(round.totalLamports) > 0n
   );
@@ -2362,16 +2786,22 @@ function getRefundState(round) {
 }
 
 function isRefundMode(round) {
-  const winnerSecond = round.winnerSecond?.toBase58?.() ?? DEFAULT_PUBLIC_KEY;
-  const winnerThird = round.winnerThird?.toBase58?.() ?? DEFAULT_PUBLIC_KEY;
+  const winner = publicKeyText(round.winner);
+  const winnerSecond = publicKeyText(round.winnerSecond);
+  const winnerThird = publicKeyText(round.winnerThird);
+  const jackpotWinner = publicKeyText(round.jackpotWinner);
   return round.settled &&
     !round.jackpotTriggered &&
     numberFromAnchor(round.winnerCount ?? 0) === 0 &&
-    round.winner.toBase58() === DEFAULT_PUBLIC_KEY &&
+    winner === DEFAULT_PUBLIC_KEY &&
     winnerSecond === DEFAULT_PUBLIC_KEY &&
     winnerThird === DEFAULT_PUBLIC_KEY &&
-    round.jackpotWinner.toBase58() === DEFAULT_PUBLIC_KEY &&
-    Array.from(round.randomness).every((byte) => byte === 0);
+    jackpotWinner === DEFAULT_PUBLIC_KEY &&
+    Array.from(round.randomness ?? []).every((byte) => byte === 0);
+}
+
+function publicKeyText(value) {
+  return value?.toBase58?.() ?? String(value ?? DEFAULT_PUBLIC_KEY);
 }
 
 function isEmptyClosedRound(round) {
@@ -2623,3 +3053,13 @@ function numberFromAnchor(value) {
 function stringFromAnchor(value) {
   return value.toString();
 }
+
+export {
+  archiveIdentityMatches,
+  archivedRoundPayload,
+  assertRoundMinimumReached,
+  getRefundState,
+  minimumPolicyForPool,
+  roundMinimumState,
+  roundPolicyFields,
+};

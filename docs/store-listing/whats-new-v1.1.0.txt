@@ -1,0 +1,1 @@
+LuckyMe 1.1.0 adds live minimum-ticket progress for every pool, a clear How to Play guide, and automatic refunds when a round ends below its target. The first ticket starts the one-hour timer. Purchase review now locks to the exact round progress shown before the wallet prompt, and unavailable or outdated backend rules keep buying disabled.

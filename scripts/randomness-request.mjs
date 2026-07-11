@@ -2,21 +2,28 @@ import oraoVrf from "@orao-network/solana-vrf";
 import {
   ORAO_VRF_PROGRAM_ID,
   POOLS,
+  PROGRAM_ID,
+  PublicKey,
   SystemProgram,
   accountExists,
   createClient,
   deriveConfig,
+  deriveKeeperConfig,
   deriveOraoRandomnessAccount,
   derivePool,
   deriveRound,
   deriveRoundRandomnessAccount,
+  poolMinimums,
+  roundMeetsMinimums,
 } from "./anchor-client.mjs";
 
 const { Orao, networkStateAccountAddress } = oraoVrf;
 
-const DRY_RUN = process.env.DRY_RUN === "true" || process.argv.includes("--dry-run");
+const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+const ACTIVE_KEEPER = "6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N";
+const RPC_URL = process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
+const DRY_RUN = process.env.DRY_RUN !== "false" || process.argv.includes("--dry-run");
 const POOL = process.env.POOL?.toLowerCase() ?? "normal";
-const ROUND_ID = parsePositiveInteger(process.env.ROUND_ID, "ROUND_ID");
 const RANDOMNESS_MODE = process.env.LUCKYME_RANDOMNESS_MODE ?? "orao_vrf";
 const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.slug, pool]));
 
@@ -25,10 +32,18 @@ if (!POOL_BY_SLUG.has(POOL)) {
   throw new Error(`Unknown POOL=${POOL}. Use one of: ${[...POOL_BY_SLUG.keys()].join(", ")}`);
 }
 
-const { connection, payer, program, provider, url } = createClient();
-requireMainnetConfirmation(url);
+requireMainnetConfirmation(RPC_URL, false);
+const ROUND_ID = parsePositiveInteger(process.env.ROUND_ID, "ROUND_ID");
+const readonly = createClient({ requireSigner: false, url: RPC_URL });
+const genesisHash = await readonly.connection.getGenesisHash();
+const mainnet = genesisHash === MAINNET_GENESIS_HASH;
+requireMainnetConfirmation(RPC_URL, mainnet);
+const { connection, payer, program, provider, url } = DRY_RUN
+  ? readonly
+  : createClient({ requireSigner: true, url: RPC_URL });
 
 const config = deriveConfig();
+const keeperConfig = deriveKeeperConfig(config);
 const poolSpec = POOL_BY_SLUG.get(POOL);
 const pool = derivePool(config, poolSpec.id);
 const round = deriveRound(pool, ROUND_ID);
@@ -38,6 +53,9 @@ const vrf = new Orao(provider, ORAO_VRF_PROGRAM_ID);
 if (!(await accountExists(connection, config))) {
   throw new Error(`Config account does not exist: ${config.toBase58()}`);
 }
+if (!(await accountExists(connection, keeperConfig))) {
+  throw new Error(`KeeperConfig account does not exist: ${keeperConfig.toBase58()}`);
+}
 if (!(await accountExists(connection, pool))) {
   throw new Error(`${poolSpec.label} pool does not exist: ${pool.toBase58()}`);
 }
@@ -46,12 +64,25 @@ if (!(await accountExists(connection, round))) {
 }
 
 const roundAccount = await program.account.round.fetch(round);
-assertRoundClosedWithEntries(roundAccount);
+assertRoundClosedAndEligible(roundAccount, poolSpec);
+const configuredKeeper = (await program.account.keeperConfig.fetch(keeperConfig)).keeper;
+const expectedKeeper = new PublicKey(process.env.LUCKYME_EXPECTED_KEEPER_PUBKEY ?? ACTIVE_KEEPER);
+if (mainnet && !configuredKeeper.equals(expectedKeeper)) {
+  throw new Error(
+    `On-chain keeper ${configuredKeeper.toBase58()} does not match expected keeper ${expectedKeeper.toBase58()}`,
+  );
+}
+if (!DRY_RUN) {
+  assertConfiguredKeeper(payer, configuredKeeper);
+}
 
 console.log(`Cluster: ${url}`);
+console.log(`Genesis hash: ${genesisHash}`);
+console.log(`Program: ${PROGRAM_ID.toBase58()}`);
 console.log(`Release mode: ${process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE"}`);
 console.log(`Randomness mode: ${RANDOMNESS_MODE}`);
-console.log(`Keeper fee payer: ${payer.publicKey.toBase58()}`);
+console.log(`Keeper fee payer: ${configuredKeeper.toBase58()}`);
+console.log(`KeeperConfig: ${keeperConfig.toBase58()}`);
 console.log(`Pool: ${poolSpec.label} (${pool.toBase58()})`);
 console.log(`Round: ${ROUND_ID} (${round.toBase58()})`);
 console.log(`LuckyMe sidecar: ${roundRandomness.toBase58()}`);
@@ -74,17 +105,22 @@ if (DRY_RUN) {
 }
 
 if (!sidecarExists) {
-  const signature = await program.methods
+  const method = program.methods
     .requestRandomness()
     .accounts({
       keeper: payer.publicKey,
       config,
+      keeperConfig,
       pool,
       round,
       roundRandomness,
       systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+    });
+  const simulation = await method.simulate();
+  console.log(`LuckyMe request simulation: ok (${simulation?.raw?.length ?? "unknown"} logs)`);
+  await recheckConfiguredKeeper(program, keeperConfig, payer.publicKey);
+  assertRoundClosedAndEligible(await program.account.round.fetch(round), poolSpec);
+  const signature = await method.rpc();
   console.log(`Recorded LuckyMe randomness request: ${signature}`);
 }
 
@@ -102,13 +138,19 @@ console.log(`ORAO request: ${request.toBase58()}`);
 console.log(`ORAO request exists: ${requestExists ? "yes" : "no"}`);
 
 if (!requestExists) {
+  assertRoundClosedAndEligible(await program.account.round.fetch(round), poolSpec);
   const builder = await vrf.request(seed);
   builder.withComputeUnitPrice(0n);
-  const [_seed, signature] = await builder.rpc();
+  const method = await builder.build();
+  const simulation = await method.simulate();
+  console.log(`ORAO request simulation: ok (${simulation?.raw?.length ?? "unknown"} logs)`);
+  await recheckConfiguredKeeper(program, keeperConfig, payer.publicKey);
+  assertRoundClosedAndEligible(await program.account.round.fetch(round), poolSpec);
+  const signature = await method.rpc();
   console.log(`Requested ORAO randomness: ${signature}`);
 }
 
-function assertRoundClosedWithEntries(roundAccount) {
+function assertRoundClosedAndEligible(roundAccount, poolSpec) {
   if (roundAccount.settled) {
     throw new Error("Round is already settled");
   }
@@ -117,8 +159,14 @@ function assertRoundClosedWithEntries(roundAccount) {
   if (now < endTs) {
     throw new Error(`Round is still open until ${endTs}`);
   }
-  if (BigInt(roundAccount.totalTickets.toString()) === 0n) {
-    throw new Error("Round has no tickets");
+  const totalTickets = BigInt(roundAccount.totalTickets.toString());
+  const entrantCount = Number(roundAccount.entrantCount);
+  if (!roundMeetsMinimums(poolSpec, totalTickets, entrantCount)) {
+    const { minimumTickets, minimumDistinctEntrants } = poolMinimums(poolSpec);
+    throw new Error(
+      `Round is below the valid-draw minimum: tickets=${totalTickets.toString()}/${minimumTickets} ` +
+      `entrants=${entrantCount}/${minimumDistinctEntrants}`,
+    );
   }
 }
 
@@ -149,8 +197,26 @@ function parsePositiveInteger(value, name) {
   return parsed;
 }
 
-function requireMainnetConfirmation(url) {
-  if (/mainnet|api\.mainnet-beta\.solana\.com/i.test(url) && process.env.CONFIRM_MAINNET !== "true") {
-    throw new Error("Refusing mainnet randomness request without CONFIRM_MAINNET=true");
+function assertConfiguredKeeper(payer, configuredKeeper) {
+  if (!payer?.publicKey.equals(configuredKeeper)) {
+    throw new Error(
+      `Signer ${payer?.publicKey.toBase58() ?? "missing"} is not configured keeper ${configuredKeeper.toBase58()}`,
+    );
+  }
+}
+
+async function recheckConfiguredKeeper(program, keeperConfig, keeper) {
+  const latest = await program.account.keeperConfig.fetch(keeperConfig);
+  if (!latest.keeper.equals(keeper)) {
+    throw new Error(`On-chain keeper changed to ${latest.keeper.toBase58()} before submission`);
+  }
+}
+
+function requireMainnetConfirmation(url, mainnetByGenesis) {
+  const mainnet = mainnetByGenesis || /mainnet|api\.mainnet-beta\.solana\.com|helius-rpc/i.test(url);
+  if (mainnet && !DRY_RUN && process.env.CONFIRM_MAINNET_RANDOMNESS_REQUEST !== "true") {
+    throw new Error(
+      "Refusing mainnet randomness request without CONFIRM_MAINNET_RANDOMNESS_REQUEST=true",
+    );
   }
 }

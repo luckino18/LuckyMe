@@ -54,7 +54,30 @@
         },
         {
           "name": "round",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.current_round",
+                "account": "Pool"
+              }
+            ]
+          }
         },
         {
           "name": "entry",
@@ -113,6 +136,10 @@
         {
           "name": "ticket_count",
           "type": "u64"
+        },
+        {
+          "name": "expected_total_tickets",
+          "type": "u64"
         }
       ]
     },
@@ -152,8 +179,38 @@
             ]
           },
           "relations": [
+            "keeper_config",
             "pool"
           ]
+        },
+        {
+          "name": "keeper_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
         },
         {
           "name": "pool",
@@ -163,6 +220,319 @@
         },
         {
           "name": "round",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_settled_entry",
+      "discriminator": [
+        100,
+        118,
+        42,
+        166,
+        120,
+        168,
+        228,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "keeper_config"
+          ]
+        },
+        {
+          "name": "keeper_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true
+        },
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "entry",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_settled_randomness",
+      "discriminator": [
+        175,
+        121,
+        103,
+        176,
+        113,
+        82,
+        206,
+        91
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "keeper_config"
+          ]
+        },
+        {
+          "name": "keeper_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "round"
+        },
+        {
+          "name": "round_randomness",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100,
+                  95,
+                  114,
+                  97,
+                  110,
+                  100,
+                  111,
+                  109,
+                  110,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_settled_round",
+      "discriminator": [
+        46,
+        186,
+        140,
+        247,
+        236,
+        83,
+        31,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "keeper_config",
+            "pool"
+          ]
+        },
+        {
+          "name": "keeper_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "round_randomness",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100,
+                  95,
+                  114,
+                  97,
+                  110,
+                  100,
+                  111,
+                  109,
+                  110,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
           "writable": true
         }
       ],
@@ -230,6 +600,84 @@
         {
           "name": "round_duration_secs",
           "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_keeper_config",
+      "discriminator": [
+        71,
+        180,
+        50,
+        101,
+        122,
+        212,
+        92,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "keeper_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "keeper",
+          "type": "pubkey"
         }
       ]
     },
@@ -371,12 +819,68 @@
             ]
           },
           "relations": [
+            "keeper_config",
             "pool"
           ]
         },
         {
+          "name": "keeper_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
           "name": "pool",
           "writable": true
+        },
+        {
+          "name": "previous_round",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.current_round",
+                "account": "Pool"
+              }
+            ]
+          }
         },
         {
           "name": "round",
@@ -413,6 +917,11 @@
       ],
       "accounts": [
         {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
           "name": "player",
           "writable": true
         },
@@ -434,8 +943,38 @@
             ]
           },
           "relations": [
+            "keeper_config",
             "pool"
           ]
+        },
+        {
+          "name": "keeper_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
         },
         {
           "name": "pool",
@@ -445,7 +984,30 @@
         },
         {
           "name": "round",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "Round"
+              }
+            ]
+          }
         },
         {
           "name": "entry",
@@ -516,8 +1078,38 @@
             ]
           },
           "relations": [
+            "keeper_config",
             "pool"
           ]
+        },
+        {
+          "name": "keeper_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
         },
         {
           "name": "pool",
@@ -526,7 +1118,30 @@
           ]
         },
         {
-          "name": "round"
+          "name": "round",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.current_round",
+                "account": "Pool"
+              }
+            ]
+          }
         },
         {
           "name": "round_randomness",
@@ -567,6 +1182,82 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "set_keeper",
+      "discriminator": [
+        102,
+        94,
+        23,
+        78,
+        157,
+        222,
+        243,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "keeper_config"
+          ]
+        },
+        {
+          "name": "keeper_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "keeper",
+          "type": "pubkey"
+        }
+      ]
     },
     {
       "name": "set_paused",
@@ -613,137 +1304,6 @@
       ]
     },
     {
-      "name": "settle_round",
-      "discriminator": [
-        40,
-        101,
-        18,
-        1,
-        31,
-        129,
-        52,
-        77
-      ],
-      "accounts": [
-        {
-          "name": "keeper",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          },
-          "relations": [
-            "pool"
-          ]
-        },
-        {
-          "name": "pool",
-          "writable": true,
-          "relations": [
-            "round"
-          ]
-        },
-        {
-          "name": "round",
-          "writable": true
-        },
-        {
-          "name": "pool_vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "pool"
-              }
-            ]
-          }
-        },
-        {
-          "name": "jackpot_vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  106,
-                  97,
-                  99,
-                  107,
-                  112,
-                  111,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "pool"
-              }
-            ]
-          }
-        },
-        {
-          "name": "winner",
-          "writable": true
-        },
-        {
-          "name": "winner_entry"
-        },
-        {
-          "name": "jackpot_winner",
-          "writable": true
-        },
-        {
-          "name": "jackpot_entry"
-        },
-        {
-          "name": "treasury",
-          "writable": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "randomness_reveal",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "settle_round_with_provider_randomness",
       "discriminator": [
         130,
@@ -779,8 +1339,38 @@
             ]
           },
           "relations": [
+            "keeper_config",
             "pool"
           ]
+        },
+        {
+          "name": "keeper_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
         },
         {
           "name": "pool",
@@ -791,7 +1381,30 @@
         },
         {
           "name": "round",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.current_round",
+                "account": "Pool"
+              }
+            ]
+          }
         },
         {
           "name": "round_randomness",
@@ -929,6 +1542,19 @@
       ]
     },
     {
+      "name": "KeeperConfig",
+      "discriminator": [
+        77,
+        240,
+        250,
+        22,
+        132,
+        135,
+        162,
+        101
+      ]
+    },
+    {
       "name": "Pool",
       "discriminator": [
         241,
@@ -1009,6 +1635,19 @@
       ]
     },
     {
+      "name": "KeeperConfigured",
+      "discriminator": [
+        217,
+        232,
+        128,
+        155,
+        254,
+        60,
+        11,
+        47
+      ]
+    },
+    {
       "name": "PausedSet",
       "discriminator": [
         171,
@@ -1061,6 +1700,19 @@
       ]
     },
     {
+      "name": "RoundCancelledBelowMinimum",
+      "discriminator": [
+        47,
+        128,
+        156,
+        64,
+        234,
+        138,
+        148,
+        188
+      ]
+    },
+    {
       "name": "RoundOpened",
       "discriminator": [
         99,
@@ -1084,6 +1736,45 @@
         200,
         234,
         222
+      ]
+    },
+    {
+      "name": "RoundStarted",
+      "discriminator": [
+        180,
+        209,
+        2,
+        244,
+        238,
+        48,
+        170,
+        120
+      ]
+    },
+    {
+      "name": "SettledEntryClosed",
+      "discriminator": [
+        18,
+        210,
+        160,
+        82,
+        230,
+        67,
+        129,
+        96
+      ]
+    },
+    {
+      "name": "SettledRoundClosed",
+      "discriminator": [
+        228,
+        179,
+        22,
+        110,
+        5,
+        169,
+        169,
+        147
       ]
     },
     {
@@ -1178,98 +1869,163 @@
     },
     {
       "code": 6015,
+      "name": "InvalidKeeper",
+      "msg": "Keeper address is invalid"
+    },
+    {
+      "code": 6016,
+      "name": "UnauthorizedKeeper",
+      "msg": "Signer is not the configured keeper"
+    },
+    {
+      "code": 6017,
+      "name": "PreviousRoundStillExists",
+      "msg": "Previous round account still exists"
+    },
+    {
+      "code": 6018,
+      "name": "CommitRevealDisabled",
+      "msg": "Commit-reveal settlement is disabled in production"
+    },
+    {
+      "code": 6019,
       "name": "RoundClosed",
       "msg": "Round is closed"
     },
     {
-      "code": 6016,
+      "code": 6020,
+      "name": "RoundNotStarted",
+      "msg": "Round has not started yet"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidRoundState",
+      "msg": "Round state is invalid"
+    },
+    {
+      "code": 6022,
       "name": "RoundStillOpen",
       "msg": "Round is still open"
     },
     {
-      "code": 6017,
+      "code": 6023,
       "name": "RoundSettled",
       "msg": "Round is already settled"
     },
     {
-      "code": 6018,
+      "code": 6024,
       "name": "EmptyRound",
       "msg": "Round has no tickets"
     },
     {
-      "code": 6019,
+      "code": 6025,
+      "name": "MinimumTicketsNotReached",
+      "msg": "Minimum tickets for a valid draw were not reached"
+    },
+    {
+      "code": 6026,
+      "name": "MinimumDistinctEntrantsNotReached",
+      "msg": "Minimum distinct entrants for a valid draw were not reached"
+    },
+    {
+      "code": 6027,
+      "name": "RoundEligibleForDraw",
+      "msg": "Round reached the minimum and must use the draw path"
+    },
+    {
+      "code": 6028,
       "name": "InvalidRandomnessCommitment",
       "msg": "Invalid randomness commitment"
     },
     {
-      "code": 6020,
+      "code": 6029,
       "name": "InvalidRandomnessReveal",
       "msg": "Invalid randomness reveal"
     },
     {
-      "code": 6021,
+      "code": 6030,
       "name": "WrongWinnerEntry",
       "msg": "Wrong winner entry was provided"
     },
     {
-      "code": 6022,
+      "code": 6031,
       "name": "WrongJackpotEntry",
       "msg": "Wrong jackpot entry was provided"
     },
     {
-      "code": 6023,
+      "code": 6032,
       "name": "WinnerMismatch",
       "msg": "Winner account does not match entry"
     },
     {
-      "code": 6024,
+      "code": 6033,
       "name": "InsufficientVaultFunds",
       "msg": "Vault does not have enough lamports"
     },
     {
-      "code": 6025,
+      "code": 6034,
       "name": "MathOverflow",
       "msg": "Math overflow"
     },
     {
-      "code": 6026,
+      "code": 6035,
       "name": "AlreadyEnteredRound",
       "msg": "Wallet already entered this round"
     },
     {
-      "code": 6027,
+      "code": 6036,
       "name": "RefundNotAvailable",
       "msg": "Refund is not available yet"
     },
     {
-      "code": 6028,
+      "code": 6037,
       "name": "NothingToRefund",
       "msg": "Entry has nothing to refund"
     },
     {
-      "code": 6029,
+      "code": 6038,
+      "name": "NothingToClose",
+      "msg": "Account has nothing to close"
+    },
+    {
+      "code": 6039,
       "name": "RoundHasEntries",
       "msg": "Round already has entries"
     },
     {
-      "code": 6030,
+      "code": 6040,
+      "name": "RandomnessAccountStillExists",
+      "msg": "Round randomness account still exists"
+    },
+    {
+      "code": 6041,
       "name": "InvalidRandomnessProvider",
       "msg": "Invalid randomness provider"
     },
     {
-      "code": 6031,
+      "code": 6042,
       "name": "InvalidRandomnessStatus",
       "msg": "Invalid randomness status"
     },
     {
-      "code": 6032,
+      "code": 6043,
       "name": "InvalidRandomnessProviderAccount",
       "msg": "Invalid randomness provider account"
     },
     {
-      "code": 6033,
+      "code": 6044,
       "name": "RandomnessNotFulfilled",
       "msg": "Provider randomness is not fulfilled"
+    },
+    {
+      "code": 6045,
+      "name": "RefundsPending",
+      "msg": "All refundable entries must be paid before cleanup"
+    },
+    {
+      "code": 6046,
+      "name": "ReviewedRoundChanged",
+      "msg": "Round ticket state changed after review; refresh and review again"
     }
   ],
   "types": [
@@ -1437,6 +2193,54 @@
           {
             "name": "remaining_entrant_count",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "KeeperConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "KeeperConfigured",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper_config",
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "type": "pubkey"
           }
         ]
       }
@@ -1784,6 +2588,46 @@
       }
     },
     {
+      "name": "RoundCancelledBelowMinimum",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "total_tickets",
+            "type": "u64"
+          },
+          {
+            "name": "total_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "entrant_count",
+            "type": "u32"
+          },
+          {
+            "name": "minimum_tickets",
+            "type": "u64"
+          },
+          {
+            "name": "minimum_distinct_entrants",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
       "name": "RoundOpened",
       "type": {
         "kind": "struct",
@@ -1999,6 +2843,90 @@
                 "name": "RandomnessProvider"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoundStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "first_player",
+            "type": "pubkey"
+          },
+          {
+            "name": "start_ts",
+            "type": "i64"
+          },
+          {
+            "name": "end_ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettledEntryClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "rent_recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "remaining_entrant_count",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettledRoundClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "rent_recipient",
+            "type": "pubkey"
           }
         ]
       }

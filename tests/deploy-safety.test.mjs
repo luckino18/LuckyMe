@@ -22,6 +22,156 @@ test("init:pools refuses mainnet without explicit mainnet confirmation", () => {
   assert.doesNotMatch(result.output, /Initialized config|Initialized .* pool/);
 });
 
+test("settlement keeper refuses mainnet writes without explicit confirmation", () => {
+  const result = runNodeScript("scripts/settlement-keeper.mjs", {
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    DRY_RUN: "false",
+    LUCKYME_RANDOMNESS_MODE: "orao_vrf",
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /CONFIRM_MAINNET_SETTLEMENT_KEEPER=true/);
+  assert.doesNotMatch(result.output, /settlement_keeper_start/);
+});
+
+test("legacy rent recovery refuses mainnet writes without explicit confirmation", () => {
+  const result = runNodeScript("scripts/recover-legacy-empty-round-rent.mjs", {
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    DRY_RUN: "false",
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /CONFIRM_MAINNET_RENT_RECOVERY=true/);
+  assert.doesNotMatch(result.output, /legacy_empty_round_rent_inventory/);
+});
+
+test("software-keypair keeper configuration cannot write mainnet", () => {
+  const result = runNodeScript("scripts/configure-keeper.mjs", {
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    DRY_RUN: "false",
+    CONFIRM_MAINNET_KEEPER_CONFIG: "true",
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /Mainnet KeeperConfig writes are Ledger-only/);
+  assert.doesNotMatch(result.output, /keeper_configuration_plan/);
+});
+
+test("Ledger keeper configuration requires both mainnet and hardware approvals", () => {
+  const cases = [
+    {},
+    { CONFIRM_MAINNET_KEEPER_CONFIG: "true" },
+    { CONFIRM_LEDGER_AUTHORITY: "true" },
+  ];
+  for (const approvals of cases) {
+    const result = runNodeScript("scripts/configure-keeper-ledger.mjs", {
+      ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+      DRY_RUN: "false",
+      ...approvals,
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /CONFIRM_MAINNET_KEEPER_CONFIG=true and CONFIRM_LEDGER_AUTHORITY=true/);
+    assert.doesNotMatch(result.output, /keeper_configuration_ledger_plan/);
+  }
+});
+
+test("Ledger KeeperConfig writer is mainnet-pinned, init-only, and plan-hash gated", () => {
+  const source = fs.readFileSync("scripts/configure-keeper-ledger.mjs", "utf8");
+  assert.match(source, /genesisHash !== MAINNET_GENESIS_HASH/);
+  assert.match(source, /KeeperConfig rotation is not authorized by Stage 1/);
+  assert.doesNotMatch(source, /\.setKeeper\(/);
+  assert.doesNotMatch(source, /process\.env\.LUCKYME_(?:EXPECTED_AUTHORITY|EXPECTED_FEE_PAYER|KEEPER_PUBKEY|LEDGER_PATH)/);
+  assert.match(source, /feePayer: EXPECTED_AUTHORITY/);
+  assert.doesNotMatch(source, /partialSign|readFeePayer/);
+  assert.match(source, /LUCKYME_APPROVED_KEEPER_CONFIG_PLAN_HASH/);
+  assert.match(source, /planHash: null/);
+  assert.match(source, /simulationStatus: "succeeded"/);
+  assert.ok(source.indexOf("simulation.value.err") < source.indexOf("const planHash"));
+  assert.ok(source.indexOf("simulateTransaction") < source.indexOf("TransportNodeHid.create"));
+  assert.ok(source.indexOf("simulateTransaction") < source.indexOf("sendRawTransaction"));
+});
+
+test("legacy operational writers default to dry-run and simulate before rpc", () => {
+  const scripts = [
+    "scripts/open-round.mjs",
+    "scripts/close-empty-round.mjs",
+    "scripts/randomness-request.mjs",
+    "scripts/randomness-settle.mjs",
+    "scripts/settle-round.mjs",
+  ];
+
+  for (const script of scripts) {
+    const source = fs.readFileSync(path.join(process.cwd(), script), "utf8");
+    assert.match(source, /process\.env\.DRY_RUN !== "false"/, script);
+    assert.ok(source.indexOf(".simulate()") >= 0, `${script} must simulate`);
+    assert.ok(source.indexOf(".simulate()") < source.indexOf(".rpc()"), `${script} must simulate before rpc`);
+  }
+});
+
+test("standalone commit-reveal and empty crank cannot write mainnet", () => {
+  for (const script of ["scripts/open-round.mjs", "scripts/settle-round.mjs"]) {
+    const result = runNodeScript(script, {
+      ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /disabled on mainnet/);
+  }
+
+  const close = runNodeScript("scripts/close-empty-round.mjs", {
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    DRY_RUN: "false",
+  });
+  assert.notEqual(close.status, 0);
+  assert.match(close.output, /Direct mainnet close-empty is disabled/);
+
+  const crank = runNodeScript("scripts/crank-empty-rounds.mjs", {});
+  assert.notEqual(crank.status, 0);
+  assert.match(crank.output, /retired and cannot submit transactions/);
+});
+
+test("legacy empty-round rotation is retired at both route and builder layers", () => {
+  const source = fs.readFileSync("backend/src/server.mjs", "utf8");
+  assert.match(source, /\/transactions\/crank-empty-rounds[\s\S]{0,240}idle_round_crank_retired/);
+  assert.match(
+    source,
+    /async function buildCrankEmptyRoundsTransaction\(payload\) \{\s*throw httpError\(\s*410,\s*"idle_round_crank_retired"/,
+  );
+});
+
+test("direct provider writers require dedicated mainnet approvals", () => {
+  const cases = [
+    ["scripts/randomness-request.mjs", /CONFIRM_MAINNET_RANDOMNESS_REQUEST=true/],
+    ["scripts/randomness-settle.mjs", /CONFIRM_MAINNET_PROVIDER_SETTLEMENT=true/],
+  ];
+
+  for (const [script, expected] of cases) {
+    const result = runNodeScript(script, {
+      ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+      DRY_RUN: "false",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, expected);
+  }
+});
+
+test("direct refund writers are retired in favor of the journaled settlement keeper", () => {
+  const result = runNodeScript("scripts/refund-cranker.mjs", {
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    DRY_RUN: "false",
+    CONFIRM_MAINNET_REFUND_CRANK: "true",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /Direct refund writes are retired/);
+
+  const backend = fs.readFileSync("backend/src/server.mjs", "utf8");
+  assert.match(
+    backend,
+    /\/transactions\/refund-entry[\s\S]{0,260}automatic_refund_only/,
+  );
+  assert.doesNotMatch(backend, /program\.methods\s*\.refundEntryAfterTimeout/);
+});
+
 test("init:pools refuses mainnet without explicit treasury public key", () => {
   const authority = writeTempKeypair();
 

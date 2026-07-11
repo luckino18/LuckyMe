@@ -1,20 +1,28 @@
-import { Connection, Transaction } from "https://esm.sh/@solana/web3.js@1.98.4?bundle";
+import { Connection, PublicKey, Transaction } from "https://esm.sh/@solana/web3.js@1.98.4?bundle";
+import {
+  SOLANA_MAINNET_CHAIN,
+  SOLANA_SIGN_AND_SEND_TRANSACTION,
+  SOLANA_SIGN_TRANSACTION,
+  STANDARD_DISCONNECT,
+  STANDARD_EVENTS,
+  base58Encode,
+  compatibleWalletStandardOptions,
+  createWalletStandardRegistry,
+  mergeCompatibleWalletOptions,
+  selectSolanaMainnetAccount,
+} from "./wallet-standard.js";
 
 const API_BASE = "https://api.lucky-me.app";
 const PROGRAM_ID = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
-const SOLANA_CHAIN = "solana:mainnet";
 const DEFAULT_RPC = "https://api.mainnet-beta.solana.com";
 const WALLETCONNECT_PROJECT_ID = window.LUCKYME_WALLETCONNECT_PROJECT_ID || "";
-const WALLETCONNECT_SOLANA_CHAIN = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-const WALLETCONNECT_SOLANA_CHAINS = [
-  WALLETCONNECT_SOLANA_CHAIN,
-  "solana:4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZ",
-];
+const WALLETCONNECT_SOLANA_CHAIN = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+const WALLETCONNECT_SOLANA_CHAINS = [WALLETCONNECT_SOLANA_CHAIN];
 const WALLETCONNECT_SOLANA_METHODS = [
   "solana_signTransaction",
   "solana_signAndSendTransaction",
-  "solana_signMessage",
 ];
+const WALLETCONNECT_SOLANA_EVENTS = ["accountsChanged"];
 const WALLETCONNECT_PROVIDER_URL = "https://unpkg.com/@walletconnect/universal-provider@2.23.9/dist/index.umd.js";
 const WALLETCONNECT_MODAL_URL = "https://unpkg.com/@walletconnect/modal@2.7.0/dist/cdn/bundle.js";
 const OPERATOR_MODE = new URLSearchParams(window.location.search).has("operator");
@@ -25,6 +33,7 @@ const MOBILE_WALLET_BROWSERS = [
   { id: "backpack", name: "Backpack" },
 ];
 const scriptLoaders = new Map();
+const walletStandardRegistry = createWalletStandardRegistry(window);
 
 const POOLS = [
   {
@@ -35,7 +44,9 @@ const POOLS = [
     prize: "95% main prize",
     winners: "1 winner",
     limit: "1,000 tickets max",
-    note: "Low entry, same settlement rules.",
+    minimumTickets: 25,
+    minimumDistinctEntrants: 1,
+    note: "The target is 25 total tickets; several may come from the same wallet.",
   },
   {
     id: "normal",
@@ -45,7 +56,9 @@ const POOLS = [
     prize: "95% main prize",
     winners: "1 winner",
     limit: "1,000 tickets max",
-    note: "Balanced public pool.",
+    minimumTickets: 13,
+    minimumDistinctEntrants: 1,
+    note: "One wallet may buy multiple tickets toward the 13-ticket target.",
   },
   {
     id: "high",
@@ -55,7 +68,9 @@ const POOLS = [
     prize: "95% main prize",
     winners: "1 winner",
     limit: "1,000 tickets max",
-    note: "Higher entry, single winner.",
+    minimumTickets: 3,
+    minimumDistinctEntrants: 1,
+    note: "The target is three total tickets; one wallet may buy more than one.",
   },
   {
     id: "premium",
@@ -65,7 +80,9 @@ const POOLS = [
     prize: "70 / 20 / 10 split",
     winners: "3 winners",
     limit: "1 ticket per wallet",
-    note: "Minimum 3 wallets required.",
+    minimumTickets: 3,
+    minimumDistinctEntrants: 3,
+    note: "Three tickets from three distinct wallets are required.",
   },
 ];
 
@@ -74,9 +91,13 @@ const state = {
   config: null,
   pools: [],
   poolsLoaded: false,
+  poolsLoading: false,
   onchainAvailable: false,
   wallet: null,
-  walletMenuOpen: false,
+  walletEventCleanup: null,
+  walletModalOpen: false,
+  walletModalMessage: "",
+  walletModalTone: "soft",
   walletConnectProvider: null,
   walletConnectModal: null,
   walletConnectUri: "",
@@ -98,6 +119,8 @@ const dom = {
   walletList: document.querySelector("#wallet-list"),
   walletMessage: document.querySelector("#wallet-message"),
   walletPill: document.querySelector("#wallet-pill"),
+  walletModal: document.querySelector("#wallet-modal"),
+  walletModalBody: document.querySelector("#wallet-modal-body"),
   reviewPanel: document.querySelector("#review-panel"),
   screens: Array.from(document.querySelectorAll("[data-screen]")),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
@@ -134,6 +157,34 @@ function poolFromApi(poolId) {
   return state.pools.find((pool) => pool.id === poolId || pool.slug === poolId);
 }
 
+function minimumPolicy(poolId = state.selectedPool) {
+  const staticPool = poolById(poolId);
+  const livePool = poolFromApi(poolId);
+  return {
+    minimumTickets: Number(livePool?.minimumTickets ?? staticPool.minimumTickets),
+    minimumDistinctEntrants: Number(
+      livePool?.minimumDistinctEntrants ?? staticPool.minimumDistinctEntrants,
+    ),
+  };
+}
+
+function hasVerifiedMinimumPolicy(poolId = state.selectedPool) {
+  const staticPool = poolById(poolId);
+  const livePool = poolFromApi(poolId);
+  const round = activeRound(livePool);
+  return Boolean(
+    round &&
+    Number(livePool?.minimumTickets) === staticPool.minimumTickets &&
+    Number(livePool?.minimumDistinctEntrants) === staticPool.minimumDistinctEntrants &&
+    Number(round.minimumTickets) === staticPool.minimumTickets &&
+    Number(round.minimumDistinctEntrants) === staticPool.minimumDistinctEntrants &&
+    typeof round.minimumReached === "boolean" &&
+    Number.isFinite(Number(round.ticketsRemaining)) &&
+    typeof round.roundOutcome === "string" &&
+    typeof round.refundStatus === "string"
+  );
+}
+
 function selectedTicketLimit(poolId = state.selectedPool) {
   const pool = poolFromApi(poolId);
   return Math.max(1, Number(pool?.maxTicketsPerEntry || (poolId === "premium" ? 1 : 1000)));
@@ -167,7 +218,8 @@ function numberValue(value) {
 
 function activeRound(poolOrId) {
   const livePool = typeof poolOrId === "string" ? poolFromApi(poolOrId) : poolOrId;
-  return livePool?.activeRound || null;
+  const round = livePool?.activeRound;
+  return round && round.missing !== true ? round : null;
 }
 
 function roundUserEntry(round) {
@@ -202,38 +254,94 @@ function formatDuration(seconds) {
 
 function roundTiming(poolId = state.selectedPool) {
   const livePool = poolFromApi(poolId);
-  const round = livePool?.activeRound;
+  const round = activeRound(livePool);
   const roundId = round?.roundId ?? livePool?.currentRound ?? null;
 
-  if (!round) {
-    const syncing = state.onchainAvailable && (!state.poolsLoaded || state.pools.length === 0);
+  if (!livePool) {
     return {
       isOpen: false,
-      canDetermine: !syncing,
+      canDetermine: state.poolsLoaded,
       roundId,
-      status: syncing ? "Syncing" : state.onchainAvailable ? "No active round" : "Pending",
-      timeLeft: syncing ? "Syncing" : state.onchainAvailable ? "Unavailable" : "Pending",
+      status: state.poolsLoaded ? "Unavailable" : "Syncing",
+      timeLeft: state.poolsLoaded ? "No verified pool state" : "Syncing",
       chipClass: "warning",
     };
   }
 
-  if (round.settled) {
+  if (!round) {
+    return {
+      isOpen: false,
+      canDetermine: true,
+      roundId,
+      status: "No active round",
+      timeLeft: "Maintenance required",
+      chipClass: "warning",
+    };
+  }
+
+  if (!hasVerifiedMinimumPolicy(livePool.id || poolId)) {
+    return {
+      isOpen: false,
+      canDetermine: true,
+      roundId,
+      status: `Round ${roundId}`,
+      timeLeft: "Rule update required",
+      chipClass: "warning",
+      maintenanceRequired: true,
+    };
+  }
+
+  const outcome = round.roundOutcome;
+  if (outcome === "waiting") {
+    return {
+      isOpen: true,
+      waitingFirstTicket: true,
+      canDetermine: true,
+      roundId,
+      status: `Round ${roundId}`,
+      timeLeft: "Starts with first ticket",
+      chipClass: "success",
+    };
+  }
+
+  if (outcome === "settled") {
     return {
       isOpen: false,
       canDetermine: true,
       roundId,
       status: `Round ${roundId}`,
       timeLeft: "Settled",
-      chipClass: "warning",
+      chipClass: "success",
     };
   }
 
-  const remainingSeconds = Number(round.endTs) - Math.floor(Date.now() / 1000);
-  const isOpen = remainingSeconds > 0;
-  const totalTickets = bigintValue(round.totalTickets);
-  const expired = !isOpen;
+  if (outcome === "cancelled_below_minimum") {
+    const refundComplete = round.refundStatus === "completed";
+    return {
+      isOpen: false,
+      canDetermine: true,
+      roundId,
+      status: `Round ${roundId}`,
+      timeLeft: refundComplete ? "Refund complete" : "Refunding",
+      chipClass: refundComplete ? "success" : "warning",
+      cancelledBelowMinimum: true,
+      refundComplete,
+    };
+  }
 
-  if (expired && totalTickets > 0n) {
+  if (outcome === "eligible_for_draw") {
+    return {
+      isOpen: false,
+      canDetermine: true,
+      roundId,
+      status: `Round ${roundId}`,
+      timeLeft: "Draw queued",
+      chipClass: "success",
+      settlementPending: true,
+    };
+  }
+
+  if (outcome === "settling") {
     return {
       isOpen: false,
       canDetermine: true,
@@ -245,20 +353,33 @@ function roundTiming(poolId = state.selectedPool) {
     };
   }
 
-  if (expired) {
+  const endTs = Number(round.endTs || 0);
+  const remainingSeconds = endTs - Math.floor(Date.now() / 1000);
+  if (outcome === "open" && remainingSeconds <= 0) {
     return {
       isOpen: false,
       canDetermine: true,
       roundId,
       status: `Round ${roundId}`,
-      timeLeft: "Starting soon",
+      timeLeft: "Confirming final state",
       chipClass: "warning",
-      needsCrank: true,
+    };
+  }
+
+  if (outcome !== "open") {
+    return {
+      isOpen: false,
+      canDetermine: true,
+      roundId,
+      status: `Round ${roundId}`,
+      timeLeft: "Maintenance required",
+      chipClass: "warning",
+      maintenanceRequired: true,
     };
   }
 
   return {
-    isOpen,
+    isOpen: outcome === "open" && remainingSeconds > 0,
     canDetermine: true,
     roundId,
     status: `Round ${roundId}`,
@@ -277,6 +398,69 @@ function setTicketCount(value) {
   state.lastError = "";
 }
 
+function renderMinimumTarget(pool, livePool, round) {
+  const policy = minimumPolicy(pool.id);
+  const verified = Boolean(round) && hasVerifiedMinimumPolicy(pool.id);
+  const sold = verified ? Math.max(0, numberValue(round.totalTickets)) : null;
+  const remaining = verified
+    ? Math.max(0, Number(round.ticketsRemaining))
+    : null;
+  const progressValue = verified
+    ? Math.min(sold, policy.minimumTickets)
+    : 0;
+  const refundComplete = verified && round.refundStatus === "completed";
+  const refundPending = verified && round.roundOutcome === "cancelled_below_minimum" && !refundComplete;
+  const minimumReached = verified && round.minimumReached === true;
+  let message;
+  let tone = "";
+
+  if (!round) {
+    message = "Maintenance required — verified round data is unavailable";
+    tone = "warning";
+  } else if (!verified) {
+    message = "Maintenance required — minimum rules are not verified";
+    tone = "warning";
+  } else if (refundComplete) {
+    message = "Refund complete — ticket purchase amount returned";
+    tone = "success";
+  } else if (refundPending) {
+    message = "Round cancelled — automatic refunds in progress";
+    tone = "warning";
+  } else if (minimumReached) {
+    message = pool.id === "premium"
+      ? "Minimum reached — this round will draw three winners"
+      : "Minimum reached — this round will draw a winner";
+    tone = "success";
+  } else {
+    message = `${remaining} ${ticketWord(remaining)} still needed`;
+  }
+
+  const soldCopy = verified
+    ? `${sold} / ${policy.minimumTickets} tickets sold`
+    : `— / ${policy.minimumTickets} tickets sold`;
+  const premiumWalletCopy = pool.id === "premium" && verified
+    ? `<p class="minimum-wallets">${numberValue(round.entrantCount)} / ${policy.minimumDistinctEntrants} distinct wallets</p>`
+    : "";
+
+  return `
+    <section class="minimum-target ${tone}" aria-label="${escapeHtml(pool.name)} minimum for a valid draw">
+      <span class="label">Minimum for a valid draw</span>
+      <strong>${soldCopy}</strong>
+      <div
+        class="minimum-progress"
+        role="progressbar"
+        aria-label="${escapeHtml(pool.name)} total ticket target"
+        aria-valuemin="0"
+        aria-valuemax="${policy.minimumTickets}"
+        ${verified ? `aria-valuenow="${progressValue}"` : "aria-valuetext=\"Unavailable\""}
+      ><span style="width:${verified ? (progressValue / policy.minimumTickets) * 100 : 0}%"></span></div>
+      <p class="minimum-message">${message}</p>
+      ${premiumWalletCopy}
+      <p class="minimum-clarification">Target counts total tickets sold, not players.${pool.id === "premium" ? " Premium also requires three distinct wallets." : ""}</p>
+    </section>
+  `;
+}
+
 function renderPoolCard(pool, compact = false) {
   const livePool = poolFromApi(pool.id);
   const timing = roundTiming(pool.id);
@@ -284,20 +468,24 @@ function renderPoolCard(pool, compact = false) {
   const userEntry = roundUserEntry(round);
   const totalTickets = bigintValue(round?.totalTickets);
   const entrantCount = numberValue(round?.entrantCount);
-  const liveStatus = state.onchainAvailable ? timing.status : "Pending";
-  const jackpotValue = state.onchainAvailable && livePool?.jackpotSol
+  const poolStateReady = state.onchainAvailable && state.poolsLoaded &&
+    Boolean(round) && hasVerifiedMinimumPolicy(pool.id);
+  const liveStatus = timing.status;
+  const jackpotValue = poolStateReady && livePool?.jackpotSol
     ? `${livePool.jackpotSol} SOL`
     : "Pending";
-  const actionLabel = state.onchainAvailable
-    ? !timing.canDetermine
-      ? "Review setup"
-      : timing.isOpen
+  const actionLabel = poolStateReady
+    ? timing.isOpen
       ? `Join ${pool.name}`
+      : timing.refundComplete
+      ? "Refund complete"
+      : timing.cancelledBelowMinimum
+      ? "Refunding"
       : timing.settlementPending
       ? "Settling"
-      : "Starting soon"
-    : "Review setup";
-  const disablePrimary = state.onchainAvailable && timing.canDetermine && !timing.isOpen;
+      : "Maintenance"
+    : state.poolsLoaded ? "Unavailable" : "Syncing";
+  const disablePrimary = !poolStateReady || !timing.isOpen;
 
   return `
     <article class="pool-card">
@@ -309,6 +497,7 @@ function renderPoolCard(pool, compact = false) {
         <span class="pool-chip ${timing.chipClass}">${liveStatus}</span>
       </div>
       <div class="entry">${pool.entrySol}<span>SOL</span></div>
+      ${renderMinimumTarget(pool, livePool, round)}
       <div class="facts-grid">
         <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
         <div class="fact"><span class="label">Winners</span><strong>${pool.winners}</strong></div>
@@ -334,10 +523,6 @@ function operatorPoolActions(pool, timing, round) {
   const roundId = round?.roundId;
   const provider = round?.providerRandomness || {};
   const buttons = [];
-
-  if (timing.needsCrank || round?.settled) {
-    buttons.push(`<button class="secondary-button" data-action="operator-crank-pool" data-pool-id="${pool.id}">Open next</button>`);
-  }
 
   if (timing.settlementPending && roundId) {
     if (provider.status === "not_requested") {
@@ -371,14 +556,16 @@ function renderActivity() {
     const rows = [];
     const poolName = escapeHtml(pool.label || poolById(pool.id)?.name || pool.id);
 
-    if (pool.activeRound) {
+    const currentRound = activeRound(pool);
+    if (currentRound) {
       const timing = roundTiming(pool.id);
-      const round = pool.activeRound;
+      const round = currentRound;
+      const minimumTickets = Number(round.minimumTickets || pool.minimumTickets || 0);
       rows.push({
         label: `${poolName} round #${escapeHtml(round.roundId)}`,
-        detail: `${escapeHtml(round.totalTickets)} ${ticketWord(round.totalTickets)} sold · ${escapeHtml(round.entrantCount)} players · ${escapeHtml(round.totalSol || "0")} SOL`,
+        detail: `${escapeHtml(round.totalTickets)} / ${escapeHtml(minimumTickets)} total tickets · ${escapeHtml(round.entrantCount)} players · ${escapeHtml(round.totalSol || "0")} SOL`,
         value: timing.timeLeft,
-        tone: timing.isOpen ? "success" : "warning",
+        tone: timing.isOpen || timing.refundComplete ? "success" : "warning",
       });
 
       const entry = roundUserEntry(round);
@@ -390,6 +577,26 @@ function renderActivity() {
           tone: "success",
         });
       }
+    }
+
+    for (const round of pool.recentRounds || []) {
+      const hasRefundOutcome = round?.roundOutcome === "cancelled_below_minimum" ||
+        ["pending", "completed"].includes(round?.refundStatus);
+      if (
+        Number(round?.roundId) === Number(currentRound?.roundId) ||
+        !hasRefundOutcome
+      ) {
+        continue;
+      }
+      const refundComplete = round.refundStatus === "completed";
+      rows.push({
+        label: `${poolName} round #${escapeHtml(round.roundId)}`,
+        detail: refundComplete
+          ? "Automatic refund complete. Ticket purchase amount returned."
+          : "Round cancelled below its total-ticket target. Automatic refunds are in progress.",
+        value: refundComplete ? "Refund complete" : "Refunding",
+        tone: refundComplete ? "success" : "warning",
+      });
     }
 
     return rows;
@@ -484,21 +691,30 @@ function winnerPrizeSol(pool, round, rank = 1) {
 
 function renderStatus() {
   const live = state.onchainAvailable;
+  const minimumRulesVerified = state.poolsLoaded && POOLS.every((pool) => {
+    const livePool = poolFromApi(pool.id);
+    return Number(livePool?.minimumTickets) === pool.minimumTickets &&
+      Number(livePool?.minimumDistinctEntrants) === pool.minimumDistinctEntrants;
+  });
   const reason = state.config?.onchain?.reason || normalizeReason(state.lastError) || "";
   const statusText = live ? "Mainnet live" : "Mainnet syncing";
   const dotClass = live ? "dot-live" : "dot-sync";
 
   dom.chainStatus.innerHTML = `<span class="status-dot ${dotClass}"></span><span>${statusText}</span>`;
-  dom.homeStatusTitle.textContent = live ? "Live" : "Pending";
-  dom.homeStatusCopy.textContent = live
-    ? "Backend and on-chain pool state are available."
+  dom.homeStatusTitle.textContent = live && minimumRulesVerified ? "Live" : live ? "Maintenance" : "Pending";
+  dom.homeStatusCopy.textContent = live && minimumRulesVerified
+    ? "Backend, on-chain pool state, and ticket targets are verified."
+    : live
+    ? "On-chain state is available, but the minimum-ticket rules are not yet verified across every pool."
     : reason
       ? `Waiting for verified chain state: ${reason}.`
       : "Live pool values appear only after the backend confirms the deployed program.";
-  dom.homeStatusPill.textContent = live ? "Live" : "Syncing";
-  dom.homeStatusPill.className = `status-pill ${live ? "success" : "warning"}`;
-  dom.poolsNote.textContent = live
-    ? "Live pool state is available. Review each transaction before signing."
+  dom.homeStatusPill.textContent = live && minimumRulesVerified ? "Live" : live ? "Maintenance" : "Syncing";
+  dom.homeStatusPill.className = `status-pill ${live && minimumRulesVerified ? "success" : "warning"}`;
+  dom.poolsNote.textContent = live && minimumRulesVerified
+    ? "Live pool state and total-ticket targets are available. Review each purchase before signing."
+    : live
+    ? "Buying stays disabled until the backend and on-chain minimum-ticket rules are verified."
     : "Static rules are shown now. Live rounds load from the backend when on-chain state is available.";
 }
 
@@ -564,7 +780,7 @@ function renderWallets() {
         <div class="row">
           <div>
             <span class="label">Connected wallet</span>
-            <h3>${state.wallet.name}</h3>
+            <h3>${escapeHtml(state.wallet.name)}</h3>
           </div>
           <strong class="success">CONNECTED</strong>
         </div>
@@ -587,69 +803,109 @@ function renderWallets() {
         </div>
         <p>Choose a detected browser wallet or continue with a mobile wallet app.</p>
         <div class="wallet-actions">
-          <button class="primary-button" data-action="toggle-wallet-menu">Connect wallet</button>
+          <button class="primary-button" data-action="open-wallet-modal">Connect wallet</button>
         </div>
       </article>
-      ${state.walletMenuOpen ? walletMenu(wallets) : ""}
     `;
     showWalletMessage(
-      state.walletMenuOpen
-        ? hasWalletOption
-          ? "Choose a wallet connection to continue."
-          : "No compatible Solana wallet was detected in this browser."
-        : "Connect a wallet before reviewing a pool entry.",
-      state.walletMenuOpen && !hasWalletOption ? "warning" : "soft",
+      hasWalletOption
+        ? "Connect a wallet before reviewing a pool entry."
+        : "No compatible Solana wallet was detected in this browser.",
+      hasWalletOption ? "soft" : "warning",
     );
   }
 }
 
-function walletMenu(wallets) {
-  const canUseWalletConnect = Boolean(WALLETCONNECT_PROJECT_ID);
-  const mobileWallets = mobileWalletBrowserOptions();
-  const hasOptions = wallets.length || canUseWalletConnect || mobileWallets.length;
+function walletInitials(name) {
+  return String(name || "Wallet")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
 
-  if (!hasOptions) {
-    return `
-      <article class="wallet-card wallet-menu">
-        <span class="label">Detected wallets</span>
-        <p>No compatible Solana wallet was detected in this browser.</p>
-      </article>
-    `;
+function walletIconMarkup(wallet) {
+  const icon = wallet.icon || wallet.provider?.icon || wallet.provider?._wallet?.icon;
+  if (typeof icon === "string" && /^(data:image\/|https?:\/\/)/i.test(icon)) {
+    return `<span class="wallet-modal-icon"><img src="${escapeHtml(icon)}" alt="" /></span>`;
   }
+  return `<span class="wallet-modal-icon">${escapeHtml(walletInitials(wallet.name))}</span>`;
+}
 
-  return `
-    <article class="wallet-card wallet-menu">
-      <span class="label">${hasOptions ? "Wallet connection" : "Detected wallets"}</span>
-      <div class="wallet-option-list">
-        ${wallets.map((wallet) => `
-          <button class="wallet-option" data-connect="${wallet.id}">
-            <span>${wallet.name}</span>
-            <strong>Connect</strong>
-          </button>
-        `).join("")}
-        ${canUseWalletConnect ? `
-          <button class="wallet-option" data-connect="mobile-wallet">
-            <span>Mobile wallet</span>
-            <strong>Connect</strong>
-          </button>
-        ` : ""}
-        ${mobileWallets.map((wallet) => `
-          <button class="wallet-option" data-connect="mobile-open:${wallet.id}">
-            <span>Open in ${wallet.name}</span>
-            <strong>Open</strong>
-          </button>
-        `).join("")}
-      </div>
-      ${state.walletConnectUri ? `
-        <div class="wallet-uri-box">
-          <span class="label">WalletConnect ready</span>
-          <p>Open the WalletConnect prompt in your wallet app, or copy the session URI if the prompt is blocked.</p>
-          <button class="secondary-button" data-action="copy-walletconnect-uri">Copy session URI</button>
+function renderWalletModal() {
+  if (!dom.walletModal || !dom.walletModalBody) {
+    return;
+  }
+  const wallets = discoverWallets();
+  dom.walletModalBody.innerHTML = `
+    <section class="wallet-modal-section">
+      <h3>${wallets.length ? "Installed wallets" : "Browser wallets"}</h3>
+      ${wallets.length ? `
+        <div class="wallet-modal-grid">
+          ${wallets.map((wallet) => `
+            <button class="wallet-modal-option" data-connect="${escapeHtml(wallet.id)}">
+              ${walletIconMarkup(wallet)}
+              <span>${escapeHtml(wallet.name)}</span>
+            </button>
+          `).join("")}
         </div>
-      ` : ""}
-      ${mobileWallets.length ? `<p class="wallet-menu-note">Chrome mobile cannot read phone wallet apps directly. Open LuckyMe inside your wallet app, then connect from that wallet browser.</p>` : ""}
-    </article>
+      ` : `<p class="wallet-modal-note">No compatible Solana extension was detected in this browser. Only wallets discovered in this browser are listed.</p>`}
+    </section>
+    ${WALLETCONNECT_PROJECT_ID ? `
+      <section class="wallet-modal-section">
+        <h3>Reown / WalletConnect</h3>
+        <button class="wallet-modal-option walletconnect-option" data-connect="mobile-wallet">
+          <span class="wallet-modal-icon">W</span>
+          <span>WalletConnect</span>
+          <strong>Connect</strong>
+        </button>
+      </section>
+    ` : ""}
+    ${isMobileBrowser() ? `
+      <section class="wallet-modal-section">
+        <h3>Open wallet browser</h3>
+        <div class="wallet-modal-grid">
+          ${mobileWalletBrowserOptions().map((wallet) => `
+            <button class="wallet-modal-option" data-connect="mobile-open:${wallet.id}">
+              <span class="wallet-modal-icon">${escapeHtml(walletInitials(wallet.name))}</span>
+              <span>${escapeHtml(wallet.name)}</span>
+            </button>
+          `).join("")}
+        </div>
+      </section>
+    ` : ""}
+    ${state.walletModalMessage ? `
+      <div class="notice ${escapeHtml(state.walletModalTone)} wallet-modal-message" role="status">
+        ${escapeHtml(state.walletModalMessage)}
+      </div>
+    ` : ""}
+    ${state.walletConnectUri ? `
+      <div class="wallet-uri-box wallet-modal-uri">
+        <span class="label">WalletConnect session URI</span>
+        <code>${escapeHtml(state.walletConnectUri)}</code>
+        <button class="secondary-button" data-action="copy-walletconnect-uri">Copy session URI</button>
+      </div>
+    ` : ""}
   `;
+}
+
+function openWalletModal() {
+  state.walletModalOpen = true;
+  if (!state.walletConnectUri) {
+    state.walletModalMessage = "";
+  }
+  renderWalletModal();
+  dom.walletModal.hidden = false;
+  dom.walletModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("wallet-modal-open");
+}
+
+function closeWalletModal() {
+  state.walletModalOpen = false;
+  dom.walletModal.hidden = true;
+  dom.walletModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("wallet-modal-open");
 }
 
 function showWalletMessage(message, tone = "warning") {
@@ -658,40 +914,75 @@ function showWalletMessage(message, tone = "warning") {
   dom.walletMessage.className = `notice ${tone}`;
 }
 
-function injectedWallet(id, name, provider) {
-  return {
-    id,
-    name,
-    provider,
-    type: "injected",
-  };
+function setWalletModalMessage(message, tone = "soft") {
+  state.walletModalMessage = message;
+  state.walletModalTone = tone;
+  if (state.walletModalOpen) {
+    renderWalletModal();
+  }
 }
 
-function discoverInjectedWallets() {
+function injectedWalletCandidates() {
   const candidates = [];
   const seen = new Set();
-  const add = (wallet) => {
-    if (!wallet.provider || seen.has(wallet.provider)) {
+  const add = (id, name, provider) => {
+    if (!provider || seen.has(provider)) {
       return;
     }
-    seen.add(wallet.provider);
-    candidates.push(wallet);
+    seen.add(provider);
+    candidates.push({ id, name, provider });
   };
 
-  add(injectedWallet("phantom", "Phantom", window.phantom?.solana));
+  add("phantom", "Phantom", window.phantom?.solana);
   if (window.solana?.isPhantom) {
-    add(injectedWallet("phantom-window", "Phantom", window.solana));
+    add("phantom", "Phantom", window.solana);
   }
-  add(injectedWallet("solflare", "Solflare", window.solflare));
-  add(injectedWallet("backpack", "Backpack", window.backpack?.solana || window.backpack));
-  add(injectedWallet("brave", "Brave Wallet", window.braveSolana));
-  add(injectedWallet("glow", "Glow", window.glowSolana));
+  add("solflare", "Solflare", window.solflare);
+  add("backpack", "Backpack", window.backpack?.solana || window.backpack);
+  add("coinbase", "Coinbase Wallet", window.coinbaseSolana || window.coinbaseWalletExtension?.solana);
+  add("okx", "OKX Wallet", window.okxwallet?.solana || window.okxwallet);
+  add("brave", "Brave Wallet", window.braveSolana);
+  add("glow", "Glow", window.glowSolana);
+  add("trust", "Trust Wallet", window.trustwallet?.solana);
 
-  return candidates.filter((wallet) => typeof wallet.provider?.connect === "function");
+  if (window.solana && !seen.has(window.solana)) {
+    const providerName = typeof window.solana.name === "string" && window.solana.name.trim()
+      ? window.solana.name.trim()
+      : "Solana wallet";
+    add("solana-wallet", providerName, window.solana);
+  }
+
+  return candidates;
 }
 
 function discoverWallets() {
-  return discoverInjectedWallets();
+  const standardOptions = compatibleWalletStandardOptions(walletStandardRegistry.get());
+  return mergeCompatibleWalletOptions(standardOptions, injectedWalletCandidates());
+}
+
+function bytesEqual(left, right) {
+  if (!left || !right || left.length !== right.length) {
+    return false;
+  }
+  return left.every((value, index) => value === right[index]);
+}
+
+function validatedSignerAddress(address, expectedPublicKey) {
+  let publicKey;
+  try {
+    publicKey = new PublicKey(String(address || ""));
+  } catch {
+    throw new Error("Wallet returned an invalid Solana public key");
+  }
+
+  const publicKeyBytes = publicKey.toBytes();
+  if (!PublicKey.isOnCurve(publicKeyBytes)) {
+    throw new Error("Wallet account must be an on-curve Solana signer");
+  }
+  if (expectedPublicKey && !bytesEqual(publicKeyBytes, new Uint8Array(expectedPublicKey))) {
+    throw new Error("Wallet address does not match the account public key");
+  }
+  return publicKey.toBase58();
 }
 
 function loadScript(src) {
@@ -769,18 +1060,63 @@ async function getWalletConnectProvider() {
 
   provider.on("display_uri", (uri) => {
     state.walletConnectUri = uri;
+    setWalletModalMessage("WalletConnect is ready. Scan the QR prompt or copy the session URI below.", "soft");
+    renderWalletModal();
     modal?.openModal?.({ uri });
-    renderWallets();
     showWalletMessage("WalletConnect session ready. Continue in your wallet app.", "soft");
   });
 
   provider.on("session_delete", () => {
     state.walletConnectUri = "";
     if (state.wallet?.type === "walletconnect") {
-      state.wallet = null;
-      state.preparedTransaction = null;
-      renderWalletPill();
-      renderWallets();
+      void clearConnectedWallet("WalletConnect session ended.");
+    }
+  });
+
+  provider.on("session_update", ({ params } = {}) => {
+    if (state.wallet?.type !== "walletconnect") {
+      return;
+    }
+    const session = {
+      ...(provider.session || state.wallet.session),
+      namespaces: params?.namespaces || provider.session?.namespaces || state.wallet.session?.namespaces,
+    };
+    try {
+      const account = parseWalletConnectAccount(session);
+      state.wallet = {
+        ...state.wallet,
+        session,
+        chainId: account.chainId,
+        address: account.address,
+      };
+      walletAccountChanged("WalletConnect account updated.");
+    } catch (error) {
+      void clearConnectedWallet(error instanceof Error ? error.message : "WalletConnect account became unavailable.");
+    }
+  });
+
+  provider.on("session_event", ({ params } = {}) => {
+    const event = params?.event;
+    if (state.wallet?.type !== "walletconnect" || event?.name !== "accountsChanged") {
+      return;
+    }
+    if (params?.chainId !== WALLETCONNECT_SOLANA_CHAIN) {
+      void clearConnectedWallet("WalletConnect changed to a non-mainnet Solana account.");
+      return;
+    }
+    const next = Array.isArray(event.data) ? event.data[0] : event.data;
+    const rawAddress = String(next || "");
+    const address = rawAddress.startsWith(`${WALLETCONNECT_SOLANA_CHAIN}:`)
+      ? rawAddress.slice(WALLETCONNECT_SOLANA_CHAIN.length + 1)
+      : rawAddress;
+    try {
+      state.wallet = {
+        ...state.wallet,
+        address: validatedSignerAddress(address),
+      };
+      walletAccountChanged("WalletConnect account updated.");
+    } catch (error) {
+      void clearConnectedWallet(error instanceof Error ? error.message : "WalletConnect account became unavailable.");
     }
   });
 
@@ -790,23 +1126,30 @@ async function getWalletConnectProvider() {
 }
 
 function parseWalletConnectAccount(session) {
-  const account = session?.namespaces?.solana?.accounts?.find((item) => item.startsWith("solana:"));
-  const [, reference, address] = account?.split(":") || [];
-  if (!address) {
-    throw new Error("Mobile wallet did not return a Solana account");
+  const namespace = session?.namespaces?.solana;
+  const supportedMethod = namespace?.methods?.some((method) => WALLETCONNECT_SOLANA_METHODS.includes(method));
+  if (!supportedMethod) {
+    throw new Error("WalletConnect wallet cannot sign Solana transactions");
   }
-  return { account, chainId: `solana:${reference}`, address };
+  const prefix = `${WALLETCONNECT_SOLANA_CHAIN}:`;
+  const account = namespace?.accounts?.find((item) => typeof item === "string" && item.startsWith(prefix));
+  if (!account) {
+    throw new Error("WalletConnect did not return a Solana mainnet account");
+  }
+  const address = validatedSignerAddress(account.slice(prefix.length));
+  return { account, chainId: WALLETCONNECT_SOLANA_CHAIN, address };
 }
 
 async function connectWalletConnect() {
   const provider = await getWalletConnectProvider();
+  releaseWalletEventSubscription();
   state.walletConnectUri = "";
   const session = provider.session || await provider.connect({
     optionalNamespaces: {
       solana: {
         chains: WALLETCONNECT_SOLANA_CHAINS,
         methods: WALLETCONNECT_SOLANA_METHODS,
-        events: [],
+        events: WALLETCONNECT_SOLANA_EVENTS,
       },
     },
   });
@@ -826,6 +1169,140 @@ async function connectWalletConnect() {
   };
 }
 
+function releaseWalletEventSubscription() {
+  try {
+    state.walletEventCleanup?.();
+  } catch {
+    // Wallet event cleanup must not block an explicit disconnect.
+  }
+  state.walletEventCleanup = null;
+}
+
+function walletAccountChanged(message) {
+  state.preparedTransaction = null;
+  renderWalletPill();
+  renderWallets();
+  showWalletMessage(message, "success");
+  void loadPools();
+}
+
+async function clearConnectedWallet(message = "Wallet disconnected.") {
+  releaseWalletEventSubscription();
+  state.wallet = null;
+  state.walletConnectUri = "";
+  state.preparedTransaction = null;
+  renderWalletPill();
+  renderWallets();
+  showWalletMessage(message, "warning");
+  await loadPools();
+}
+
+function subscribeStandardWalletEvents(standardWallet) {
+  releaseWalletEventSubscription();
+  const on = standardWallet.features?.[STANDARD_EVENTS]?.on;
+  if (typeof on !== "function") {
+    return;
+  }
+
+  try {
+    const off = on("change", (properties = {}) => {
+      if (state.wallet?.type !== "standard" || state.wallet.standardWallet !== standardWallet) {
+        return;
+      }
+      if (properties.accounts === undefined) {
+        return;
+      }
+      const account = selectSolanaMainnetAccount(properties.accounts, standardWallet);
+      if (!account) {
+        void clearConnectedWallet(`${standardWallet.name} no longer exposes a compatible Solana mainnet account.`);
+        return;
+      }
+      try {
+        const address = validatedSignerAddress(account.address, account.publicKey);
+        state.wallet = { ...state.wallet, account, address };
+        walletAccountChanged(`${standardWallet.name} account updated.`);
+      } catch (error) {
+        void clearConnectedWallet(error instanceof Error ? error.message : "Wallet account became unavailable.");
+      }
+    });
+    state.walletEventCleanup = typeof off === "function" ? off : null;
+  } catch {
+    state.walletEventCleanup = null;
+  }
+}
+
+function subscribeInjectedWalletEvents(provider, walletName) {
+  releaseWalletEventSubscription();
+  if (typeof provider?.on !== "function") {
+    return;
+  }
+  const cleanups = [];
+  const subscribe = (event, listener) => {
+    try {
+      const returned = provider.on(event, listener);
+      if (typeof returned === "function") {
+        cleanups.push(returned);
+      } else {
+        cleanups.push(() => {
+          if (typeof provider.removeListener === "function") {
+            provider.removeListener(event, listener);
+          } else if (typeof provider.off === "function") {
+            provider.off(event, listener);
+          }
+        });
+      }
+    } catch {
+      // Some legacy extensions expose `on` but not every standard Solana event.
+    }
+  };
+
+  subscribe("accountChanged", (nextPublicKey) => {
+    if (state.wallet?.type !== "injected" || state.wallet.provider !== provider) {
+      return;
+    }
+    if (!nextPublicKey) {
+      void clearConnectedWallet(`${walletName} disconnected.`);
+      return;
+    }
+    const address = nextPublicKey?.toBase58?.() || nextPublicKey?.toString?.();
+    try {
+      state.wallet = {
+        ...state.wallet,
+        address: validatedSignerAddress(address),
+      };
+      walletAccountChanged(`${walletName} account updated.`);
+    } catch (error) {
+      void clearConnectedWallet(error instanceof Error ? error.message : "Wallet account became unavailable.");
+    }
+  });
+  subscribe("disconnect", () => {
+    if (state.wallet?.type === "injected" && state.wallet.provider === provider) {
+      void clearConnectedWallet(`${walletName} disconnected.`);
+    }
+  });
+  state.walletEventCleanup = () => cleanups.splice(0).forEach((cleanup) => cleanup());
+}
+
+async function connectStandard(walletOption) {
+  const standardWallet = walletOption.standardWallet;
+  const result = await standardWallet.features["standard:connect"].connect({ silent: false });
+  const accounts = result?.accounts?.length ? result.accounts : standardWallet.accounts;
+  const account = selectSolanaMainnetAccount(accounts, standardWallet);
+  if (!account) {
+    throw new Error(`${walletOption.name} did not return a compatible Solana mainnet account`);
+  }
+  const address = validatedSignerAddress(account.address, account.publicKey);
+  state.wallet = {
+    id: walletOption.id,
+    name: walletOption.name,
+    type: "standard",
+    standardWallet,
+    account,
+    address,
+  };
+  subscribeStandardWalletEvents(standardWallet);
+}
+
 async function connectInjected(wallet) {
   const response = await wallet.provider.connect({ onlyIfTrusted: false });
   const publicKey = response?.publicKey || wallet.provider.publicKey;
@@ -840,8 +1317,9 @@ async function connectInjected(wallet) {
     name: wallet.name,
     type: "injected",
     provider: wallet.provider,
-    address,
+    address: validatedSignerAddress(address),
   };
+  subscribeInjectedWalletEvents(wallet.provider, wallet.name);
 }
 
 async function connectWallet(walletId) {
@@ -856,14 +1334,17 @@ async function connectWallet(walletId) {
 
   if (walletId === "mobile-wallet") {
     try {
+      setWalletModalMessage("Opening WalletConnect…", "soft");
       await connectWalletConnect();
-      state.walletMenuOpen = false;
+      closeWalletModal();
       renderWalletPill();
       renderWallets();
       await loadPools();
     } catch (error) {
       state.walletConnectModal?.closeModal?.();
-      showWalletMessage(error instanceof Error ? error.message : String(error), "danger");
+      const message = error instanceof Error ? error.message : String(error);
+      setWalletModalMessage(message, "danger");
+      showWalletMessage(message, "danger");
     }
     return;
   }
@@ -874,14 +1355,20 @@ async function connectWallet(walletId) {
   }
 
   try {
-    await connectInjected(wallet);
-    state.walletMenuOpen = false;
+    if (wallet.type === "standard") {
+      await connectStandard(wallet);
+    } else {
+      await connectInjected(wallet);
+    }
+    closeWalletModal();
 
     renderWalletPill();
     renderWallets();
     await loadPools();
   } catch (error) {
-    showWalletMessage(error instanceof Error ? error.message : String(error), "danger");
+    const message = error instanceof Error ? error.message : String(error);
+    setWalletModalMessage(message, "danger");
+    showWalletMessage(message, "danger");
   }
 }
 
@@ -889,31 +1376,31 @@ async function disconnectWallet() {
   try {
     if (state.wallet?.type === "walletconnect") {
       await state.wallet.provider?.disconnect?.();
-    } else if (state.wallet?.disconnect) {
-      await state.wallet.disconnect();
+    } else if (state.wallet?.type === "standard") {
+      await state.wallet.standardWallet?.features?.[STANDARD_DISCONNECT]?.disconnect?.();
     } else if (state.wallet?.provider?.disconnect) {
       await state.wallet.provider.disconnect();
     }
   } finally {
-    state.wallet = null;
-    state.walletConnectUri = "";
-    state.preparedTransaction = null;
-    renderWalletPill();
-    renderWallets();
+    await clearConnectedWallet();
   }
 }
 
 async function copyWalletConnectUri() {
   if (!state.walletConnectUri) {
+    setWalletModalMessage("WalletConnect session is not ready yet.", "warning");
     showWalletMessage("WalletConnect session is not ready yet.", "warning");
     return;
   }
 
   try {
     await navigator.clipboard.writeText(state.walletConnectUri);
+    setWalletModalMessage("WalletConnect session URI copied.", "success");
     showWalletMessage("WalletConnect session URI copied.", "success");
   } catch (error) {
-    showWalletMessage(error instanceof Error ? error.message : "Could not copy WalletConnect URI.", "danger");
+    const message = error instanceof Error ? error.message : "Could not copy WalletConnect URI.";
+    setWalletModalMessage(message, "danger");
+    showWalletMessage(message, "danger");
   }
 }
 
@@ -926,16 +1413,31 @@ function renderReview() {
   const ticketCount = Math.min(state.ticketCount, ticketLimit);
   const amountLamports = selectedTicketPriceLamports(pool.id) * BigInt(ticketCount);
   const timing = roundTiming(pool.id);
+  const policy = minimumPolicy(pool.id);
+  const ticketsSold = numberValue(round?.totalTickets);
+  const ticketsAfterPurchase = ticketsSold + ticketCount;
+  const ticketsRemainingAfter = Math.max(policy.minimumTickets - ticketsAfterPurchase, 0);
+  const entrantsAfterPurchase = numberValue(round?.entrantCount) + (userEntry ? 0 : 1);
+  const minimumReachedAfter = ticketsAfterPurchase >= policy.minimumTickets &&
+    entrantsAfterPurchase >= policy.minimumDistinctEntrants;
   const connected = Boolean(state.wallet);
   const alreadyEntered = Boolean(userEntry);
-  const canBuy = connected && state.onchainAvailable && timing.isOpen && !alreadyEntered;
+  const poolStateReady = state.onchainAvailable && state.poolsLoaded &&
+    Boolean(round) && hasVerifiedMinimumPolicy(pool.id);
+  const canBuy = connected && poolStateReady && timing.isOpen && !alreadyEntered;
   const buyLabel = ticketCount === 1 ? "Buy 1 ticket" : `Buy ${ticketCount} tickets`;
   const roundCopy = timing.isOpen
-    ? "Round is open for entries"
+    ? timing.waitingFirstTicket
+      ? "The first confirmed ticket starts the one-hour countdown"
+      : "Round is open for entries"
     : timing.settlementPending
-    ? "Round ended and is waiting for settlement"
-    : timing.needsCrank
-    ? "Next round is being opened"
+    ? "Round ended after reaching its target and is waiting for the draw"
+    : timing.cancelledBelowMinimum
+    ? timing.refundComplete
+      ? "The round was cancelled and its automatic refunds are complete"
+      : "The round was cancelled and automatic refunds are in progress"
+    : timing.maintenanceRequired
+    ? "Verified round rules or state are unavailable"
     : "This round is no longer accepting entries";
 
   dom.reviewPanel.innerHTML = `
@@ -956,6 +1458,13 @@ function renderReview() {
         <button class="icon-button" data-action="ticket-inc" ${ticketCount >= ticketLimit ? "disabled" : ""}>+</button>
       </div>
     </div>
+    <section class="minimum-target review-target ${minimumReachedAfter ? "success" : ""}" aria-label="Ticket target after this purchase">
+      <span class="label">Minimum for a valid draw</span>
+      <strong>${ticketsSold} / ${policy.minimumTickets} tickets sold now</strong>
+      <div class="minimum-progress" role="progressbar" aria-label="Tickets after purchase" aria-valuemin="0" aria-valuemax="${policy.minimumTickets}" aria-valuenow="${Math.min(ticketsAfterPurchase, policy.minimumTickets)}"><span style="width:${Math.min(ticketsAfterPurchase / policy.minimumTickets, 1) * 100}%"></span></div>
+      <p class="minimum-message">After this purchase: ${ticketsAfterPurchase} / ${policy.minimumTickets} total tickets${minimumReachedAfter ? " — target reached" : ` — ${ticketsRemainingAfter} ${ticketWord(ticketsRemainingAfter)} still needed`}.</p>
+      <p class="minimum-clarification">The target is based on total tickets sold, not the number of players. ${pool.id === "premium" ? "Premium allows one ticket per wallet and requires three distinct wallets." : "One wallet may buy multiple tickets in Mini, Normal, and High."}</p>
+    </section>
     <div class="review-summary">
       <div class="list-row">
         <div><span class="label">${timing.status}</span><p>${roundCopy}</p></div>
@@ -963,7 +1472,7 @@ function renderReview() {
       </div>
       <div class="list-row">
         <div><span class="label">Tickets sold</span><p>${escapeHtml(round?.totalSol || "0")} SOL in this round</p></div>
-        <strong class="mono">${bigintValue(round?.totalTickets).toString()}</strong>
+        <strong class="mono">${ticketsSold} / ${policy.minimumTickets}</strong>
       </div>
       <div class="list-row">
         <div><span class="label">Players</span><p>Confirmed entry accounts</p></div>
@@ -978,16 +1487,22 @@ function renderReview() {
         <strong class="${connected ? "success" : "warning"}">${connected ? "CONNECTED" : "REQUIRED"}</strong>
       </div>
     </div>
+    <div class="refund-explainer">
+      <strong>If the target is not reached in time</strong>
+      <p>If the minimum is not reached before the round ends, no winner is drawn. 100% of the ticket purchase amount is automatically returned to the wallet that bought the tickets.</p>
+      <p>No claim button is required. Refunds are processed automatically. Solana network fees are not refundable.</p>
+    </div>
     ${state.lastError ? `<div class="notice danger">${state.lastError}</div>` : ""}
     <div class="wallet-actions">
       ${connected ? "" : `<button class="primary-button" data-route="wallet">Connect wallet</button>`}
       <button class="primary-button" data-action="buy" ${canBuy ? "" : "disabled"}>${buyLabel}</button>
       <button class="secondary-button" data-route="pools">Back to pools</button>
     </div>
-    ${state.onchainAvailable ? "" : `<div class="notice">Mainnet pool state is not available yet.</div>`}
+    ${poolStateReady ? "" : `<div class="notice">Verified mainnet state for this pool is not available yet.</div>`}
     ${alreadyEntered ? `<div class="notice success">This wallet already has confirmed tickets in the current round.</div>` : ""}
-    ${state.onchainAvailable && timing.settlementPending ? `<div class="notice">This round has ended and is waiting for keeper settlement.</div>` : ""}
-    ${state.onchainAvailable && timing.needsCrank ? `<div class="notice">This empty round needs keeper refresh before entries reopen.</div>` : ""}
+    ${state.onchainAvailable && timing.settlementPending ? `<div class="notice">This round has ended and the automatic draw is being processed.</div>` : ""}
+    ${state.onchainAvailable && timing.cancelledBelowMinimum ? `<div class="notice ${timing.refundComplete ? "success" : ""}">${timing.refundComplete ? "Refund complete — ticket purchase amount returned." : "Round cancelled — automatic refunds in progress."}</div>` : ""}
+    ${state.onchainAvailable && timing.maintenanceRequired ? `<div class="notice">Maintenance required. Buying stays disabled until verified round rules are available.</div>` : ""}
   `;
 }
 
@@ -1000,6 +1515,24 @@ async function prepareTransaction() {
   renderReview();
 
   try {
+    const livePool = poolFromApi(state.selectedPool);
+    const round = activeRound(livePool);
+    const timing = roundTiming(state.selectedPool);
+    if (!state.onchainAvailable || !state.poolsLoaded || !round || !timing.isOpen) {
+      throw new Error("This pool does not currently have a verified round open for entries");
+    }
+    if (!hasVerifiedMinimumPolicy(state.selectedPool)) {
+      throw new Error("Verified round rules changed. Refresh and review the purchase again.");
+    }
+    const expectedRoundId = Number(round.id ?? round.roundId);
+    const expectedTotalTickets = String(round.totalTickets ?? "");
+    if (
+      !Number.isSafeInteger(expectedRoundId) ||
+      expectedRoundId < 1 ||
+      !/^\d+$/.test(expectedTotalTickets)
+    ) {
+      throw new Error("Verified round state is incomplete. Refresh and review again.");
+    }
     const response = await fetch(`${API_BASE}/transactions/buy-tickets`, {
       method: "POST",
       headers: {
@@ -1009,11 +1542,19 @@ async function prepareTransaction() {
         pool: state.selectedPool,
         ticketCount: state.ticketCount,
         player: state.wallet.address,
+        expectedRoundId,
+        expectedTotalTickets,
       }),
     });
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.message || payload.error || "Transaction build failed");
+    }
+    if (
+      Number(payload.summary?.roundId) !== expectedRoundId ||
+      String(payload.summary?.totalTicketsBefore ?? "") !== expectedTotalTickets
+    ) {
+      throw new Error("Round progress changed while preparing the transaction. Refresh and review again.");
     }
     state.preparedTransaction = payload;
     return payload;
@@ -1059,11 +1600,15 @@ async function signAndSendTransactionPayload(preparedTransaction) {
   }
 
   const transaction = Transaction.from(base64ToBytes(preparedTransaction.transactionBase64));
-  const provider = state.wallet.provider;
 
   if (state.wallet.type === "walletconnect") {
     return signAndSendWalletConnectTransaction(preparedTransaction.transactionBase64, preparedTransaction.clusterUrl);
   }
+  if (state.wallet.type === "standard") {
+    return signAndSendWalletStandardTransaction(transaction, preparedTransaction.clusterUrl);
+  }
+
+  const provider = state.wallet.provider;
 
   if (typeof provider.signAndSendTransaction === "function") {
     const result = await provider.signAndSendTransaction(transaction);
@@ -1082,6 +1627,66 @@ async function signAndSendTransactionPayload(preparedTransaction) {
   }
 
   throw new Error(`${state.wallet.name} does not expose a Solana transaction signing method`);
+}
+
+async function signAndSendWalletStandardTransaction(transaction, clusterUrl) {
+  const standardWallet = state.wallet?.standardWallet;
+  const account = state.wallet?.account;
+  if (!standardWallet || !account) {
+    throw new Error("Wallet Standard account is no longer connected");
+  }
+
+  const serialized = new Uint8Array(transaction.serialize({
+    requireAllSignatures: false,
+    verifySignatures: false,
+  }));
+  const signAndSend = standardWallet.features?.[SOLANA_SIGN_AND_SEND_TRANSACTION];
+  if (
+    account.features.includes(SOLANA_SIGN_AND_SEND_TRANSACTION)
+    && typeof signAndSend?.signAndSendTransaction === "function"
+  ) {
+    const [output] = await signAndSend.signAndSendTransaction({
+      account,
+      transaction: serialized,
+      chain: SOLANA_MAINNET_CHAIN,
+      options: {
+        commitment: "confirmed",
+        preflightCommitment: "confirmed",
+        skipPreflight: false,
+        maxRetries: 3,
+      },
+    });
+    const signatureBytes = output?.signature ? new Uint8Array(output.signature) : new Uint8Array();
+    if (signatureBytes.length !== 64) {
+      throw new Error(`${state.wallet.name} did not return a valid Solana signature`);
+    }
+    return base58Encode(signatureBytes);
+  }
+
+  const sign = standardWallet.features?.[SOLANA_SIGN_TRANSACTION];
+  if (account.features.includes(SOLANA_SIGN_TRANSACTION) && typeof sign?.signTransaction === "function") {
+    const [output] = await sign.signTransaction({
+      account,
+      transaction: serialized,
+      chain: SOLANA_MAINNET_CHAIN,
+      options: { preflightCommitment: "confirmed" },
+    });
+    const signedTransaction = output?.signedTransaction
+      ? new Uint8Array(output.signedTransaction)
+      : new Uint8Array();
+    if (!signedTransaction.length) {
+      throw new Error(`${state.wallet.name} did not return a signed Solana transaction`);
+    }
+    const connection = new Connection(clusterUrl || state.config?.clusterUrl || DEFAULT_RPC, "confirmed");
+    const signature = await connection.sendRawTransaction(signedTransaction, {
+      maxRetries: 3,
+      skipPreflight: false,
+    });
+    await connection.confirmTransaction(signature, "confirmed");
+    return signature;
+  }
+
+  throw new Error(`${state.wallet.name} no longer exposes a compatible transaction signing feature`);
 }
 
 function sleep(ms) {
@@ -1134,15 +1739,6 @@ async function sendOperatorTransaction(endpoint, body, preparingMessage, success
   } catch (error) {
     showWalletMessage(error instanceof Error ? error.message : String(error), "danger");
   }
-}
-
-async function crankEmptyRounds(poolId = null) {
-  await sendOperatorTransaction(
-    "/transactions/crank-empty-rounds",
-    poolId ? { pool: poolId } : {},
-    poolId ? `Preparing ${poolId} round refresh...` : "Preparing round crank transaction...",
-    "Crank submitted",
-  );
 }
 
 async function requestLuckyMeRandomness(poolId, roundId) {
@@ -1243,6 +1839,10 @@ async function loadConfig() {
 }
 
 async function loadPools() {
+  if (state.poolsLoading) {
+    return;
+  }
+  state.poolsLoading = true;
   try {
     const url = new URL(`${API_BASE}/pools`);
     if (state.wallet?.address) {
@@ -1264,6 +1864,8 @@ async function loadPools() {
     state.poolsLoaded = false;
     state.onchainAvailable = false;
     state.lastError = error instanceof Error ? error.message : String(error);
+  } finally {
+    state.poolsLoading = false;
   }
 
   renderStatus();
@@ -1303,9 +1905,10 @@ document.addEventListener("click", async (event) => {
   if (action === "refresh") {
     await loadConfig();
     await loadPools();
-  } else if (action === "toggle-wallet-menu") {
-    state.walletMenuOpen = !state.walletMenuOpen;
-    renderWallets();
+  } else if (action === "toggle-wallet-menu" || action === "open-wallet-modal") {
+    openWalletModal();
+  } else if (action === "close-wallet-modal") {
+    closeWalletModal();
   } else if (action === "copy-walletconnect-uri") {
     await copyWalletConnectUri();
   } else if (action === "ticket-dec") {
@@ -1316,10 +1919,6 @@ document.addEventListener("click", async (event) => {
     renderReview();
   } else if (action === "buy") {
     await buyWithWallet();
-  } else if (action === "crank-empty-rounds") {
-    await crankEmptyRounds();
-  } else if (action === "operator-crank-pool") {
-    await crankEmptyRounds(actionButton.dataset.poolId);
   } else if (action === "operator-request-randomness") {
     await requestLuckyMeRandomness(actionButton.dataset.poolId, actionButton.dataset.roundId);
   } else if (action === "operator-request-orao") {
@@ -1333,6 +1932,18 @@ document.addEventListener("click", async (event) => {
   }
 });
 
+document.addEventListener("click", (event) => {
+  if (event.target === dom.walletModal) {
+    closeWalletModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.walletModalOpen) {
+    closeWalletModal();
+  }
+});
+
 document.addEventListener("change", (event) => {
   const input = event.target.closest("[data-ticket-input]");
   if (!input) {
@@ -1340,6 +1951,28 @@ document.addEventListener("change", (event) => {
   }
   setTicketCount(input.value);
   renderReview();
+});
+
+walletStandardRegistry.on("register", () => {
+  if (state.walletModalOpen) {
+    renderWalletModal();
+  }
+  if (!state.wallet) {
+    renderWallets();
+  }
+});
+
+walletStandardRegistry.on("unregister", (...wallets) => {
+  if (state.wallet?.type === "standard" && wallets.includes(state.wallet.standardWallet)) {
+    void clearConnectedWallet(`${state.wallet.name} is no longer available in this browser.`);
+    return;
+  }
+  if (state.walletModalOpen) {
+    renderWalletModal();
+  }
+  if (!state.wallet) {
+    renderWallets();
+  }
 });
 
 setInterval(() => {
@@ -1352,12 +1985,17 @@ setInterval(() => {
   }
 }, 1000);
 
+setInterval(() => {
+  if (document.visibilityState === "visible") {
+    void loadPools();
+  }
+}, 12_000);
+
 renderPools();
 renderActivity();
 renderWalletPill();
 if (new URLSearchParams(window.location.search).has("wallet")) {
-  state.walletMenuOpen = true;
-  setRoute("wallet");
+  openWalletModal();
 }
 loadConfig();
 loadPools();

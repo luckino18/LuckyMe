@@ -1,5 +1,9 @@
 # LuckyMe Final Store Handoff - 2026-07-08
 
+> Superseded historical v1.0 handoff. Preserve its signature evidence, but use
+> the July 11 `1.1.0` release-candidate report for the current APK and install
+> instructions. Its active-round assumptions are no longer current.
+
 ## Final APK
 
 - Artifact:

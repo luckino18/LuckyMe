@@ -5,7 +5,7 @@ description = "LuckyMe fixed-entry Solana luck pools"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib"]
 name = "luckyme"
 
 [features]

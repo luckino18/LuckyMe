@@ -253,6 +253,31 @@ test("backend transaction submit relay is disabled by default", async () => {
   }
 });
 
+test("backend exposes automatic refunds without a player claim transaction", async () => {
+  const port = await getFreePort();
+  const child = startServer({
+    PORT: String(port),
+    ANCHOR_PROVIDER_URL: "http://127.0.0.1:1",
+    LUCKYME_RELEASE_MODE: "LOCAL_DEVELOPMENT",
+  });
+
+  try {
+    await waitForOutput(child, /LuckyMe API listening/);
+    const response = await fetch(`http://127.0.0.1:${port}/transactions/refund-entry`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 410);
+    assert.equal(payload.error, "automatic_refund_only");
+    assert.match(payload.message, /configured keeper/);
+  } finally {
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  }
+});
+
 test("backend exposes safe public config", async () => {
   const port = await getFreePort();
   const child = startServer({

@@ -1,5 +1,9 @@
 # LuckyMe Web App Handoff for Claude Fable 5
 
+> Superseded design handoff. The current site adds minimum-ticket progress,
+> automatic-refund states, `/how-to-play/`, and the Wallet Standard modal. The
+> July 7 backend/active-round snapshot below is historical.
+
 Date: 2026-07-07
 
 ## Goal

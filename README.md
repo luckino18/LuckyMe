@@ -9,6 +9,32 @@ Pool math is transparent: fixed ticket price, total tickets, winner chance,
 prize, jackpot contribution, and treasury fee. Results and payouts are executed
 by the Solana program.
 
+> Release-candidate boundary (2026-07-11): this branch contains the new
+> minimum-ticket and automatic-refund program, keeper, backend, web, and Seeker
+> code. The source is intentionally ahead of the program and services currently
+> running on mainnet. No minimum-ticket program upgrade, live site/backend
+> deployment, or keeper start is implied by this repository state.
+
+## Funded-round rules
+
+The one-hour timer starts only when the first ticket is confirmed. A draw is
+valid only when the round reaches its target before the timer expires:
+
+| Pool | Ticket target | Distinct-wallet target |
+| --- | ---: | ---: |
+| Mini | 25 | 1 |
+| Normal | 13 | 1 |
+| High | 3 | 1 |
+| Premium | 3 | 3 |
+
+Mini, Normal, and High count total tickets, not distinct players: one wallet
+may buy the complete target. Premium keeps one ticket per wallet and requires
+three distinct wallets. If a round expires below either applicable target, no
+ORAO request or winner draw is created. The authorized settlement keeper
+automatically returns every ticket's full purchase principal and closes each
+Entry account so its rent returns to that player. Solana network fees already
+paid to the network cannot be refunded. There is no player claim step.
+
 ## Screenshots
 
 <p>
@@ -30,7 +56,8 @@ by the Solana program.
 - **Mobile app:** Expo React Native with Mobile Wallet Adapter
 - **Web app:** static landing and browser dapp shell for `lucky-me.app`
 - **Backend:** transaction builder and public state API
-- **Randomness:** ORAO VRF provider path for `MAINNET_RELEASE`
+- **Randomness:** ORAO VRF only for expired rounds that reached their draw
+  minimum; below-target rounds enter refund mode without an ORAO request.
 - **Player custody:** the backend never signs player transactions and never
   custodies user funds.
 - **Device smoke test:** Victor reported the signed Seeker build tested on a
@@ -111,8 +138,8 @@ Important backend behavior:
   on-chain state returns an unavailable/error state rather than fake pool data.
 - `POST /transactions/buy-tickets` builds and simulates an unsigned ticket
   transaction for the connected wallet.
-- `POST /transactions/refund-entry` builds and simulates an unsigned refund
-  transaction when refund state is available.
+- `POST /transactions/refund-entry` is retired and returns `410`; below-target
+  refunds are executed only by the authorized, journaled settlement keeper.
 - `POST /transactions/request-randomness`,
   `POST /transactions/request-orao-randomness`, and
   `POST /transactions/settle-provider-round` support the ORAO keeper flow.
@@ -150,6 +177,7 @@ The public site lives under `site/lucky-me.app` and deploys as static files to
 
 - Landing: `https://www.lucky-me.app/`
 - Browser dapp: `https://www.lucky-me.app/play/`
+- Player rules: `https://www.lucky-me.app/how-to-play/`
 - Legal/support pages: `/terms/`, `/privacy/`, `/support/`
 
 The web wallet UI exposes one public `Connect wallet` action. After click it
@@ -182,6 +210,11 @@ For EAS cloud builds, set `EXPO_PUBLIC_LUCKYME_API_URL`,
 `EXPO_PUBLIC_LUCKYME_PRIVACY_URL`, and `EXPO_PUBLIC_LUCKYME_SUPPORT_URL` in the
 EAS project environment or as EAS secrets before the `dapp-store` build. The
 build must use HTTPS production URLs, not loopback or LAN addresses.
+
+The minimum-ticket release candidate is app version `1.1.0`, Android
+`versionCode` `3`, and keeps package `com.luckyme.seeker`. Its target progress,
+purchase review, automatic-refund explanation, and How to Play content mirror
+the browser app.
 
 Build the Solana dApp Store APK with EAS:
 
@@ -249,7 +282,7 @@ export DAPP_STORE_API_KEY=<publisher-portal-api-key>
 dapp-store \
   --apk-file ./app-release.apk \
   --keypair ./publisher-keypair.json \
-  --whats-new "$(cat docs/store-listing/whats-new-v1.0.0.txt)"
+  --whats-new "$(cat docs/store-listing/whats-new-v1.1.0.txt)"
 ```
 
 The CLI path requires an app already created in the Publisher Portal, an App NFT
@@ -262,6 +295,7 @@ Store listing material is in `docs/store-listing/`:
 - `short-description.txt`
 - `full-description.md`
 - `whats-new-v1.0.0.txt`
+- `whats-new-v1.1.0.txt`
 - `screenshot-checklist.md`
 - `icon-adaptive-icon-checklist.md`
 - `privacy-policy.md`
@@ -274,9 +308,10 @@ be configured before submitting the APK.
 
 Store readiness is tracked in `docs/store-readiness.md`; it uses the same
 `MAINNET_RELEASE`, `solana:mainnet`, `mainnet-beta`, and signed APK release
-positioning as this README.
-The final `v1.0.0-mainnet` release checklist is in
-`docs/release-v1.0.0-mainnet.md`.
+positioning as this README. `docs/release-v1.0.0-mainnet.md` is retained as
+historical v1.0 evidence. The minimum-ticket `1.1.0` release-candidate evidence
+and still-gated mainnet plan are recorded in the dated July 11 documents under
+`docs/`.
 
 ## Solana Mobile Docs Scope
 

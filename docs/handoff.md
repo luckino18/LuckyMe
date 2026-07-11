@@ -1,7 +1,7 @@
 # LuckyMe Handoff
 
-Current objective: operate the deployed LuckyMe `MAINNET_RELEASE` Solana Mobile
-/ Seeker Store release candidate.
+Current objective: preserve the completed lifecycle deployment while preparing
+the separately gated minimum-ticket/refund `MAINNET_RELEASE` release candidate.
 
 ## Current Release Shape
 
@@ -12,17 +12,19 @@ Current objective: operate the deployed LuckyMe `MAINNET_RELEASE` Solana Mobile
   `Euf5ociVf2MyeyVpypC7EcwyQgnWBvsnuqhuxPGSMCeta9Ho1u7dKNGiLFczKbwkamjZMf8Ajb6Ykbj4mMXAP8N`
 - Upgrade/config authority: `AApgoYncyfpadcMwZBvbCtzp3L9QdocgsYTmrPR2wEds`
 - Treasury: `87jw8LSagc3NdcyPixwXFYZRNPYes7YqFFmqU5WUeJtd`
+- Production keeper: `6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N`
 - Backend: `https://api.lucky-me.app`
 - Mobile wallet chain: `solana:mainnet`
 - Randomness: ORAO provider path
 - Backend player signing: none
 - Backend submit relay: disabled for production
 - Production pool fallback: unavailable/error state, not fake data
-- On-chain status on 2026-07-07: config initialized, all four pools
-  initialized, and first active round opened for Mini, Normal, High, and
-  Premium.
-- Final store APK: `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
-- Final APK SHA-256:
+- Historical on-chain status on 2026-07-07: config and all four pools were
+  initialized and their first rounds opened. Current post-cleanup status is
+  `activeRound: null` for Mini, Normal, High, and Premium.
+- Historical v1.0 store APK:
+  `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
+- Historical v1.0 APK SHA-256:
   `c104ec372270dc175d54d26bf472edd9f489813324f66c9a6766df423fc05bc2`
 - APK signing: EAS-managed Android credentials
   `Build Credentials iNPMBDRiCC (default)`, verified with APK Signature Scheme
@@ -39,6 +41,57 @@ Current objective: operate the deployed LuckyMe `MAINNET_RELEASE` Solana Mobile
 - Home copy now states `95% prize / 3% jackpot / 2% treasury`.
 - Winner share card: included in the APK/WebView flow as a dynamic,
   responsive card with WhatsApp, X, Telegram, and PNG download actions.
+
+## July 11 lifecycle upgrade status
+
+The lifecycle program upgrade and `KeeperConfig` initialization are deployed.
+The approved Stage 2 recovery closed all 18 eligible legacy empty Round
+accounts in five batches of at most four and returned exactly `0.05211648 SOL`
+to the on-chain treasury. Mini round 2, which contains four tickets and player
+funds, was excluded and remains unchanged. The temporary upload payer was
+drained back to the Ledger authority and the upgrade buffer is closed.
+
+The post-recovery keeper dry-run executed nothing and plans one new waiting
+Round for each pool. Those four Round accounts have not been created. The live
+API therefore reports `activeRound: null`, the site disables Join, and the
+keeper timer remains `disabled` and `inactive`. Do not enable keeper writes or
+the timer without the next explicit approval and sufficient keeper funding.
+
+The required production keeper is still
+`6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N`.
+`8TN3gVGp86EUnmpa3ncMpPHoWDAV7t997RuXaLesRWqV` is only an older plan and is not
+the VPS signer. Full Stage 2 evidence is in
+`docs/mainnet-stage2-rent-recovery-execution-2026-07-11.md` and
+`docs/mainnet-stage2-rent-recovery-evidence-2026-07-11.json`.
+
+## Minimum-ticket release candidate status
+
+Source now implements Mini `25`, Normal `13`, High `3`, and Premium `3`
+minimum tickets; Premium also requires three distinct wallets. The first ticket
+starts the one-hour timer. An expired below-target round requests no ORAO and
+has no winner: after the 600-second delay, the configured keeper returns full
+ticket principal and Entry rent to each player automatically. Network fees are
+not refundable and players do not claim manually.
+
+Program, IDL/SDK, settlement keeper/journal, backend, static site, How to Play,
+wallet selector, and Seeker `1.1.0`/code `3` are synchronized in this branch.
+The signed code-3 test APK is
+`/Users/victor/Desktop/LuckyMe-Seeker-MINIMUM-TICKETS-TEST-1.1.0-2026-07-11.apk`
+with SHA-256
+`b0da48983e84fd361fe27e06a6ac3d5193b7fb9d0f04621ca963dbc6321af42d`.
+It uses the established EAS certificate `e249bc55...2067`; signature v2, ZIP,
+package/version, production configuration, and extracted LuckyMe launcher
+resources passed verification. See
+`docs/seeker-apk-1.1.0-verification-2026-07-11.md`. No ADB device was connected,
+so the physical Seeker smoke test remains outstanding.
+The final production program artifact is `359312` bytes with SHA-256
+`ab541a8eac1c3525199f9f409e4134274484183a1b67c9826fa0badf7cbb9576`;
+the IDL and SDK hashes are recorded in the release-candidate report.
+All local test suites and the mainnet keeper dry-run pass; the dry-run executes
+zero transactions. This new binary and its matching backend/site/keeper have
+not been deployed. The live timer remains disabled and inactive. See
+`docs/mainnet-minimum-tickets-upgrade-approval-plan-2026-07-11.md` before any
+transfer, upgrade, deployment, round opening, or keeper start.
 
 ## Main Files Changed In This Pass
 
@@ -65,7 +118,8 @@ Current objective: operate the deployed LuckyMe `MAINNET_RELEASE` Solana Mobile
 - Publisher Portal account and KYC/KYB.
 - Publisher wallet with enough SOL for submission and storage costs.
 - Publisher Portal API key and signer keypair if using the optional CLI path.
-- Post-deploy real-device wallet entry test against the active mainnet rounds.
+- Post-approval real-device wallet entry test against a separately opened
+  mainnet round.
 - Final Publisher Portal submission and storage provider selection.
 
 ## Validation Commands
@@ -81,12 +135,12 @@ cargo check
 cargo test
 ```
 
-Final store APK verification commands:
+Current release-candidate APK verification commands:
 
 ```bash
 npm run app:apk:verify
-apksigner verify --verbose --print-certs /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk
-shasum -a 256 /Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk
+apksigner verify --verbose --print-certs /Users/victor/Desktop/LuckyMe-Seeker-MINIMUM-TICKETS-TEST-1.1.0-2026-07-11.apk
+shasum -a 256 /Users/victor/Desktop/LuckyMe-Seeker-MINIMUM-TICKETS-TEST-1.1.0-2026-07-11.apk
 ```
 
 ## Mainnet Operations Notes

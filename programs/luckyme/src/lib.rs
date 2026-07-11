@@ -10,7 +10,16 @@ const MAX_FEE_BPS: u16 = 200;
 const MAX_JACKPOT_BPS: u16 = 300;
 const MAX_WINNERS: usize = 3;
 const MAX_TICKETS_PER_ENTRY: u64 = 1_000;
+const MINI_POOL_ID: u8 = 1;
+const NORMAL_POOL_ID: u8 = 2;
+const HIGH_POOL_ID: u8 = 3;
 const PREMIUM_POOL_ID: u8 = 4;
+const MINI_MINIMUM_TICKETS: u64 = 25;
+const NORMAL_MINIMUM_TICKETS: u64 = 13;
+const HIGH_MINIMUM_TICKETS: u64 = 3;
+const PREMIUM_MINIMUM_TICKETS: u64 = 3;
+const DEFAULT_MINIMUM_DISTINCT_ENTRANTS: u32 = 1;
+const PREMIUM_MINIMUM_DISTINCT_ENTRANTS: u32 = 3;
 const PREMIUM_MAX_TICKETS_PER_ENTRY: u64 = 1;
 #[cfg(not(feature = "test-short-timers"))]
 const MIN_ROUND_DURATION_SECS: i64 = 60;
@@ -106,14 +115,51 @@ pub mod luckyme {
         Ok(())
     }
 
+    pub fn initialize_keeper_config(
+        ctx: Context<InitializeKeeperConfig>,
+        keeper: Pubkey,
+    ) -> Result<()> {
+        require_valid_keeper(&keeper)?;
+        let keeper_config = &mut ctx.accounts.keeper_config;
+        keeper_config.config = ctx.accounts.config.key();
+        keeper_config.keeper = keeper;
+        keeper_config.bump = ctx.bumps.keeper_config;
+        emit!(KeeperConfigured {
+            authority: ctx.accounts.authority.key(),
+            config: ctx.accounts.config.key(),
+            keeper_config: keeper_config.key(),
+            previous_keeper: Pubkey::default(),
+            keeper,
+        });
+        Ok(())
+    }
+
+    pub fn set_keeper(ctx: Context<SetKeeper>, keeper: Pubkey) -> Result<()> {
+        require_valid_keeper(&keeper)?;
+        let keeper_config = &mut ctx.accounts.keeper_config;
+        let previous_keeper = keeper_config.keeper;
+        keeper_config.keeper = keeper;
+        emit!(KeeperConfigured {
+            authority: ctx.accounts.authority.key(),
+            config: ctx.accounts.config.key(),
+            keeper_config: keeper_config.key(),
+            previous_keeper,
+            keeper,
+        });
+        Ok(())
+    }
+
     pub fn open_round(ctx: Context<OpenRound>, randomness_commitment: [u8; 32]) -> Result<()> {
         require!(!ctx.accounts.config.paused, LuckyMeError::Paused);
         require!(
             randomness_commitment != [0; 32],
             LuckyMeError::InvalidRandomnessCommitment
         );
+        require!(
+            ctx.accounts.previous_round.data_is_empty(),
+            LuckyMeError::PreviousRoundStillExists
+        );
 
-        let now = Clock::get()?.unix_timestamp;
         let pool = &mut ctx.accounts.pool;
         let round = &mut ctx.accounts.round;
         let round_id = pool
@@ -125,10 +171,10 @@ pub mod luckyme {
 
         round.pool = pool.key();
         round.round_id = round_id;
-        round.start_ts = now;
-        round.end_ts = now
-            .checked_add(ctx.accounts.config.round_duration_secs)
-            .ok_or(LuckyMeError::MathOverflow)?;
+        // A newly opened round waits indefinitely for its first paid entry.
+        // The one-hour countdown is started atomically by buy_tickets.
+        round.start_ts = 0;
+        round.end_ts = 0;
         round.ticket_price_lamports = pool.ticket_price_lamports;
         round.total_tickets = 0;
         round.total_lamports = 0;
@@ -155,17 +201,51 @@ pub mod luckyme {
         Ok(())
     }
 
-    pub fn buy_tickets(ctx: Context<BuyTickets>, ticket_count: u64) -> Result<()> {
+    pub fn buy_tickets(
+        ctx: Context<BuyTickets>,
+        ticket_count: u64,
+        expected_total_tickets: u64,
+    ) -> Result<()> {
         require!(!ctx.accounts.config.paused, LuckyMeError::Paused);
         require!(ticket_count > 0, LuckyMeError::InvalidTicketCount);
         require!(
             ticket_count <= ctx.accounts.pool.max_tickets_per_entry,
             LuckyMeError::InvalidTicketCount
         );
+        require!(
+            ctx.accounts.round.total_tickets == expected_total_tickets,
+            LuckyMeError::ReviewedRoundChanged
+        );
 
         let now = Clock::get()?.unix_timestamp;
-        require!(now < ctx.accounts.round.end_ts, LuckyMeError::RoundClosed);
         require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
+        if ctx.accounts.round.start_ts == 0 {
+            require!(
+                ctx.accounts.round.end_ts == 0
+                    && ctx.accounts.round.total_tickets == 0
+                    && ctx.accounts.round.total_lamports == 0
+                    && ctx.accounts.round.entrant_count == 0,
+                LuckyMeError::InvalidRoundState
+            );
+            ctx.accounts.round.start_ts = now;
+            ctx.accounts.round.end_ts = now
+                .checked_add(ctx.accounts.config.round_duration_secs)
+                .ok_or(LuckyMeError::MathOverflow)?;
+            emit!(RoundStarted {
+                pool: ctx.accounts.pool.key(),
+                round: ctx.accounts.round.key(),
+                round_id: ctx.accounts.round.round_id,
+                first_player: ctx.accounts.player.key(),
+                start_ts: ctx.accounts.round.start_ts,
+                end_ts: ctx.accounts.round.end_ts,
+            });
+        } else {
+            require!(
+                ctx.accounts.round.end_ts > ctx.accounts.round.start_ts,
+                LuckyMeError::InvalidRoundState
+            );
+        }
+        require!(now < ctx.accounts.round.end_ts, LuckyMeError::RoundClosed);
         require!(
             ctx.accounts.entry.ticket_count == 0,
             LuckyMeError::AlreadyEnteredRound
@@ -246,20 +326,19 @@ pub mod luckyme {
         Ok(())
     }
 
+    #[cfg(feature = "test-short-timers")]
     pub fn settle_round<'info>(
         ctx: Context<'info, SettleRound<'info>>,
         randomness_reveal: [u8; 32],
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
+        require!(ctx.accounts.round.end_ts > 0, LuckyMeError::RoundNotStarted);
         require!(
             now >= ctx.accounts.round.end_ts,
             LuckyMeError::RoundStillOpen
         );
         require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
-        require!(
-            ctx.accounts.round.total_tickets > 0,
-            LuckyMeError::EmptyRound
-        );
+        require_round_eligible_for_draw(&ctx.accounts.pool, &ctx.accounts.round)?;
         require!(
             commitment_for(&randomness_reveal) == ctx.accounts.round.randomness_commitment,
             LuckyMeError::InvalidRandomnessReveal
@@ -457,15 +536,13 @@ pub mod luckyme {
     pub fn request_randomness(ctx: Context<RequestRandomness>) -> Result<()> {
         let clock = Clock::get()?;
         let now = clock.unix_timestamp;
+        require!(ctx.accounts.round.end_ts > 0, LuckyMeError::RoundNotStarted);
         require!(
             now >= ctx.accounts.round.end_ts,
             LuckyMeError::RoundStillOpen
         );
         require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
-        require!(
-            ctx.accounts.round.total_tickets > 0,
-            LuckyMeError::EmptyRound
-        );
+        require_round_eligible_for_draw(&ctx.accounts.pool, &ctx.accounts.round)?;
 
         let seed = derive_orao_randomness_seed(
             &ctx.accounts.round.key(),
@@ -504,15 +581,13 @@ pub mod luckyme {
         ctx: Context<'info, SettleRoundWithProviderRandomness<'info>>,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
+        require!(ctx.accounts.round.end_ts > 0, LuckyMeError::RoundNotStarted);
         require!(
             now >= ctx.accounts.round.end_ts,
             LuckyMeError::RoundStillOpen
         );
         require!(!ctx.accounts.round.settled, LuckyMeError::RoundSettled);
-        require!(
-            ctx.accounts.round.total_tickets > 0,
-            LuckyMeError::EmptyRound
-        );
+        require_round_eligible_for_draw(&ctx.accounts.pool, &ctx.accounts.round)?;
         require!(
             ctx.accounts.round_randomness.provider == RandomnessProvider::OraoVrf,
             LuckyMeError::InvalidRandomnessProvider
@@ -721,6 +796,10 @@ pub mod luckyme {
             Pubkey::default()
         };
         round.randomness = randomness;
+        // Preserve the ORAO seed in the durable round account so the backend can
+        // continue verifying the provider request after the temporary LuckyMe
+        // sidecar account is closed and its rent is returned to treasury.
+        round.randomness_commitment = fulfilled.seed;
 
         let round_randomness = &mut ctx.accounts.round_randomness;
         round_randomness.status = RandomnessStatus::Settled;
@@ -760,12 +839,17 @@ pub mod luckyme {
 
     pub fn refund_entry_after_timeout(ctx: Context<RefundEntryAfterTimeout>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
+        require!(ctx.accounts.round.end_ts > 0, LuckyMeError::RoundNotStarted);
         let refund_after = refund_deadline(ctx.accounts.round.end_ts)?;
         require!(now >= refund_after, LuckyMeError::RefundNotAvailable);
+        let already_in_refund_mode = round_is_refund_mode(&ctx.accounts.round);
         require!(
-            !ctx.accounts.round.settled || round_is_refund_mode(&ctx.accounts.round),
+            !ctx.accounts.round.settled || already_in_refund_mode,
             LuckyMeError::RoundSettled
         );
+        if !already_in_refund_mode {
+            require_round_below_draw_minimum(&ctx.accounts.pool, &ctx.accounts.round)?;
+        }
         require!(
             ctx.accounts.entry.lamports > 0,
             LuckyMeError::NothingToRefund
@@ -773,6 +857,9 @@ pub mod luckyme {
 
         let refund_lamports = ctx.accounts.entry.lamports;
         let refund_tickets = ctx.accounts.entry.ticket_count;
+        let cancelled_total_tickets = ctx.accounts.round.total_tickets;
+        let cancelled_total_lamports = ctx.accounts.round.total_lamports;
+        let cancelled_entrant_count = ctx.accounts.round.entrant_count;
 
         transfer_lamports(
             &ctx.accounts.pool_vault.to_account_info(),
@@ -806,6 +893,21 @@ pub mod luckyme {
         entry.ticket_count = 0;
         entry.lamports = 0;
 
+        if !already_in_refund_mode {
+            emit!(RoundCancelledBelowMinimum {
+                pool: ctx.accounts.pool.key(),
+                round: round.key(),
+                round_id: round.round_id,
+                total_tickets: cancelled_total_tickets,
+                total_lamports: cancelled_total_lamports,
+                entrant_count: cancelled_entrant_count,
+                minimum_tickets: minimum_tickets_for_pool(ctx.accounts.pool.pool_id)?,
+                minimum_distinct_entrants: minimum_distinct_entrants_for_pool(
+                    ctx.accounts.pool.pool_id,
+                )?,
+            });
+        }
+
         emit!(EntryRefunded {
             pool: ctx.accounts.pool.key(),
             round: round.key(),
@@ -821,8 +923,11 @@ pub mod luckyme {
         Ok(())
     }
 
-    pub fn close_empty_round_after_timeout(ctx: Context<CloseEmptyRoundAfterTimeout>) -> Result<()> {
+    pub fn close_empty_round_after_timeout(
+        ctx: Context<CloseEmptyRoundAfterTimeout>,
+    ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
+        require!(ctx.accounts.round.end_ts > 0, LuckyMeError::RoundNotStarted);
         require!(
             now >= ctx.accounts.round.end_ts,
             LuckyMeError::RoundStillOpen
@@ -849,6 +954,80 @@ pub mod luckyme {
             pool: ctx.accounts.pool.key(),
             round: round.key(),
             round_id: round.round_id,
+        });
+
+        Ok(())
+    }
+
+    pub fn close_settled_entry(ctx: Context<CloseSettledEntry>) -> Result<()> {
+        require!(ctx.accounts.round.settled, LuckyMeError::RoundStillOpen);
+        let active_entry = entry_counts_as_entrant(&ctx.accounts.entry);
+        require!(
+            !round_is_refund_mode(&ctx.accounts.round) || !active_entry,
+            LuckyMeError::RefundsPending
+        );
+        if active_entry {
+            ctx.accounts.round.entrant_count = ctx
+                .accounts
+                .round
+                .entrant_count
+                .checked_sub(1)
+                .ok_or(LuckyMeError::MathOverflow)?;
+        }
+
+        emit!(SettledEntryClosed {
+            round: ctx.accounts.round.key(),
+            entry: ctx.accounts.entry.key(),
+            player: ctx.accounts.player.key(),
+            rent_recipient: ctx.accounts.player.key(),
+            remaining_entrant_count: ctx.accounts.round.entrant_count,
+        });
+
+        Ok(())
+    }
+
+    pub fn close_settled_randomness(ctx: Context<CloseSettledRandomness>) -> Result<()> {
+        require!(ctx.accounts.round.settled, LuckyMeError::RoundStillOpen);
+        let refund_cleanup = round_is_refund_mode(&ctx.accounts.round)
+            && matches!(
+                ctx.accounts.round_randomness.status,
+                RandomnessStatus::Requested
+                    | RandomnessStatus::Fulfilled
+                    | RandomnessStatus::RefundMode
+            );
+        require!(
+            matches!(
+                ctx.accounts.round_randomness.status,
+                RandomnessStatus::Settled | RandomnessStatus::RefundMode
+            ) || refund_cleanup,
+            LuckyMeError::InvalidRandomnessStatus
+        );
+
+        Ok(())
+    }
+
+    pub fn close_settled_round(ctx: Context<CloseSettledRound>) -> Result<()> {
+        require!(ctx.accounts.round.settled, LuckyMeError::RoundStillOpen);
+        if round_is_refund_mode(&ctx.accounts.round) {
+            require!(
+                ctx.accounts.round.total_tickets == 0 && ctx.accounts.round.total_lamports == 0,
+                LuckyMeError::RefundsPending
+            );
+        }
+        require!(
+            ctx.accounts.round.entrant_count == 0,
+            LuckyMeError::RoundHasEntries
+        );
+        require!(
+            ctx.accounts.round_randomness.data_is_empty(),
+            LuckyMeError::RandomnessAccountStillExists
+        );
+
+        emit!(SettledRoundClosed {
+            pool: ctx.accounts.pool.key(),
+            round: ctx.accounts.round.key(),
+            round_id: ctx.accounts.round.round_id,
+            rent_recipient: ctx.accounts.treasury.key(),
         });
 
         Ok(())
@@ -886,6 +1065,15 @@ pub struct PoolInitialized {
 }
 
 #[event]
+pub struct KeeperConfigured {
+    pub authority: Pubkey,
+    pub config: Pubkey,
+    pub keeper_config: Pubkey,
+    pub previous_keeper: Pubkey,
+    pub keeper: Pubkey,
+}
+
+#[event]
 pub struct RoundOpened {
     pub pool: Pubkey,
     pub round: Pubkey,
@@ -894,6 +1082,16 @@ pub struct RoundOpened {
     pub end_ts: i64,
     pub ticket_price_lamports: u64,
     pub randomness_commitment: [u8; 32],
+}
+
+#[event]
+pub struct RoundStarted {
+    pub pool: Pubkey,
+    pub round: Pubkey,
+    pub round_id: u64,
+    pub first_player: Pubkey,
+    pub start_ts: i64,
+    pub end_ts: i64,
 }
 
 #[event]
@@ -977,10 +1175,39 @@ pub struct EntryRefunded {
 }
 
 #[event]
+pub struct RoundCancelledBelowMinimum {
+    pub pool: Pubkey,
+    pub round: Pubkey,
+    pub round_id: u64,
+    pub total_tickets: u64,
+    pub total_lamports: u64,
+    pub entrant_count: u32,
+    pub minimum_tickets: u64,
+    pub minimum_distinct_entrants: u32,
+}
+
+#[event]
 pub struct EmptyRoundClosed {
     pub pool: Pubkey,
     pub round: Pubkey,
     pub round_id: u64,
+}
+
+#[event]
+pub struct SettledEntryClosed {
+    pub round: Pubkey,
+    pub entry: Pubkey,
+    pub player: Pubkey,
+    pub rent_recipient: Pubkey,
+    pub remaining_entrant_count: u32,
+}
+
+#[event]
+pub struct SettledRoundClosed {
+    pub pool: Pubkey,
+    pub round: Pubkey,
+    pub round_id: u64,
+    pub rent_recipient: Pubkey,
 }
 
 #[event]
@@ -1042,13 +1269,58 @@ pub struct InitializePool<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitializeKeeperConfig<'info> {
+    #[account(mut, address = config.authority)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + KeeperConfig::LEN,
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetKeeper<'info> {
+    #[account(address = config.authority)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(
+        mut,
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
+}
+
+#[derive(Accounts)]
 pub struct OpenRound<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
     #[account(mut, has_one = config)]
     pub pool: Account<'info, Pool>,
+    #[account(
+        seeds = [b"round", pool.key().as_ref(), &pool.current_round.to_le_bytes()],
+        bump
+    )]
+    /// CHECK: Canonical previous Round PDA. Its data must be empty before advancing.
+    pub previous_round: UncheckedAccount<'info>,
     #[account(
         init,
         payer = keeper,
@@ -1068,7 +1340,12 @@ pub struct BuyTickets<'info> {
     pub config: Account<'info, Config>,
     #[account(has_one = config)]
     pub pool: Account<'info, Pool>,
-    #[account(mut, has_one = pool)]
+    #[account(
+        mut,
+        has_one = pool,
+        seeds = [b"round", pool.key().as_ref(), &pool.current_round.to_le_bytes()],
+        bump = round.bump
+    )]
     pub round: Account<'info, Round>,
     #[account(
         init_if_needed,
@@ -1088,15 +1365,28 @@ pub struct BuyTickets<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "test-short-timers")]
 #[derive(Accounts)]
 pub struct SettleRound<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Box<Account<'info, Config>>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Box<Account<'info, KeeperConfig>>,
     #[account(mut, has_one = config)]
     pub pool: Box<Account<'info, Pool>>,
-    #[account(mut, has_one = pool)]
+    #[account(
+        mut,
+        has_one = pool,
+        seeds = [b"round", pool.key().as_ref(), &pool.current_round.to_le_bytes()],
+        bump = round.bump
+    )]
     pub round: Box<Account<'info, Round>>,
     #[account(
         mut,
@@ -1131,9 +1421,20 @@ pub struct RequestRandomness<'info> {
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
     #[account(has_one = config)]
     pub pool: Account<'info, Pool>,
-    #[account(has_one = pool)]
+    #[account(
+        has_one = pool,
+        seeds = [b"round", pool.key().as_ref(), &pool.current_round.to_le_bytes()],
+        bump = round.bump
+    )]
     pub round: Account<'info, Round>,
     #[account(
         init,
@@ -1152,12 +1453,25 @@ pub struct SettleRoundWithProviderRandomness<'info> {
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Box<Account<'info, Config>>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Box<Account<'info, KeeperConfig>>,
     #[account(mut, has_one = config)]
     pub pool: Box<Account<'info, Pool>>,
-    #[account(mut, has_one = pool)]
+    #[account(
+        mut,
+        has_one = pool,
+        seeds = [b"round", pool.key().as_ref(), &pool.current_round.to_le_bytes()],
+        bump = round.bump
+    )]
     pub round: Box<Account<'info, Round>>,
     #[account(
         mut,
+        close = treasury,
         seeds = [b"round_randomness", round.key().as_ref()],
         bump = round_randomness.bump,
         constraint = round_randomness.round == round.key()
@@ -1195,15 +1509,30 @@ pub struct SettleRoundWithProviderRandomness<'info> {
 #[derive(Accounts)]
 pub struct RefundEntryAfterTimeout<'info> {
     #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(mut)]
     pub player: SystemAccount<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
     #[account(has_one = config)]
     pub pool: Account<'info, Pool>,
-    #[account(mut, has_one = pool)]
+    #[account(
+        mut,
+        has_one = pool,
+        seeds = [b"round", pool.key().as_ref(), &round.round_id.to_le_bytes()],
+        bump = round.bump
+    )]
     pub round: Account<'info, Round>,
     #[account(
         mut,
+        close = player,
         constraint = entry.round == round.key(),
         constraint = entry.player == player.key()
     )]
@@ -1224,10 +1553,95 @@ pub struct CloseEmptyRoundAfterTimeout<'info> {
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
     #[account(has_one = config)]
     pub pool: Account<'info, Pool>,
-    #[account(mut, has_one = pool)]
+    #[account(mut, close = treasury, has_one = pool)]
     pub round: Account<'info, Round>,
+    #[account(mut, address = config.treasury)]
+    pub treasury: SystemAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CloseSettledEntry<'info> {
+    pub keeper: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
+    #[account(mut)]
+    pub player: SystemAccount<'info>,
+    #[account(mut)]
+    pub round: Account<'info, Round>,
+    #[account(
+        mut,
+        close = player,
+        constraint = entry.round == round.key(),
+        constraint = entry.player == player.key()
+    )]
+    pub entry: Account<'info, Entry>,
+}
+
+#[derive(Accounts)]
+pub struct CloseSettledRandomness<'info> {
+    pub keeper: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
+    pub round: Account<'info, Round>,
+    #[account(
+        mut,
+        close = treasury,
+        seeds = [b"round_randomness", round.key().as_ref()],
+        bump = round_randomness.bump,
+        constraint = round_randomness.round == round.key()
+    )]
+    pub round_randomness: Account<'info, RoundRandomness>,
+    #[account(mut, address = config.treasury)]
+    pub treasury: SystemAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CloseSettledRound<'info> {
+    pub keeper: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
+    #[account(has_one = config)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, close = treasury, has_one = pool)]
+    pub round: Account<'info, Round>,
+    #[account(
+        seeds = [b"round_randomness", round.key().as_ref()],
+        bump
+    )]
+    /// CHECK: Canonical sidecar PDA; it must be empty before Round closure.
+    pub round_randomness: UncheckedAccount<'info>,
+    #[account(mut, address = config.treasury)]
+    pub treasury: SystemAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -1252,6 +1666,17 @@ pub struct Config {
 
 impl Config {
     pub const LEN: usize = 32 + 32 + 2 + 2 + 4 + 8 + 1 + 1;
+}
+
+#[account]
+pub struct KeeperConfig {
+    pub config: Pubkey,
+    pub keeper: Pubkey,
+    pub bump: u8,
+}
+
+impl KeeperConfig {
+    pub const LEN: usize = 32 + 32 + 1;
 }
 
 #[account]
@@ -1390,6 +1815,52 @@ fn pool_spec(pool_id: u8) -> Result<PoolSpec> {
     }
 }
 
+fn minimum_tickets_for_pool(pool_id: u8) -> Result<u64> {
+    match pool_id {
+        MINI_POOL_ID => Ok(MINI_MINIMUM_TICKETS),
+        NORMAL_POOL_ID => Ok(NORMAL_MINIMUM_TICKETS),
+        HIGH_POOL_ID => Ok(HIGH_MINIMUM_TICKETS),
+        PREMIUM_POOL_ID => Ok(PREMIUM_MINIMUM_TICKETS),
+        _ => err!(LuckyMeError::InvalidPool),
+    }
+}
+
+fn minimum_distinct_entrants_for_pool(pool_id: u8) -> Result<u32> {
+    match pool_id {
+        MINI_POOL_ID | NORMAL_POOL_ID | HIGH_POOL_ID => Ok(DEFAULT_MINIMUM_DISTINCT_ENTRANTS),
+        PREMIUM_POOL_ID => Ok(PREMIUM_MINIMUM_DISTINCT_ENTRANTS),
+        _ => err!(LuckyMeError::InvalidPool),
+    }
+}
+
+fn round_meets_draw_minimums(pool: &Pool, round: &Round) -> Result<bool> {
+    let minimum_tickets = minimum_tickets_for_pool(pool.pool_id)?;
+    let minimum_distinct_entrants = minimum_distinct_entrants_for_pool(pool.pool_id)?;
+    Ok(round.total_tickets >= minimum_tickets && round.entrant_count >= minimum_distinct_entrants)
+}
+
+fn require_round_eligible_for_draw(pool: &Pool, round: &Round) -> Result<()> {
+    let minimum_tickets = minimum_tickets_for_pool(pool.pool_id)?;
+    require!(
+        round.total_tickets >= minimum_tickets,
+        LuckyMeError::MinimumTicketsNotReached
+    );
+    let minimum_distinct_entrants = minimum_distinct_entrants_for_pool(pool.pool_id)?;
+    require!(
+        round.entrant_count >= minimum_distinct_entrants,
+        LuckyMeError::MinimumDistinctEntrantsNotReached
+    );
+    Ok(())
+}
+
+fn require_round_below_draw_minimum(pool: &Pool, round: &Round) -> Result<()> {
+    require!(
+        !round_meets_draw_minimums(pool, round)?,
+        LuckyMeError::RoundEligibleForDraw
+    );
+    Ok(())
+}
+
 fn bps_amount(total: u64, bps: u16) -> Result<u64> {
     total
         .checked_mul(u64::from(bps))
@@ -1401,6 +1872,14 @@ fn require_valid_winner_count(winner_count: u8) -> Result<()> {
     require!(
         winner_count == 1 || winner_count == MAX_WINNERS as u8,
         LuckyMeError::InvalidWinnerConfig
+    );
+    Ok(())
+}
+
+fn require_valid_keeper(keeper: &Pubkey) -> Result<()> {
+    require!(
+        *keeper != Pubkey::default() && keeper.is_on_curve(),
+        LuckyMeError::InvalidKeeper
     );
     Ok(())
 }
@@ -1504,7 +1983,10 @@ fn validate_remaining_winner<'info>(
         entry_contains_ticket(&entry, winning_ticket),
         LuckyMeError::WrongWinnerEntry
     );
-    require!(entry.player == winner_info.key(), LuckyMeError::WinnerMismatch);
+    require!(
+        entry.player == winner_info.key(),
+        LuckyMeError::WinnerMismatch
+    );
 
     Ok(RemainingWinner {
         winner: winner_info.key(),
@@ -1545,6 +2027,10 @@ fn round_is_refund_mode(round: &Round) -> bool {
         && round.randomness == [0; 32]
 }
 
+fn entry_counts_as_entrant(entry: &Entry) -> bool {
+    entry.ticket_count > 0 || entry.lamports > 0
+}
+
 fn random_mod_domain(randomness: &[u8; 32], domain: &[u8], nonce: u8, modulo: u64) -> u64 {
     let nonce_bytes = [nonce];
     let hash = hashv(&[
@@ -1559,10 +2045,12 @@ fn random_mod_domain(randomness: &[u8; 32], domain: &[u8], nonce: u8, modulo: u6
     u64::from_le_bytes(bytes) % modulo
 }
 
+#[cfg(feature = "test-short-timers")]
 fn commitment_for(reveal: &[u8; 32]) -> [u8; 32] {
     hashv(&[b"luckyme-commit".as_ref(), reveal.as_ref()]).to_bytes()
 }
 
+#[cfg(feature = "test-short-timers")]
 fn derive_round_randomness(round_key: &Pubkey, total_tickets: u64, reveal: &[u8; 32]) -> [u8; 32] {
     hashv(&[
         b"luckyme-round-randomness",
@@ -1731,14 +2219,32 @@ pub enum LuckyMeError {
     InvalidWinnerAccount,
     #[msg("Program is paused")]
     Paused,
+    #[msg("Keeper address is invalid")]
+    InvalidKeeper,
+    #[msg("Signer is not the configured keeper")]
+    UnauthorizedKeeper,
+    #[msg("Previous round account still exists")]
+    PreviousRoundStillExists,
+    #[msg("Commit-reveal settlement is disabled in production")]
+    CommitRevealDisabled,
     #[msg("Round is closed")]
     RoundClosed,
+    #[msg("Round has not started yet")]
+    RoundNotStarted,
+    #[msg("Round state is invalid")]
+    InvalidRoundState,
     #[msg("Round is still open")]
     RoundStillOpen,
     #[msg("Round is already settled")]
     RoundSettled,
     #[msg("Round has no tickets")]
     EmptyRound,
+    #[msg("Minimum tickets for a valid draw were not reached")]
+    MinimumTicketsNotReached,
+    #[msg("Minimum distinct entrants for a valid draw were not reached")]
+    MinimumDistinctEntrantsNotReached,
+    #[msg("Round reached the minimum and must use the draw path")]
+    RoundEligibleForDraw,
     #[msg("Invalid randomness commitment")]
     InvalidRandomnessCommitment,
     #[msg("Invalid randomness reveal")]
@@ -1759,8 +2265,12 @@ pub enum LuckyMeError {
     RefundNotAvailable,
     #[msg("Entry has nothing to refund")]
     NothingToRefund,
+    #[msg("Account has nothing to close")]
+    NothingToClose,
     #[msg("Round already has entries")]
     RoundHasEntries,
+    #[msg("Round randomness account still exists")]
+    RandomnessAccountStillExists,
     #[msg("Invalid randomness provider")]
     InvalidRandomnessProvider,
     #[msg("Invalid randomness status")]
@@ -1769,6 +2279,10 @@ pub enum LuckyMeError {
     InvalidRandomnessProviderAccount,
     #[msg("Provider randomness is not fulfilled")]
     RandomnessNotFulfilled,
+    #[msg("All refundable entries must be paid before cleanup")]
+    RefundsPending,
+    #[msg("Round ticket state changed after review; refresh and review again")]
+    ReviewedRoundChanged,
 }
 
 #[cfg(test)]
@@ -1776,8 +2290,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn fixed_draw_minimums_match_the_approved_economics() {
+        assert_eq!(minimum_tickets_for_pool(MINI_POOL_ID).unwrap(), 25);
+        assert_eq!(minimum_tickets_for_pool(NORMAL_POOL_ID).unwrap(), 13);
+        assert_eq!(minimum_tickets_for_pool(HIGH_POOL_ID).unwrap(), 3);
+        assert_eq!(minimum_tickets_for_pool(PREMIUM_POOL_ID).unwrap(), 3);
+        assert_eq!(minimum_distinct_entrants_for_pool(MINI_POOL_ID).unwrap(), 1);
+        assert_eq!(
+            minimum_distinct_entrants_for_pool(NORMAL_POOL_ID).unwrap(),
+            1
+        );
+        assert_eq!(minimum_distinct_entrants_for_pool(HIGH_POOL_ID).unwrap(), 1);
+        assert_eq!(
+            minimum_distinct_entrants_for_pool(PREMIUM_POOL_ID).unwrap(),
+            3
+        );
+        assert!(minimum_tickets_for_pool(0).is_err());
+        assert!(minimum_distinct_entrants_for_pool(5).is_err());
+    }
+
+    #[test]
+    fn mini_and_normal_use_total_tickets_not_wallet_count() {
+        let mini = test_pool(MINI_POOL_ID);
+        let normal = test_pool(NORMAL_POOL_ID);
+        assert!(round_meets_draw_minimums(&mini, &test_round(25, 1)).unwrap());
+        assert!(!round_meets_draw_minimums(&mini, &test_round(24, 24)).unwrap());
+        assert!(round_meets_draw_minimums(&normal, &test_round(13, 1)).unwrap());
+        assert!(!round_meets_draw_minimums(&normal, &test_round(12, 12)).unwrap());
+    }
+
+    #[test]
+    fn high_and_premium_apply_both_ticket_and_wallet_minimums() {
+        let high = test_pool(HIGH_POOL_ID);
+        let premium = test_pool(PREMIUM_POOL_ID);
+        assert!(!round_meets_draw_minimums(&high, &test_round(2, 2)).unwrap());
+        assert!(round_meets_draw_minimums(&high, &test_round(3, 1)).unwrap());
+        assert!(!round_meets_draw_minimums(&premium, &test_round(3, 2)).unwrap());
+        assert!(round_meets_draw_minimums(&premium, &test_round(3, 3)).unwrap());
+    }
+
+    #[test]
     fn refund_deadline_adds_delay() {
-        assert_eq!(refund_deadline(1_000).unwrap(), 1_600);
+        assert_eq!(refund_deadline(1_000).unwrap(), 1_000 + REFUND_DELAY_SECS);
     }
 
     #[test]
@@ -1809,6 +2363,19 @@ mod tests {
         };
 
         assert!(round_is_refund_mode(&round));
+    }
+
+    #[test]
+    fn legacy_zeroed_entry_closes_without_second_entrant_decrement() {
+        let entry = Entry {
+            round: Pubkey::new_unique(),
+            player: Pubkey::new_unique(),
+            ticket_start: 0,
+            ticket_count: 0,
+            lamports: 0,
+            bump: 255,
+        };
+        assert!(!entry_counts_as_entrant(&entry));
     }
 
     #[test]
@@ -1867,5 +2434,48 @@ mod tests {
         data.extend_from_slice(&seed);
         data.extend_from_slice(&randomness);
         data
+    }
+
+    fn test_pool(pool_id: u8) -> Pool {
+        Pool {
+            config: Pubkey::new_unique(),
+            pool_id,
+            ticket_price_lamports: 1,
+            current_round: 1,
+            jackpot_lamports: 0,
+            winner_count: if pool_id == PREMIUM_POOL_ID { 3 } else { 1 },
+            prize_split_bps: if pool_id == PREMIUM_POOL_ID {
+                [7_000, 2_000, 1_000]
+            } else {
+                [10_000, 0, 0]
+            },
+            max_tickets_per_entry: if pool_id == PREMIUM_POOL_ID { 1 } else { 1_000 },
+            bump: 255,
+            vault_bump: 254,
+            jackpot_bump: 253,
+        }
+    }
+
+    fn test_round(total_tickets: u64, entrant_count: u32) -> Round {
+        Round {
+            pool: Pubkey::new_unique(),
+            round_id: 1,
+            start_ts: 1,
+            end_ts: 2,
+            ticket_price_lamports: 1,
+            total_tickets,
+            total_lamports: total_tickets,
+            entrant_count,
+            settled: false,
+            jackpot_triggered: false,
+            winner_count: 0,
+            winner: Pubkey::default(),
+            winner_second: Pubkey::default(),
+            winner_third: Pubkey::default(),
+            jackpot_winner: Pubkey::default(),
+            randomness_commitment: [1; 32],
+            randomness: [0; 32],
+            bump: 255,
+        }
     }
 }

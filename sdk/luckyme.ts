@@ -60,7 +60,30 @@ export type Luckyme = {
         },
         {
           "name": "round",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.currentRound",
+                "account": "pool"
+              }
+            ]
+          }
         },
         {
           "name": "entry",
@@ -119,6 +142,10 @@ export type Luckyme = {
         {
           "name": "ticketCount",
           "type": "u64"
+        },
+        {
+          "name": "expectedTotalTickets",
+          "type": "u64"
         }
       ]
     },
@@ -158,8 +185,38 @@ export type Luckyme = {
             ]
           },
           "relations": [
+            "keeperConfig",
             "pool"
           ]
+        },
+        {
+          "name": "keeperConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
         },
         {
           "name": "pool",
@@ -169,6 +226,319 @@ export type Luckyme = {
         },
         {
           "name": "round",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeSettledEntry",
+      "discriminator": [
+        100,
+        118,
+        42,
+        166,
+        120,
+        168,
+        228,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "keeperConfig"
+          ]
+        },
+        {
+          "name": "keeperConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true
+        },
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "entry",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeSettledRandomness",
+      "discriminator": [
+        175,
+        121,
+        103,
+        176,
+        113,
+        82,
+        206,
+        91
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "keeperConfig"
+          ]
+        },
+        {
+          "name": "keeperConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "round"
+        },
+        {
+          "name": "roundRandomness",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100,
+                  95,
+                  114,
+                  97,
+                  110,
+                  100,
+                  111,
+                  109,
+                  110,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeSettledRound",
+      "discriminator": [
+        46,
+        186,
+        140,
+        247,
+        236,
+        83,
+        31,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "keeperConfig",
+            "pool"
+          ]
+        },
+        {
+          "name": "keeperConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "relations": [
+            "round"
+          ]
+        },
+        {
+          "name": "round",
+          "writable": true
+        },
+        {
+          "name": "roundRandomness",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100,
+                  95,
+                  114,
+                  97,
+                  110,
+                  100,
+                  111,
+                  109,
+                  110,
+                  101,
+                  115,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
           "writable": true
         }
       ],
@@ -236,6 +606,84 @@ export type Luckyme = {
         {
           "name": "roundDurationSecs",
           "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "initializeKeeperConfig",
+      "discriminator": [
+        71,
+        180,
+        50,
+        101,
+        122,
+        212,
+        92,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "keeperConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "keeper",
+          "type": "pubkey"
         }
       ]
     },
@@ -377,12 +825,68 @@ export type Luckyme = {
             ]
           },
           "relations": [
+            "keeperConfig",
             "pool"
           ]
         },
         {
+          "name": "keeperConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
           "name": "pool",
           "writable": true
+        },
+        {
+          "name": "previousRound",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.currentRound",
+                "account": "pool"
+              }
+            ]
+          }
         },
         {
           "name": "round",
@@ -419,6 +923,11 @@ export type Luckyme = {
       ],
       "accounts": [
         {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
           "name": "player",
           "writable": true
         },
@@ -440,8 +949,38 @@ export type Luckyme = {
             ]
           },
           "relations": [
+            "keeperConfig",
             "pool"
           ]
+        },
+        {
+          "name": "keeperConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
         },
         {
           "name": "pool",
@@ -451,7 +990,30 @@ export type Luckyme = {
         },
         {
           "name": "round",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "round.roundId",
+                "account": "round"
+              }
+            ]
+          }
         },
         {
           "name": "entry",
@@ -522,8 +1084,38 @@ export type Luckyme = {
             ]
           },
           "relations": [
+            "keeperConfig",
             "pool"
           ]
+        },
+        {
+          "name": "keeperConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
         },
         {
           "name": "pool",
@@ -532,7 +1124,30 @@ export type Luckyme = {
           ]
         },
         {
-          "name": "round"
+          "name": "round",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.currentRound",
+                "account": "pool"
+              }
+            ]
+          }
         },
         {
           "name": "roundRandomness",
@@ -573,6 +1188,82 @@ export type Luckyme = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "setKeeper",
+      "discriminator": [
+        102,
+        94,
+        23,
+        78,
+        157,
+        222,
+        243,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          },
+          "relations": [
+            "keeperConfig"
+          ]
+        },
+        {
+          "name": "keeperConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "keeper",
+          "type": "pubkey"
+        }
+      ]
     },
     {
       "name": "setPaused",
@@ -619,137 +1310,6 @@ export type Luckyme = {
       ]
     },
     {
-      "name": "settleRound",
-      "discriminator": [
-        40,
-        101,
-        18,
-        1,
-        31,
-        129,
-        52,
-        77
-      ],
-      "accounts": [
-        {
-          "name": "keeper",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          },
-          "relations": [
-            "pool"
-          ]
-        },
-        {
-          "name": "pool",
-          "writable": true,
-          "relations": [
-            "round"
-          ]
-        },
-        {
-          "name": "round",
-          "writable": true
-        },
-        {
-          "name": "poolVault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "pool"
-              }
-            ]
-          }
-        },
-        {
-          "name": "jackpotVault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  106,
-                  97,
-                  99,
-                  107,
-                  112,
-                  111,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "pool"
-              }
-            ]
-          }
-        },
-        {
-          "name": "winner",
-          "writable": true
-        },
-        {
-          "name": "winnerEntry"
-        },
-        {
-          "name": "jackpotWinner",
-          "writable": true
-        },
-        {
-          "name": "jackpotEntry"
-        },
-        {
-          "name": "treasury",
-          "writable": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "randomnessReveal",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "settleRoundWithProviderRandomness",
       "discriminator": [
         130,
@@ -785,8 +1345,38 @@ export type Luckyme = {
             ]
           },
           "relations": [
+            "keeperConfig",
             "pool"
           ]
+        },
+        {
+          "name": "keeperConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
         },
         {
           "name": "pool",
@@ -797,7 +1387,30 @@ export type Luckyme = {
         },
         {
           "name": "round",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.currentRound",
+                "account": "pool"
+              }
+            ]
+          }
         },
         {
           "name": "roundRandomness",
@@ -935,6 +1548,19 @@ export type Luckyme = {
       ]
     },
     {
+      "name": "keeperConfig",
+      "discriminator": [
+        77,
+        240,
+        250,
+        22,
+        132,
+        135,
+        162,
+        101
+      ]
+    },
+    {
       "name": "pool",
       "discriminator": [
         241,
@@ -1015,6 +1641,19 @@ export type Luckyme = {
       ]
     },
     {
+      "name": "keeperConfigured",
+      "discriminator": [
+        217,
+        232,
+        128,
+        155,
+        254,
+        60,
+        11,
+        47
+      ]
+    },
+    {
       "name": "pausedSet",
       "discriminator": [
         171,
@@ -1067,6 +1706,19 @@ export type Luckyme = {
       ]
     },
     {
+      "name": "roundCancelledBelowMinimum",
+      "discriminator": [
+        47,
+        128,
+        156,
+        64,
+        234,
+        138,
+        148,
+        188
+      ]
+    },
+    {
       "name": "roundOpened",
       "discriminator": [
         99,
@@ -1090,6 +1742,45 @@ export type Luckyme = {
         200,
         234,
         222
+      ]
+    },
+    {
+      "name": "roundStarted",
+      "discriminator": [
+        180,
+        209,
+        2,
+        244,
+        238,
+        48,
+        170,
+        120
+      ]
+    },
+    {
+      "name": "settledEntryClosed",
+      "discriminator": [
+        18,
+        210,
+        160,
+        82,
+        230,
+        67,
+        129,
+        96
+      ]
+    },
+    {
+      "name": "settledRoundClosed",
+      "discriminator": [
+        228,
+        179,
+        22,
+        110,
+        5,
+        169,
+        169,
+        147
       ]
     },
     {
@@ -1184,98 +1875,163 @@ export type Luckyme = {
     },
     {
       "code": 6015,
+      "name": "invalidKeeper",
+      "msg": "Keeper address is invalid"
+    },
+    {
+      "code": 6016,
+      "name": "unauthorizedKeeper",
+      "msg": "Signer is not the configured keeper"
+    },
+    {
+      "code": 6017,
+      "name": "previousRoundStillExists",
+      "msg": "Previous round account still exists"
+    },
+    {
+      "code": 6018,
+      "name": "commitRevealDisabled",
+      "msg": "Commit-reveal settlement is disabled in production"
+    },
+    {
+      "code": 6019,
       "name": "roundClosed",
       "msg": "Round is closed"
     },
     {
-      "code": 6016,
+      "code": 6020,
+      "name": "roundNotStarted",
+      "msg": "Round has not started yet"
+    },
+    {
+      "code": 6021,
+      "name": "invalidRoundState",
+      "msg": "Round state is invalid"
+    },
+    {
+      "code": 6022,
       "name": "roundStillOpen",
       "msg": "Round is still open"
     },
     {
-      "code": 6017,
+      "code": 6023,
       "name": "roundSettled",
       "msg": "Round is already settled"
     },
     {
-      "code": 6018,
+      "code": 6024,
       "name": "emptyRound",
       "msg": "Round has no tickets"
     },
     {
-      "code": 6019,
+      "code": 6025,
+      "name": "minimumTicketsNotReached",
+      "msg": "Minimum tickets for a valid draw were not reached"
+    },
+    {
+      "code": 6026,
+      "name": "minimumDistinctEntrantsNotReached",
+      "msg": "Minimum distinct entrants for a valid draw were not reached"
+    },
+    {
+      "code": 6027,
+      "name": "roundEligibleForDraw",
+      "msg": "Round reached the minimum and must use the draw path"
+    },
+    {
+      "code": 6028,
       "name": "invalidRandomnessCommitment",
       "msg": "Invalid randomness commitment"
     },
     {
-      "code": 6020,
+      "code": 6029,
       "name": "invalidRandomnessReveal",
       "msg": "Invalid randomness reveal"
     },
     {
-      "code": 6021,
+      "code": 6030,
       "name": "wrongWinnerEntry",
       "msg": "Wrong winner entry was provided"
     },
     {
-      "code": 6022,
+      "code": 6031,
       "name": "wrongJackpotEntry",
       "msg": "Wrong jackpot entry was provided"
     },
     {
-      "code": 6023,
+      "code": 6032,
       "name": "winnerMismatch",
       "msg": "Winner account does not match entry"
     },
     {
-      "code": 6024,
+      "code": 6033,
       "name": "insufficientVaultFunds",
       "msg": "Vault does not have enough lamports"
     },
     {
-      "code": 6025,
+      "code": 6034,
       "name": "mathOverflow",
       "msg": "Math overflow"
     },
     {
-      "code": 6026,
+      "code": 6035,
       "name": "alreadyEnteredRound",
       "msg": "Wallet already entered this round"
     },
     {
-      "code": 6027,
+      "code": 6036,
       "name": "refundNotAvailable",
       "msg": "Refund is not available yet"
     },
     {
-      "code": 6028,
+      "code": 6037,
       "name": "nothingToRefund",
       "msg": "Entry has nothing to refund"
     },
     {
-      "code": 6029,
+      "code": 6038,
+      "name": "nothingToClose",
+      "msg": "Account has nothing to close"
+    },
+    {
+      "code": 6039,
       "name": "roundHasEntries",
       "msg": "Round already has entries"
     },
     {
-      "code": 6030,
+      "code": 6040,
+      "name": "randomnessAccountStillExists",
+      "msg": "Round randomness account still exists"
+    },
+    {
+      "code": 6041,
       "name": "invalidRandomnessProvider",
       "msg": "Invalid randomness provider"
     },
     {
-      "code": 6031,
+      "code": 6042,
       "name": "invalidRandomnessStatus",
       "msg": "Invalid randomness status"
     },
     {
-      "code": 6032,
+      "code": 6043,
       "name": "invalidRandomnessProviderAccount",
       "msg": "Invalid randomness provider account"
     },
     {
-      "code": 6033,
+      "code": 6044,
       "name": "randomnessNotFulfilled",
       "msg": "Provider randomness is not fulfilled"
+    },
+    {
+      "code": 6045,
+      "name": "refundsPending",
+      "msg": "All refundable entries must be paid before cleanup"
+    },
+    {
+      "code": 6046,
+      "name": "reviewedRoundChanged",
+      "msg": "Round ticket state changed after review; refresh and review again"
     }
   ],
   "types": [
@@ -1443,6 +2199,54 @@ export type Luckyme = {
           {
             "name": "remainingEntrantCount",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "keeperConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "keeperConfigured",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeperConfig",
+            "type": "pubkey"
+          },
+          {
+            "name": "previousKeeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "type": "pubkey"
           }
         ]
       }
@@ -1790,6 +2594,46 @@ export type Luckyme = {
       }
     },
     {
+      "name": "roundCancelledBelowMinimum",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
+          },
+          {
+            "name": "totalTickets",
+            "type": "u64"
+          },
+          {
+            "name": "totalLamports",
+            "type": "u64"
+          },
+          {
+            "name": "entrantCount",
+            "type": "u32"
+          },
+          {
+            "name": "minimumTickets",
+            "type": "u64"
+          },
+          {
+            "name": "minimumDistinctEntrants",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
       "name": "roundOpened",
       "type": {
         "kind": "struct",
@@ -2005,6 +2849,90 @@ export type Luckyme = {
                 "name": "randomnessProvider"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "roundStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
+          },
+          {
+            "name": "firstPlayer",
+            "type": "pubkey"
+          },
+          {
+            "name": "startTs",
+            "type": "i64"
+          },
+          {
+            "name": "endTs",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "settledEntryClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "rentRecipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "remainingEntrantCount",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "settledRoundClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
+          },
+          {
+            "name": "rentRecipient",
+            "type": "pubkey"
           }
         ]
       }

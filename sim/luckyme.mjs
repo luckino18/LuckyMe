@@ -21,6 +21,8 @@ export const FIXED_POOLS = Object.freeze([
     label: "Mini",
     ticketPriceLamports: 5_000_000n,
     winnerCount: 1,
+    minimumTickets: 25n,
+    minimumDistinctEntrants: 1,
     prizeSplitBps: Object.freeze([10_000n, 0n, 0n]),
     maxTicketsPerEntry: 1_000n,
   },
@@ -29,6 +31,8 @@ export const FIXED_POOLS = Object.freeze([
     label: "Normal",
     ticketPriceLamports: 10_000_000n,
     winnerCount: 1,
+    minimumTickets: 13n,
+    minimumDistinctEntrants: 1,
     prizeSplitBps: Object.freeze([10_000n, 0n, 0n]),
     maxTicketsPerEntry: 1_000n,
   },
@@ -37,6 +41,8 @@ export const FIXED_POOLS = Object.freeze([
     label: "High",
     ticketPriceLamports: 50_000_000n,
     winnerCount: 1,
+    minimumTickets: 3n,
+    minimumDistinctEntrants: 1,
     prizeSplitBps: Object.freeze([10_000n, 0n, 0n]),
     maxTicketsPerEntry: 1_000n,
   },
@@ -45,6 +51,8 @@ export const FIXED_POOLS = Object.freeze([
     label: "Premium",
     ticketPriceLamports: 100_000_000n,
     winnerCount: 3,
+    minimumTickets: 3n,
+    minimumDistinctEntrants: 3,
     prizeSplitBps: Object.freeze([7_000n, 2_000n, 1_000n]),
     maxTicketsPerEntry: 1n,
   },
@@ -111,9 +119,7 @@ export function settleRound({
   if (totalTickets === 0n) {
     throw new Error("cannot settle empty round");
   }
-  if (builtEntries.length < poolSpec.winnerCount) {
-    throw new Error(`pool requires at least ${poolSpec.winnerCount} entrants`);
-  }
+  requireValidDrawMinimum(poolSpec, totalTickets, builtEntries.length);
 
   const totalLamports = totalTickets * resolvedTicketPriceLamports;
   const houseFee = bpsAmount(totalLamports, config.houseFeeBps);
@@ -168,6 +174,7 @@ export function settleRound({
 export function refundEntryAfterTimeout({
   entries,
   ticketPriceLamports,
+  pool,
   player,
   roundEndTs,
   nowTs,
@@ -177,7 +184,17 @@ export function refundEntryAfterTimeout({
     throw new Error("refund is not available yet");
   }
 
-  const builtEntries = buildEntries(entries, ticketPriceLamports);
+  const poolSpec = resolvePoolSpec({ pool, ticketPriceLamports });
+  const resolvedTicketPriceLamports = BigInt(ticketPriceLamports ?? poolSpec.ticketPriceLamports);
+  const builtEntries = buildEntries(
+    entries,
+    resolvedTicketPriceLamports,
+    poolSpec.maxTicketsPerEntry,
+  );
+  const totalTickets = builtEntries.reduce((sum, entry) => sum + entry.tickets, 0n);
+  if (roundMeetsMinimums(poolSpec, totalTickets, builtEntries.length)) {
+    throw new Error("round reached the minimum and must use the draw path");
+  }
   const entry = builtEntries.find((item) => item.player === player);
   if (!entry || entry.lamports === 0n) {
     throw new Error("entry has nothing to refund");
@@ -191,6 +208,53 @@ export function refundEntryAfterTimeout({
       builtEntries.reduce((sum, item) => sum + item.lamports, 0n) - entry.lamports,
     remainingTickets:
       builtEntries.reduce((sum, item) => sum + item.tickets, 0n) - entry.tickets,
+  };
+}
+
+export function roundMeetsMinimums(pool, totalTickets, entrantCount) {
+  return BigInt(totalTickets) >= BigInt(pool.minimumTickets) &&
+    Number(entrantCount) >= Number(pool.minimumDistinctEntrants);
+}
+
+export function classifyExpiredRound({
+  pool,
+  ticketPriceLamports,
+  entries,
+  expired = true,
+  settled = false,
+  oraoRequestExists = false,
+}) {
+  const poolSpec = resolvePoolSpec({ pool, ticketPriceLamports });
+  const resolvedTicketPriceLamports = BigInt(ticketPriceLamports ?? poolSpec.ticketPriceLamports);
+  const builtEntries = buildEntries(
+    entries,
+    resolvedTicketPriceLamports,
+    poolSpec.maxTicketsPerEntry,
+  );
+  const totalTickets = builtEntries.reduce((sum, entry) => sum + entry.tickets, 0n);
+  if (settled) {
+    return { action: "cleanup", roundOutcome: "settled", requestOrao: false };
+  }
+  if (!expired) {
+    return { action: "wait", roundOutcome: "open", requestOrao: false };
+  }
+  if (totalTickets === 0n) {
+    return { action: "close_empty", roundOutcome: "cancelled_empty", requestOrao: false };
+  }
+  if (!roundMeetsMinimums(poolSpec, totalTickets, builtEntries.length)) {
+    return {
+      action: "refund",
+      roundOutcome: "cancelled_below_minimum",
+      requestOrao: false,
+      refundLamports: builtEntries.reduce((sum, entry) => sum + entry.lamports, 0n),
+      refundsPending: builtEntries.length,
+      refundsCompleted: 0,
+    };
+  }
+  return {
+    action: oraoRequestExists ? "settle_or_wait_provider" : "request_orao",
+    roundOutcome: "eligible_for_draw",
+    requestOrao: !oraoRequestExists,
   };
 }
 
@@ -311,8 +375,21 @@ function resolvePoolSpec({ pool, ticketPriceLamports }) {
       label: "Custom",
       ticketPriceLamports: resolvedTicketPriceLamports,
       winnerCount: 1,
+      minimumTickets: 1n,
+      minimumDistinctEntrants: 1,
       prizeSplitBps: Object.freeze([10_000n, 0n, 0n]),
       maxTicketsPerEntry: 1_000n,
     }
   );
+}
+
+function requireValidDrawMinimum(poolSpec, totalTickets, entrantCount) {
+  if (BigInt(totalTickets) < BigInt(poolSpec.minimumTickets)) {
+    throw new Error(`pool requires at least ${poolSpec.minimumTickets} total tickets`);
+  }
+  if (Number(entrantCount) < Number(poolSpec.minimumDistinctEntrants)) {
+    throw new Error(
+      `pool requires at least ${poolSpec.minimumDistinctEntrants} distinct entrants`,
+    );
+  }
 }

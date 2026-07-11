@@ -1,7 +1,9 @@
 # LuckyMe v1.0.0 Mainnet Release
 
-Current target: `v1.0.0-mainnet` for Solana Mobile / Seeker dApp Store
-submission.
+> Historical evidence only. `v1.0.0-mainnet` was the earlier Solana Mobile /
+> Seeker candidate. The current source is the separately gated `1.1.0`
+> minimum-ticket release candidate; do not use the active-round or pending
+> lifecycle statements below as current operational state.
 
 ## Historical Release Note
 
@@ -83,6 +85,13 @@ APK_PATH=/path/to/final.apk npm run app:apk:verify
 - Config and all four pools are initialized on `mainnet-beta`.
 - The first active production round is open for Mini, Normal, High, and
   Premium.
+
+The statements above describe the July 7 deployment. The July 11 lifecycle,
+rent-cleanup, and `KeeperConfig` upgrade remains pending explicit mainnet
+approval. The target production keeper after that upgrade is
+`6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N`; no second or replacement keeper
+may be introduced implicitly. See `docs/deploy-checklist.md` for the gated
+upgrade and separate rent-recovery order.
 
 ## Acceptance Checklist
 
