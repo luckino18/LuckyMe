@@ -345,6 +345,19 @@ function roundStatus(
   return "Live";
 }
 
+function roundTimeLeft(round?: LiveRound | null) {
+  const startTs = numberValue(round?.startTs);
+  const endTs = numberValue(round?.endTs);
+  if (startTs <= 0 || endTs <= 0) {
+    return "Starts with first ticket";
+  }
+  const remaining = Math.max(0, endTs - Math.floor(Date.now() / 1000));
+  const hours = Math.floor(remaining / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 export function isLivePoolEntryReady(pool?: LivePool | null, now = Math.floor(Date.now() / 1000)) {
   const round = pool?.activeRound;
   if (!round || !hasVerifiedMinimumPolicy(pool) || round.settled || round.status === "settled") {
@@ -1517,6 +1530,7 @@ function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: Stitch
     <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
     <div class="fact"><span class="label">Sold</span><strong>${escapeHtml(facts.tickets)} tickets</strong></div>
     <div class="fact"><span class="label">Players</span><strong>${escapeHtml(facts.players)}</strong></div>
+    <div class="fact"><span class="label">Time left</span><strong class="mono">${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
     ${facts.myTickets !== "0" ? `<div class="fact"><span class="label">My tickets</span><strong>${escapeHtml(facts.myTickets)}</strong></div>` : `<div class="fact"><span class="label">Limit</span><strong>${pool.limits}</strong></div>`}
   </div>
   ${minimumProgressPanel(pool, facts)}
@@ -1907,17 +1921,18 @@ function howToPlayBody() {
     <div class="section-header" style="margin-bottom: 10px;">
       <div>
         <span class="label">The basics</span>
-        <h2 id="how-steps-title">Nine things to know</h2>
+        <h2 id="how-steps-title">Ten things to know</h2>
       </div>
     </div>
     <ol class="how-steps">
       <li class="how-step"><div><h3>Choose a pool</h3><p>Mini costs 0.005 SOL per ticket, Normal 0.01 SOL, High 0.05 SOL, and Premium 0.1 SOL.</p></div></li>
       <li class="how-step"><div><h3>Connect your wallet</h3><p>The connection is self-custody. LuckyMe never asks for your seed phrase or stores your private keys.</p></div></li>
       <li class="how-step"><div><h3>Buy tickets</h3><p>Every ticket has an equal chance. Buying more tickets gives you more chances in Mini, Normal, and High.</p></div></li>
+      <li class="how-step"><div><h3>One temporary rent deposit</h3><p>Each wallet pays one small refundable rent deposit for its entry in a round, regardless of how many tickets it buys at once. It is returned automatically when that entry closes.</p></div></li>
       <li class="how-step"><div><h3>The first ticket starts the clock</h3><p>The 1-hour countdown starts only when the first ticket is confirmed. An empty pool waits without running a timer.</p></div></li>
       <li class="how-step"><div><h3>Reach the ticket target</h3><p>Mini needs 25 total tickets, Normal 13, High 3, and Premium 3.</p></div></li>
       <li class="how-step"><div><h3>Valid draw</h3><p>If the target is reached, the winner or winners are selected after the 1-hour round ends.</p></div></li>
-      <li class="how-step"><div><h3>Automatic refund</h3><p>If the target is missed, no winner is drawn. The ticket purchase amount returns automatically to the wallet that paid. No claim button is needed. Solana network fees are not refundable.</p></div></li>
+      <li class="how-step"><div><h3>Automatic returns</h3><p>If the target is missed, your ticket money and rent deposit return automatically. If the target is reached and another player wins, only your rent deposit returns. Solana network fees are not refundable.</p></div></li>
       <li class="how-step"><div><h3>Total tickets, not players</h3><p>Mini needs 25 tickets sold in total, not 25 different players. One wallet can buy all 25 in one entry. The same total-ticket rule applies to Normal and High.</p></div></li>
       <li class="how-step"><div><h3>Premium rules</h3><p>Premium allows one ticket per wallet, requires three distinct wallets, selects three winners, and splits the main prize 70 / 20 / 10.</p></div></li>
     </ol>
@@ -2006,6 +2021,7 @@ function reviewBody(options: StitchRenderOptions = {}) {
       <div class="row"><span class="label">Pool</span><strong class="mono">${pool.name}</strong></div>
       <div class="row"><span class="label">Ticket price</span><strong class="mono">${escapeHtml(priceSol(pool, facts.live))} SOL</strong></div>
       <div class="row"><span class="label">Round status</span><strong class="mono ${facts.statusTone === "emerald" ? "success" : facts.statusTone === "amber" ? "warning" : ""}">${facts.status}</strong></div>
+      <div class="row"><span class="label">Time left</span><strong class="mono">${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
       <div class="row"><span class="label">Valid draw target</span><strong class="mono">${facts.threshold.minimumTickets} total tickets</strong></div>
       <div class="row"><span class="label">Sold now</span><strong class="mono">${hasRound ? `${facts.threshold.sold} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
       <div class="row"><span class="label">After this purchase</span><strong class="mono">${hasRound ? `${ticketsAfterPurchase} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>

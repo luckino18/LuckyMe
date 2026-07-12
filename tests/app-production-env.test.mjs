@@ -97,9 +97,9 @@ test("Seeker publishes the approved ticket targets and automatic-refund copy", (
 test("Seeker release metadata advances without changing the Android package", () => {
   const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
 
-  assert.equal(app.version, "1.1.3");
+  assert.equal(app.version, "1.1.4");
   assert.equal(app.android.package, "com.luckyme.seeker");
-  assert.equal(app.android.versionCode, 6);
+  assert.equal(app.android.versionCode, 7);
   assert.equal(app.icon, "./assets/icon.png");
   assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
 });
@@ -125,6 +125,14 @@ test("Seeker APK includes opt-in notification and winner card surfaces", () => {
   assert.match(stitch, /SHARE ON/);
   assert.match(stitch, /WhatsApp/);
   assert.match(stitch, /Download PNG/);
+});
+
+test("Seeker shows the live round countdown and explains the single refundable rent deposit", () => {
+  const stitch = readFileSync(STITCH_SCREENS, "utf8");
+  assert.match(stitch, /function roundTimeLeft/);
+  assert.match(stitch, />Time left</);
+  assert.match(stitch, /regardless of how many tickets it buys at once/);
+  assert.match(stitch, /only your rent deposit returns/);
 });
 
 test("Seeker entry readiness is evaluated for the selected pool", () => {

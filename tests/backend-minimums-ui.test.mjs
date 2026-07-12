@@ -164,6 +164,8 @@ test("site and How to Play keep targets, refund wording, and wallet modal consis
   assert.match(combined, /100% of the ticket purchase amount is automatically returned/);
   assert.match(combined, /Solana network fees are not refundable/);
   assert.match(combined, /No claim button is required/);
+  assert.match(guide, /regardless of how many tickets it buys at once/);
+  assert.match(guide, /your rent deposit still returns automatically/);
   assert.doesNotMatch(combined, /25 players/i);
   assert.match(guide, /Mini<\/th><td>0\.005 SOL<\/td><td>25/);
   assert.match(guide, /Normal<\/th><td>0\.01 SOL<\/td><td>13/);
