@@ -27,22 +27,23 @@ Current objective: preserve the deployed minimum-ticket/refund
   `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
 - Historical v1.0 APK SHA-256:
   `c104ec372270dc175d54d26bf472edd9f489813324f66c9a6766df423fc05bc2`
-- Current Seeker APK with the responsive How To fix:
-  `/Users/victor/Desktop/LuckyMe-Seeker-HOW-TO-FIX-1.1.1-code4-2026-07-12.apk`
+- Current Seeker APK with the responsive How To fix and native notification
+  permission flow:
+  `/Users/victor/Desktop/LuckyMe-Seeker-NOTIFICATION-FIX-1.1.2-code5-2026-07-12.apk`
 - Current APK SHA-256:
-  `edd66851314cb777adb8351cd4cbbdcae9631835a692371792989b9c2e85f55d`.
-- Current APK version: `1.1.1` (`versionCode 4`). Its EAS signer certificate is
-  unchanged, so it updates the code-3 EAS build in place. See
-  `docs/seeker-apk-1.1.1-how-to-verification-2026-07-12.md`.
+  `99de87d9b104b19880669368ba30558ef0d66f4e87ea71c2898f8130b7922845`.
+- Current APK version: `1.1.2` (`versionCode 5`). Its EAS signer certificate is
+  unchanged, so it updates previous EAS builds in place. See
+  `docs/seeker-apk-1.1.2-notification-verification-2026-07-12.md`.
 - APK signing: EAS-managed Android credentials
   `Build Credentials iNPMBDRiCC (default)`, verified with APK Signature Scheme
   v2. Signer certificate SHA-256:
   `e249bc5555bb8206fc11dce9fcda527f25ddf8b8af00a0156806892a2cbb2067`.
-- Push notifications: APK includes Expo push registration and the VPS backend
-  exposes `/notifications/register`. The live register/unregister smoke test
-  and keeper dry-run passed on 2026-07-08. The final v2 APK uses a new
-  notification prompt key so older dismissed prompts do not suppress this
-  build's explainer.
+- Push notifications: APK code 5 requests the native Android notification
+  permission directly instead of redirecting to App Info, then registers the
+  installation's Expo token through `/notifications/register`. The sender fans
+  the countdown-start and last-10-minute alerts out to every opted-in token;
+  automated multi-device fan-out and timer configuration tests pass.
 - Final v2 UI correction: `Settings` / `Configuration` was removed from the
   visible app. The legal/community screen is now `Links` only, with Terms,
   Privacy, Support, and future X/Discord placeholders.
