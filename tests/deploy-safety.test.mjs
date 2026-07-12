@@ -34,6 +34,21 @@ test("settlement keeper refuses mainnet writes without explicit confirmation", (
   assert.doesNotMatch(result.output, /settlement_keeper_start/);
 });
 
+test("open-round-only mainnet writes require their own confirmation", () => {
+  const result = runNodeScript("scripts/settlement-keeper.mjs", {
+    ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",
+    DRY_RUN: "false",
+    CONFIRM_MAINNET_SETTLEMENT_KEEPER: "true",
+    LUCKYME_RANDOMNESS_MODE: "orao_vrf",
+    SETTLEMENT_KEEPER_ACTION_SCOPE: "open_round_only",
+    SETTLEMENT_KEEPER_APPROVED_OPEN_ROUNDS: "normal:6",
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /CONFIRM_MAINNET_OPEN_ROUNDS=true/);
+  assert.doesNotMatch(result.output, /settlement_keeper_start/);
+});
+
 test("legacy rent recovery refuses mainnet writes without explicit confirmation", () => {
   const result = runNodeScript("scripts/recover-legacy-empty-round-rent.mjs", {
     ANCHOR_PROVIDER_URL: "https://api.mainnet-beta.solana.com",

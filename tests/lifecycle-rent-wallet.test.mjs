@@ -49,6 +49,24 @@ test("keeper cannot open the next round until the settled Round account is close
   );
 });
 
+test("open-round-only scope returns before lifecycle and historical cleanup paths", () => {
+  const scopeBranch = keeperSource.indexOf("if (ACTION_SCOPE === OPEN_ROUND_ONLY_SCOPE)");
+  const lifecycleBranch = keeperSource.indexOf("if (currentRound <= 0)", scopeBranch);
+  const historicalCleanup = keeperSource.indexOf("await cleanupHistoricalRounds", scopeBranch);
+
+  assert.ok(scopeBranch > 0);
+  assert.ok(lifecycleBranch > scopeBranch);
+  assert.ok(historicalCleanup > lifecycleBranch);
+  assert.match(
+    keeperSource,
+    /if \(ACTION_SCOPE === OPEN_ROUND_ONLY_SCOPE\) \{\s*await handleOpenRoundOnly\(poolSpec, pool, currentRound\);\s*return;\s*\}/,
+  );
+  assert.match(keeperSource, /previous Round .* still exists; open_round_only refuses cleanup/);
+  assert.match(keeperSource, /action: "open_round_only_ready"/);
+  assert.match(keeperSource, /action: "skip_approved_round_exists"/);
+  assert.match(keeperSource, /outside the approved open-round allowlist/);
+});
+
 test("a missing current Round PDA stays unavailable until the keeper opens the next round", () => {
   assert.match(
     backendSource,

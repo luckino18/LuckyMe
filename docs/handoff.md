@@ -21,7 +21,8 @@ Current objective: preserve the deployed minimum-ticket/refund
 - Production pool fallback: unavailable/error state, not fake data
 - Historical on-chain status on 2026-07-07: config and all four pools were
   initialized and their first rounds opened. Current post-cleanup status is
-  `activeRound: null` for Mini, Normal, High, and Premium.
+  Mini round 5 active and waiting for its first ticket (`startTs=0`, `endTs=0`);
+  `activeRound: null` for Normal, High, and Premium.
 - Historical v1.0 store APK:
   `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
 - Historical v1.0 APK SHA-256:
@@ -52,10 +53,17 @@ funds, was excluded and remains unchanged. The temporary upload payer was
 drained back to the Ledger authority and the upgrade buffer is closed.
 
 The post-recovery keeper dry-run executed nothing and plans one new waiting
-Round for each pool. Those four Round accounts have not been created. The live
-API therefore reports `activeRound: null`, the site disables Join, and the
-keeper timer remains `disabled` and `inactive`. Do not enable keeper writes or
-the timer without the next explicit approval and sufficient keeper funding.
+Round for each pool. Mini round 5 was later opened with approved signature
+`2uDPC1D6DvHw86qviMcAzZWbLF77iS6WnzgEw4Z2wcBKo4ttokLEzxsi7ysfvvLJkSoEeejQjQ5yhTUE3S4fRkfd`.
+The next full-lifecycle invocation unexpectedly prioritized the already
+archived Mini round 2 sidecar cleanup and returned `1969680` lamports to the
+treasury with signature
+`eyPNoNN1UoknTpr9bbq6P3xZFvo1czxwbnje93M7eeJJbc2H8SjL33Z1yVffCMkpRE6PJzAGp6QHbr97w4AkS95`.
+Execution stopped immediately; Normal 6, High 6 and Premium 6 remain absent.
+The keeper now has a separately confirmed `open_round_only` scope with an exact
+`pool:roundId` allowlist which returns before all cleanup, refund, ORAO and
+settlement paths. The timer remains `disabled` and `inactive`, the write
+override is absent, and the base unit is dry-run-only.
 
 The required production keeper is still
 `6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N`.

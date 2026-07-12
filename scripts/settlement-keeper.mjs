@@ -53,6 +53,27 @@ const CLEANUP_SCAN_ROUNDS = positiveInteger(
 );
 const REFUND_DELAY_SECONDS = 600;
 const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.slug, pool]));
+const OPEN_ROUND_ONLY_SCOPE = "open_round_only";
+const ACTION_SCOPE = process.env.SETTLEMENT_KEEPER_ACTION_SCOPE ?? "full_lifecycle";
+const APPROVED_OPEN_ROUNDS = parseApprovedOpenRounds(
+  process.env.SETTLEMENT_KEEPER_APPROVED_OPEN_ROUNDS ?? "",
+);
+
+if (!["full_lifecycle", OPEN_ROUND_ONLY_SCOPE].includes(ACTION_SCOPE)) {
+  throw new Error(
+    "SETTLEMENT_KEEPER_ACTION_SCOPE must be full_lifecycle or open_round_only",
+  );
+}
+if (ACTION_SCOPE === OPEN_ROUND_ONLY_SCOPE && APPROVED_OPEN_ROUNDS.size === 0) {
+  throw new Error(
+    "open_round_only requires SETTLEMENT_KEEPER_APPROVED_OPEN_ROUNDS=pool:roundId[,pool:roundId]",
+  );
+}
+if (ACTION_SCOPE !== OPEN_ROUND_ONLY_SCOPE && APPROVED_OPEN_ROUNDS.size > 0) {
+  throw new Error(
+    "SETTLEMENT_KEEPER_APPROVED_OPEN_ROUNDS is valid only with SETTLEMENT_KEEPER_ACTION_SCOPE=open_round_only",
+  );
+}
 
 requireOraoMode();
 requireMainnetWriteConfirmation(RPC_URL, false);
@@ -70,7 +91,17 @@ const { connection, payer, program, provider, url } = DRY_RUN
   : createClient({ requireSigner: true, url: RPC_URL });
 const config = deriveConfig();
 const keeperConfig = deriveKeeperConfig(config);
-const pools = POOL_FILTER ? [POOL_BY_SLUG.get(POOL_FILTER)] : POOLS;
+const scopedPools = ACTION_SCOPE === OPEN_ROUND_ONLY_SCOPE
+  ? POOLS.filter((pool) => APPROVED_OPEN_ROUNDS.has(pool.slug))
+  : POOLS;
+const pools = POOL_FILTER ? [POOL_BY_SLUG.get(POOL_FILTER)] : scopedPools;
+if (
+  ACTION_SCOPE === OPEN_ROUND_ONLY_SCOPE &&
+  POOL_FILTER &&
+  !APPROVED_OPEN_ROUNDS.has(POOL_FILTER)
+) {
+  throw new Error(`POOL=${POOL_FILTER} is not in SETTLEMENT_KEEPER_APPROVED_OPEN_ROUNDS`);
+}
 let keeper = payer?.publicKey ?? null;
 const planned = [];
 const executed = [];
@@ -138,6 +169,10 @@ async function handlePool(poolSpec) {
 
   const poolAccount = await program.account.pool.fetch(pool);
   const currentRound = Number(poolAccount.currentRound.toString());
+  if (ACTION_SCOPE === OPEN_ROUND_ONLY_SCOPE) {
+    await handleOpenRoundOnly(poolSpec, pool, currentRound);
+    return;
+  }
   if (currentRound <= 0) {
     await executeOpenRound(poolSpec, pool, 1);
     return;
@@ -225,6 +260,55 @@ async function handlePool(poolSpec) {
   if (executed.length < MAX_ACTIONS) {
     await cleanupHistoricalRounds(poolSpec, pool, currentRound);
   }
+}
+
+async function handleOpenRoundOnly(poolSpec, pool, currentRound) {
+  const approvedRoundId = APPROVED_OPEN_ROUNDS.get(poolSpec.slug);
+  if (!approvedRoundId) {
+    throw new Error(`${poolSpec.slug} has no approved open-round target`);
+  }
+
+  const targetRound = deriveRound(pool, approvedRoundId);
+  if (await accountExists(connection, targetRound)) {
+    const targetState = await program.account.round.fetch(targetRound);
+    if (
+      Number(targetState.roundId.toString()) !== approvedRoundId ||
+      !targetState.pool.equals(pool) ||
+      currentRound !== approvedRoundId
+    ) {
+      throw new Error(`${poolSpec.slug} approved Round PDA exists with unexpected state`);
+    }
+    planned.push({
+      pool: poolSpec.slug,
+      action: "skip_approved_round_exists",
+      roundId: approvedRoundId,
+      round: targetRound.toBase58(),
+    });
+    return;
+  }
+
+  if (currentRound !== approvedRoundId - 1) {
+    throw new Error(
+      `${poolSpec.slug} currentRound=${currentRound}; expected ${approvedRoundId - 1} before opening ${approvedRoundId}`,
+    );
+  }
+
+  const previousRound = deriveRound(pool, currentRound);
+  if (await accountExists(connection, previousRound)) {
+    throw new Error(
+      `${poolSpec.slug} previous Round ${previousRound.toBase58()} still exists; open_round_only refuses cleanup`,
+    );
+  }
+
+  planned.push({
+    pool: poolSpec.slug,
+    action: "open_round_only_ready",
+    roundId: approvedRoundId,
+    previousRoundId: currentRound,
+    previousRound: previousRound.toBase58(),
+    round: targetRound.toBase58(),
+  });
+  await executeOpenRound(poolSpec, pool, approvedRoundId);
 }
 
 async function handleExpiredRoundWithEntries({
@@ -916,6 +1000,12 @@ async function archiveSettledRound(poolSpec, pool, round, roundAccount, settleme
 }
 
 async function executeOpenRound(poolSpec, pool, roundId) {
+  if (
+    ACTION_SCOPE === OPEN_ROUND_ONLY_SCOPE &&
+    APPROVED_OPEN_ROUNDS.get(poolSpec.slug) !== roundId
+  ) {
+    throw new Error(`${poolSpec.slug} round ${roundId} is outside the approved open-round allowlist`);
+  }
   const round = deriveRound(pool, roundId);
   if (await accountExists(connection, round)) {
     planned.push({
@@ -1150,6 +1240,16 @@ function requireMainnetWriteConfirmation(url, mainnetByGenesis) {
   if (mainnet && !DRY_RUN && process.env.CONFIRM_MAINNET_SETTLEMENT_KEEPER !== "true") {
     throw new Error("Refusing mainnet settlement keeper writes without CONFIRM_MAINNET_SETTLEMENT_KEEPER=true");
   }
+  if (
+    mainnet &&
+    !DRY_RUN &&
+    ACTION_SCOPE === OPEN_ROUND_ONLY_SCOPE &&
+    process.env.CONFIRM_MAINNET_OPEN_ROUNDS !== "true"
+  ) {
+    throw new Error(
+      "Refusing mainnet open-round-only writes without CONFIRM_MAINNET_OPEN_ROUNDS=true",
+    );
+  }
 }
 
 function printStart() {
@@ -1161,6 +1261,8 @@ function printStart() {
     dryRun: DRY_RUN,
     maxActions: MAX_ACTIONS,
     minKeeperBalanceLamports: MIN_KEEPER_BALANCE_LAMPORTS,
+    actionScope: ACTION_SCOPE,
+    approvedOpenRounds: Object.fromEntries(APPROVED_OPEN_ROUNDS),
     pools: pools.map((pool) => pool.slug),
     keeperConfig: keeperConfig.toBase58(),
     keeper: keeper?.toBase58() ?? null,
@@ -1174,6 +1276,29 @@ function printDone() {
     planned,
     executed,
   }, null, 2));
+}
+
+function parseApprovedOpenRounds(value) {
+  const approved = new Map();
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return approved;
+  }
+  for (const item of normalized.split(",")) {
+    const match = /^([a-z]+):([1-9][0-9]*)$/.exec(item.trim());
+    if (!match) {
+      throw new Error(`Invalid approved open-round target: ${item}`);
+    }
+    const [, pool, roundIdText] = match;
+    if (!POOL_BY_SLUG.has(pool)) {
+      throw new Error(`Unknown approved open-round pool: ${pool}`);
+    }
+    if (approved.has(pool)) {
+      throw new Error(`Duplicate approved open-round pool: ${pool}`);
+    }
+    approved.set(pool, positiveInteger(roundIdText, `${pool} approved round ID`));
+  }
+  return approved;
 }
 
 function redactRpcUrl(value) {

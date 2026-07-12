@@ -68,6 +68,36 @@ CONFIRM_MAINNET_SETTLEMENT_KEEPER=true \
 npm run settlement:keeper
 ```
 
+### Strict open-round-only recovery
+
+Do not use the full lifecycle scan when approval is limited to opening specific
+waiting rounds. The full scan may prioritize archived cleanup after it reaches
+an already-open waiting round. Use the explicit scope and exact allowlist:
+
+```bash
+DRY_RUN=true \
+SETTLEMENT_KEEPER_ACTION_SCOPE=open_round_only \
+SETTLEMENT_KEEPER_APPROVED_OPEN_ROUNDS=normal:6,high:6,premium:6 \
+npm run settlement:keeper
+```
+
+This mode returns before every cleanup, refund, ORAO and settlement branch. It
+opens only an allowlisted `pool:roundId`, verifies that the target PDA is absent,
+that `Pool.current_round` is exactly one less, and that the previous Round PDA
+is already closed. An existing allowlisted Round is verified and skipped.
+
+Mainnet writes in this scope require all three explicit flags:
+
+```text
+DRY_RUN=false
+CONFIRM_MAINNET_SETTLEMENT_KEEPER=true
+CONFIRM_MAINNET_OPEN_ROUNDS=true
+```
+
+Keep `SETTLEMENT_KEEPER_MAX_ACTIONS=1`, simulate and verify each result before
+starting the next invocation, and remove the temporary write override when the
+approved allowlist is complete.
+
 For systemd, use a dedicated operational keypair at:
 
 ```text
@@ -227,11 +257,12 @@ journal and enforces `KeeperConfig` authorization.
 ## Current deployment boundary (2026-07-12)
 
 The lifecycle/`KeeperConfig` upgrade, legacy empty-round recovery, and the
-minimum-ticket/refund program/backend/site deployment are complete. The mainnet
-keeper timer remains disabled and inactive, the write override is absent, the
-live API reports `activeRound: null` for all four pools, and the dry-run executes
-no transaction. Do not fund/start the keeper, install a write override, or open
-rounds without separate explicit approval.
+minimum-ticket/refund program/backend/site deployment are complete. Mini round
+5 is open and waiting for its first ticket. Normal 6, High 6 and Premium 6 are
+still absent. The mainnet keeper timer remains disabled and inactive, the write
+override is absent, and the base unit is dry-run-only. Use the strict
+`open_round_only` scope for any separately approved remaining openings; do not
+use the full lifecycle scan for an open-only approval.
 
 ## Operating Checks
 
