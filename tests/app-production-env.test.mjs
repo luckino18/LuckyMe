@@ -97,9 +97,9 @@ test("Seeker publishes the approved ticket targets and automatic-refund copy", (
 test("Seeker release metadata advances without changing the Android package", () => {
   const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
 
-  assert.equal(app.version, "1.1.4");
+  assert.equal(app.version, "1.1.5");
   assert.equal(app.android.package, "com.luckyme.seeker");
-  assert.equal(app.android.versionCode, 7);
+  assert.equal(app.android.versionCode, 8);
   assert.equal(app.icon, "./assets/icon.png");
   assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
 });
@@ -133,6 +133,21 @@ test("Seeker shows the live round countdown and explains the single refundable r
   assert.match(stitch, />Time left</);
   assert.match(stitch, /regardless of how many tickets it buys at once/);
   assert.match(stitch, /only your rent deposit returns/);
+  assert.match(stitch, /window\.setInterval\(updateRoundCountdowns, 1000\)/);
+  assert.match(stitch, /data-round-end-ts/);
+});
+
+test("Seeker configures a dedicated Android notification icon", () => {
+  const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
+  const notificationsPlugin = app.plugins.find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === "expo-notifications",
+  );
+  assert.deepEqual(notificationsPlugin?.[1], {
+    icon: "./assets/notification-icon.png",
+    color: "#14F195",
+    defaultChannel: "luckyme-round-alerts",
+  });
+  assert.equal(readFileSync("app-seeker/assets/notification-icon.png").subarray(1, 4).toString(), "PNG");
 });
 
 test("Seeker entry readiness is evaluated for the selected pool", () => {

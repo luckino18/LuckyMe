@@ -358,6 +358,10 @@ function roundTimeLeft(round?: LiveRound | null) {
   return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function countdownAttributes(round?: LiveRound | null) {
+  return `class="mono round-time-left" data-round-end-ts="${numberValue(round?.endTs)}"`;
+}
+
 export function isLivePoolEntryReady(pool?: LivePool | null, now = Math.floor(Date.now() / 1000)) {
   const round = pool?.activeRound;
   if (!round || !hasVerifiedMinimumPolicy(pool) || round.settled || round.status === "settled") {
@@ -1376,6 +1380,27 @@ function page(
     ${body}
   </div>
   ${chrome ? bottomNav(active) : ""}
+  <script>
+    (() => {
+      const formatRemaining = (remaining) => {
+        const hours = Math.floor(remaining / 3600);
+        const minutes = Math.floor((remaining % 3600) / 60);
+        const seconds = remaining % 60;
+        return hours + ":" + String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+      };
+      const updateRoundCountdowns = () => {
+        const now = Math.floor(Date.now() / 1000);
+        document.querySelectorAll(".round-time-left[data-round-end-ts]").forEach((element) => {
+          const endTs = Number(element.getAttribute("data-round-end-ts") || 0);
+          element.textContent = endTs > 0
+            ? formatRemaining(Math.max(0, endTs - now))
+            : "Starts with first ticket";
+        });
+      };
+      updateRoundCountdowns();
+      window.setInterval(updateRoundCountdowns, 1000);
+    })();
+  </script>
 </body>
 </html>`;
 }
@@ -1530,7 +1555,7 @@ function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: Stitch
     <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
     <div class="fact"><span class="label">Sold</span><strong>${escapeHtml(facts.tickets)} tickets</strong></div>
     <div class="fact"><span class="label">Players</span><strong>${escapeHtml(facts.players)}</strong></div>
-    <div class="fact"><span class="label">Time left</span><strong class="mono">${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
+    <div class="fact"><span class="label">Time left</span><strong ${countdownAttributes(facts.round)}>${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
     ${facts.myTickets !== "0" ? `<div class="fact"><span class="label">My tickets</span><strong>${escapeHtml(facts.myTickets)}</strong></div>` : `<div class="fact"><span class="label">Limit</span><strong>${pool.limits}</strong></div>`}
   </div>
   ${minimumProgressPanel(pool, facts)}
@@ -2021,7 +2046,7 @@ function reviewBody(options: StitchRenderOptions = {}) {
       <div class="row"><span class="label">Pool</span><strong class="mono">${pool.name}</strong></div>
       <div class="row"><span class="label">Ticket price</span><strong class="mono">${escapeHtml(priceSol(pool, facts.live))} SOL</strong></div>
       <div class="row"><span class="label">Round status</span><strong class="mono ${facts.statusTone === "emerald" ? "success" : facts.statusTone === "amber" ? "warning" : ""}">${facts.status}</strong></div>
-      <div class="row"><span class="label">Time left</span><strong class="mono">${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
+      <div class="row"><span class="label">Time left</span><strong ${countdownAttributes(facts.round)}>${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
       <div class="row"><span class="label">Valid draw target</span><strong class="mono">${facts.threshold.minimumTickets} total tickets</strong></div>
       <div class="row"><span class="label">Sold now</span><strong class="mono">${hasRound ? `${facts.threshold.sold} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
       <div class="row"><span class="label">After this purchase</span><strong class="mono">${hasRound ? `${ticketsAfterPurchase} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>

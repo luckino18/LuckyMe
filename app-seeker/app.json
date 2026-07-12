@@ -2,7 +2,7 @@
   "expo": {
     "name": "LuckyMe",
     "slug": "luckyme-seeker",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "orientation": "portrait",
     "scheme": "luckyme",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     "icon": "./assets/icon.png",
     "android": {
       "package": "com.luckyme.seeker",
-      "versionCode": 7,
+      "versionCode": 8,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0E14"
@@ -33,6 +33,14 @@
     },
     "plugins": [
       "./plugins/with-luckyme-immersive-android",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#14F195",
+          "defaultChannel": "luckyme-round-alerts"
+        }
+      ],
       [
         "expo-splash-screen",
         {
