@@ -14,6 +14,7 @@ Environment=LUCKYME_API_URL=https://api.lucky-me.app
 Environment=LUCKYME_EXPECTED_KEEPER_PUBKEY=6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N
 Environment=SETTLEMENT_KEEPER_MIN_BALANCE_LAMPORTS=50000000
 Environment=LUCKYME_STUCK_ROUND_GRACE_SECONDS=1800
+Environment=LUCKYME_ADMIN_STATUS_PATH=/var/www/luckyme/public/admin/status.json
 Environment=NPM_CONFIG_UPDATE_NOTIFIER=false
 ExecStart=/usr/bin/npm run monitor:operations
 NoNewPrivileges=true

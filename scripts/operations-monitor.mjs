@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { chmod, rename, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { Connection, PublicKey } from "@solana/web3.js";
 
@@ -12,6 +13,7 @@ const minimumKeeperBalance = Number(
   process.env.SETTLEMENT_KEEPER_MIN_BALANCE_LAMPORTS ?? "50000000",
 );
 const stuckGraceSeconds = Number(process.env.LUCKYME_STUCK_ROUND_GRACE_SECONDS ?? "1800");
+const adminStatusPath = process.env.LUCKYME_ADMIN_STATUS_PATH ?? "";
 
 const checks = {};
 const alerts = [];
@@ -125,6 +127,21 @@ const report = {
   alerts,
   checks,
 };
+
+if (adminStatusPath) {
+  const temporaryPath = `${adminStatusPath}.${process.pid}.tmp`;
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o640 });
+    await chmod(temporaryPath, 0o640);
+    await rename(temporaryPath, adminStatusPath);
+  } catch (error) {
+    alert("admin_status_write_failed", "Could not update the protected admin snapshot", {
+      error: error.message,
+    });
+    report.ok = false;
+    report.alerts = alerts;
+  }
+}
 
 console.log(JSON.stringify(report, null, 2));
 if (alerts.length > 0) process.exitCode = 1;

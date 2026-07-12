@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>LuckyMe Admin</title>
+    <link rel="stylesheet" href="/admin/admin.css?v=20260712-admin1" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div><span class="eyebrow">LuckyMe operations</span><h1>Admin status</h1></div>
+        <div id="overall" class="status neutral">Loading</div>
+      </header>
+      <p class="updated" id="updated">Waiting for the first protected status snapshot…</p>
+      <section class="alerts" id="alerts" aria-live="polite"></section>
+      <section class="grid" id="summary"></section>
+      <section class="panel">
+        <div class="panel-title"><div><span class="eyebrow">Lifecycle</span><h2>Pool rounds</h2></div></div>
+        <div class="rounds" id="rounds"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-title"><div><span class="eyebrow">Services</span><h2>Automation</h2></div></div>
+        <div class="services" id="services"></div>
+      </section>
+      <p class="readonly">Read-only panel. It cannot send transactions, open rounds, or change server settings.</p>
+    </main>
+    <script src="/admin/admin.js?v=20260712-admin1" defer></script>
+  </body>
+</html>

@@ -154,6 +154,25 @@ test("operations monitor covers keeper, RPC, stuck rounds, transactions, and not
   assert.match(pkg, /"monitor:operations": "node scripts\/operations-monitor\.mjs"/);
 });
 
+test("read-only admin panel uses a protected monitor snapshot", async () => {
+  const [monitor, service, page, client, nginx] = await Promise.all([
+    readFile(new URL("../scripts/operations-monitor.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/luckyme-operations-monitor.service", import.meta.url), "utf8"),
+    readFile(new URL("../site/lucky-me.app/admin/index.html", import.meta.url), "utf8"),
+    readFile(new URL("../site/lucky-me.app/admin/admin.js", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/nginx/luckyme-admin-location.conf", import.meta.url), "utf8"),
+  ]);
+  assert.match(monitor, /LUCKYME_ADMIN_STATUS_PATH/);
+  assert.match(monitor, /rename\(temporaryPath, adminStatusPath\)/);
+  assert.match(service, /LUCKYME_ADMIN_STATUS_PATH=\/var\/www\/luckyme\/public\/admin\/status\.json/);
+  assert.match(page, /Read-only panel/);
+  assert.match(page, /noindex,nofollow,noarchive/);
+  assert.match(client, /fetch\("\/admin\/status\.json"/);
+  assert.doesNotMatch(client, /fetch\([^)]*method:\s*["']POST/);
+  assert.match(nginx, /auth_basic_user_file \/etc\/nginx\/luckyme-admin\.htpasswd/);
+  assert.match(nginx, /Content-Security-Policy/);
+});
+
 test("push token registration rejects invalid Expo tokens and supports unregister", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "luckyme-push-test-"));
   const storePath = path.join(dir, "tokens.json");
