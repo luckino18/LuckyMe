@@ -1537,6 +1537,12 @@ function renderReview() {
       <p>If the minimum is not reached before the round ends, no winner is drawn. 100% of the ticket purchase amount is automatically returned to the wallet that bought the tickets.</p>
       <p>No claim button is required. Refunds are processed automatically. Solana network fees are not refundable.</p>
     </div>
+    ${pool.id === "premium" ? "" : `<div class="ticket-quick-select" role="group" aria-label="Quick ticket quantity">
+      <span class="label">Ticket quantity</span>
+      <div>
+        ${[1, 5, 10, 20, 25].filter((value) => value <= ticketLimit).map((value) => `<button class="quantity-button ${ticketCount === value ? "selected" : ""}" data-ticket-count="${value}" type="button">${value}</button>`).join("")}
+      </div>
+    </div>`}
     ${state.lastError ? `<div class="notice danger">${state.lastError}</div>` : ""}
     <div class="wallet-actions">
       ${connected ? "" : `<button class="primary-button" data-route="wallet">Connect wallet</button>`}
@@ -1695,7 +1701,6 @@ async function signAndSendWalletStandardTransaction(transaction, clusterUrl) {
       transaction: serialized,
       chain: SOLANA_MAINNET_CHAIN,
       options: {
-        commitment: "confirmed",
         preflightCommitment: "confirmed",
         skipPreflight: false,
         maxRetries: 3,
@@ -1938,6 +1943,13 @@ document.addEventListener("click", async (event) => {
   const connectButton = event.target.closest("[data-connect]");
   if (connectButton) {
     await connectWallet(connectButton.dataset.connect);
+    return;
+  }
+
+  const ticketCountButton = event.target.closest("[data-ticket-count]");
+  if (ticketCountButton) {
+    setTicketCount(ticketCountButton.dataset.ticketCount);
+    renderReview();
     return;
   }
 

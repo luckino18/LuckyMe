@@ -827,6 +827,36 @@ body.wallet-modal-open { overflow: hidden; }
   outline: 2px solid rgba(0, 209, 255, 0.32);
   border-color: var(--hover-line);
 }
+.ticket-quick-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(14, 20, 32, 0.72);
+}
+.ticket-quick-select > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.quantity-button {
+  min-width: 48px;
+  min-height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--text);
+  background: rgba(3, 5, 10, 0.54);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.quantity-button:hover, .quantity-button.selected {
+  border-color: var(--purple);
+  background: rgba(153, 69, 255, 0.2);
+}
+
+@media (max-width: 560px) {
+  .ticket-quick-select { align-items: flex-start; flex-direction: column; }
+}
 
 /* bottom nav */
 

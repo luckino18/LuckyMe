@@ -179,6 +179,17 @@ test("site and How to Play keep targets, refund wording, and wallet modal consis
   assert.match(app, /payload\.summary\?\.totalTicketsBefore/);
 });
 
+test("web purchase supports visible multi-ticket presets and wallet-compatible send options", () => {
+  const app = fs.readFileSync("site/lucky-me.app/app.js", "utf8");
+
+  assert.match(app, /\[1, 5, 10, 20, 25\]/);
+  assert.match(app, /data-ticket-count="\$\{value\}"/);
+  assert.match(app, /ticketCountButton\.dataset\.ticketCount/);
+  assert.match(app, /pool\.id === "premium" \? ""/);
+  assert.doesNotMatch(app, /options:\s*\{\s*commitment:/);
+  assert.match(app, /preflightCommitment: "confirmed"/);
+});
+
 test("Seeker How To stays within the phone viewport", () => {
   const seekerScreens = fs.readFileSync("app-seeker/src/stitchScreens.ts", "utf8");
 
