@@ -97,9 +97,9 @@ test("Seeker publishes the approved ticket targets and automatic-refund copy", (
 test("Seeker release metadata advances without changing the Android package", () => {
   const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
 
-  assert.equal(app.version, "1.1.1");
+  assert.equal(app.version, "1.1.2");
   assert.equal(app.android.package, "com.luckyme.seeker");
-  assert.equal(app.android.versionCode, 4);
+  assert.equal(app.android.versionCode, 5);
   assert.equal(app.icon, "./assets/icon.png");
   assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
 });
@@ -111,6 +111,9 @@ test("Seeker APK includes opt-in notification and winner card surfaces", () => {
   assert.match(screen, /ROUND_ALERTS_CHANNEL_ID = "luckyme-round-alerts"/);
   assert.match(screen, /Max 2 alerts per active round/);
   assert.match(screen, /Notifications\.requestPermissionsAsync/);
+  assert.match(screen, /PermissionsAndroid\.request/);
+  assert.match(screen, /PermissionsAndroid\.PERMISSIONS\.POST_NOTIFICATIONS/);
+  assert.doesNotMatch(screen, /Linking\.openSettings/);
   assert.match(screen, /Notifications\.getExpoPushTokenAsync/);
   assert.match(screen, /\/notifications\/register/);
   assert.match(screen, /signAndSendTransactions/);

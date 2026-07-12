@@ -4,6 +4,7 @@ import {
   AppState,
   Linking,
   Modal,
+  PermissionsAndroid,
   Platform,
   Pressable,
   SafeAreaView,
@@ -60,7 +61,7 @@ const API_URL =
   process.env.EXPO_PUBLIC_LUCKYME_API_URL ?? "https://api.lucky-me.app";
 const UI_PREVIEW_ENABLED = process.env.EXPO_PUBLIC_LUCKYME_UI_PREVIEW === "true";
 const LIVE_POOL_REFRESH_INTERVAL_MS = 15_000;
-const NOTIFICATION_PROMPT_KEY = "luckyme.notifications.prompt.v3";
+const NOTIFICATION_PROMPT_KEY = "luckyme.notifications.prompt.v4";
 const PUSH_TOKEN_KEY = "luckyme.notifications.expoPushToken.v1";
 const ROUND_ALERTS_CHANNEL_ID = "luckyme-round-alerts";
 
@@ -412,6 +413,24 @@ async function configureNotificationChannel() {
     showBadge: false,
     vibrationPattern: [0, 240, 140, 240],
   });
+}
+
+async function requestNativeNotificationPermission() {
+  if (Platform.OS === "android" && Number(Platform.Version) >= 33) {
+    const result = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+      {
+        title: "Allow LuckyMe notifications?",
+        message: "LuckyMe sends pool-start and last-10-minute round alerts.",
+        buttonPositive: "Allow",
+        buttonNegative: "Not now",
+      },
+    );
+    return result === PermissionsAndroid.RESULTS.GRANTED;
+  }
+
+  const permissions = await Notifications.requestPermissionsAsync();
+  return permissions.granted;
 }
 
 function expoProjectId() {
@@ -942,19 +961,12 @@ export function LuckyMeScreen() {
       await configureNotificationChannel();
       const currentPermissions = await Notifications.getPermissionsAsync();
 
-      if (currentPermissions.status === "denied" && !currentPermissions.granted) {
+      const granted = currentPermissions.granted || await requestNativeNotificationPermission();
+      if (!granted) {
         setNotificationOptInState("denied");
-        setNotificationPromptVisible(true);
-        setNotificationError("Android has notifications blocked for LuckyMe. Enable them from App Info > Notifications, then reopen LuckyMe.");
-        await Linking.openSettings();
-        return;
-      }
-
-      const permissions = await Notifications.requestPermissionsAsync();
-
-      if (!permissions.granted) {
-        setNotificationOptInState("denied");
-        setNotificationError("Android has notifications blocked for LuckyMe. Open App Info > Notifications to allow round alerts, or choose Not now.");
+        setNotificationError(
+          "Android did not grant notification permission. Tap Enable alerts to try the system prompt again.",
+        );
         setNotificationPromptVisible(true);
         return;
       }
@@ -1123,7 +1135,7 @@ function NotificationOptInModal({
             <Text style={styles.notificationError}>Notifications are not available right now.</Text>
           ) : null}
           {state === "denied" && !error ? (
-            <Text style={styles.notificationError}>Notifications are blocked by Android for this app. Enable them in App Info to receive round alerts.</Text>
+            <Text style={styles.notificationError}>Tap Enable alerts to show the Android permission prompt.</Text>
           ) : null}
           <View style={styles.notificationActions}>
             <Pressable
@@ -1137,7 +1149,7 @@ function NotificationOptInModal({
             >
               {busy ? <ActivityIndicator color="#FFFFFF" /> : null}
               <Text style={styles.notificationPrimaryText}>
-                {state === "denied" ? "Open Android permissions" : "Enable alerts"}
+                Enable alerts
               </Text>
             </Pressable>
             <Pressable

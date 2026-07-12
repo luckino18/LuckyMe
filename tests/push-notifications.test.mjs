@@ -66,6 +66,76 @@ test("push notification sender defaults to dry-run planning", async () => {
   assert.equal(result.sent, 0);
 });
 
+test("push sender delivers both round alerts to every opted-in APK token", async () => {
+  const tokens = [
+    "ExponentPushToken[luckyme_device_one]",
+    "ExponentPushToken[luckyme_device_two]",
+  ];
+  const alerts = [
+    {
+      title: "Mini pool countdown started",
+      body: "The 1 hour draw is live. Grab your ticket before the round finishes.",
+      alert: "started",
+    },
+    {
+      title: "Mini pool: last 10 minutes",
+      body: "Last 10 minutes before winner selection. Try your luck before the draw closes.",
+      alert: "last10",
+    },
+  ];
+  const messages = alerts.flatMap((alert) => tokens.map((to) => ({
+    to,
+    title: alert.title,
+    body: alert.body,
+    channelId: "luckyme-round-alerts",
+    data: {
+      type: "round_alert",
+      pool: "mini",
+      roundId: "5",
+      alert: alert.alert,
+      url: "luckyme://pools?pool=mini",
+    },
+  })));
+  const requests = [];
+  const result = await sendExpoPushNotifications(messages, {
+    dryRun: false,
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init, body: JSON.parse(init.body) });
+      return { ok: true, status: 200, json: async () => ({ data: [] }) };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.dryRun, false);
+  assert.equal(result.sent, 4);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.length, 4);
+  assert.deepEqual(new Set(requests[0].body.map((item) => item.to)), new Set(tokens));
+  assert.deepEqual(new Set(requests[0].body.map((item) => item.data.alert)), new Set(["started", "last10"]));
+  for (const message of requests[0].body) {
+    assert.equal(message.priority, "high");
+    assert.equal(message.channelId, "luckyme-round-alerts");
+    assert.equal(message.data.url, "luckyme://pools?pool=mini");
+  }
+});
+
+test("production round-alert timer scans every minute with guarded live delivery", async () => {
+  const [sender, service, timer] = await Promise.all([
+    readFile(new URL("../scripts/push-round-alerts.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/luckyme-push-alerts.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/luckyme-push-alerts.timer", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(sender, /const LAST_10_SECONDS = 10 \* 60/);
+  assert.match(sender, /alertKey\(poolSpec\.slug, roundId, "started"\)/);
+  assert.match(sender, /remainingSeconds <= LAST_10_SECONDS/);
+  assert.match(sender, /for \(const registration of registrations\)/);
+  assert.match(service, /Environment=CONFIRM_MAINNET_PUSH_ALERTS=true/);
+  assert.match(service, /Environment=LUCKYME_PUSH_SEND=true/);
+  assert.match(timer, /OnUnitActiveSec=60/);
+  assert.match(timer, /Persistent=true/);
+});
+
 test("push token registration rejects invalid Expo tokens and supports unregister", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "luckyme-push-test-"));
   const storePath = path.join(dir, "tokens.json");
