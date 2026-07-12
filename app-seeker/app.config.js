@@ -31,6 +31,7 @@ function validateReleaseEnv() {
   const termsUrl = requireEnv("EXPO_PUBLIC_LUCKYME_TERMS_URL");
   const privacyUrl = requireEnv("EXPO_PUBLIC_LUCKYME_PRIVACY_URL");
   const supportUrl = requireEnv("EXPO_PUBLIC_LUCKYME_SUPPORT_URL");
+  requireEnv("GOOGLE_SERVICES_JSON");
   const programId = process.env.EXPO_PUBLIC_LUCKYME_PROGRAM_ID ?? MAINNET_PROGRAM_ID;
 
   if (!MAINNET_RPC_RE.test(apiUrl)) {
@@ -102,5 +103,11 @@ module.exports = ({ config }) => {
   return {
     ...config,
     ...expo,
+    android: {
+      ...expo.android,
+      ...(process.env.GOOGLE_SERVICES_JSON
+        ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+        : {}),
+    },
   };
 };
