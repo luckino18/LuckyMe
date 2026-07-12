@@ -10,6 +10,7 @@ User=luckyme
 Group=luckyme
 WorkingDirectory=/opt/luckyme
 EnvironmentFile=/etc/luckyme/luckyme-api.env
+Environment=ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com
 Environment=ANCHOR_WALLET=/etc/luckyme/keeper.json
 Environment=LUCKYME_EXPECTED_KEEPER_PUBKEY=6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N
 Environment=CONFIRM_MAINNET_SETTLEMENT_KEEPER=false

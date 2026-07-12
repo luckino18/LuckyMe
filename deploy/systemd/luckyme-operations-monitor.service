@@ -9,6 +9,7 @@ User=luckyme
 Group=luckyme
 WorkingDirectory=/opt/luckyme
 EnvironmentFile=/etc/luckyme/luckyme-api.env
+Environment=ANCHOR_PROVIDER_URL=https://api.mainnet-beta.solana.com
 Environment=LUCKYME_API_URL=https://api.lucky-me.app
 Environment=LUCKYME_EXPECTED_KEEPER_PUBKEY=6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N
 Environment=SETTLEMENT_KEEPER_MIN_BALANCE_LAMPORTS=50000000
