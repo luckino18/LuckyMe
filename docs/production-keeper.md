@@ -257,12 +257,12 @@ journal and enforces `KeeperConfig` authorization.
 ## Current deployment boundary (2026-07-12)
 
 The lifecycle/`KeeperConfig` upgrade, legacy empty-round recovery, and the
-minimum-ticket/refund program/backend/site deployment are complete. Mini round
-5 is open and waiting for its first ticket. Normal 6, High 6 and Premium 6 are
-still absent. The mainnet keeper timer remains disabled and inactive, the write
-override is absent, and the base unit is dry-run-only. Use the strict
-`open_round_only` scope for any separately approved remaining openings; do not
-use the full lifecycle scan for an open-only approval.
+minimum-ticket/refund program/backend/site deployment are complete. Mini 5,
+Normal 6, High 6 and Premium 6 are open and waiting for their first tickets.
+The mainnet keeper timer remains disabled and inactive, the write override is
+absent, and the base unit is dry-run-only. Use the strict `open_round_only`
+scope for any future separately approved openings; do not use the full
+lifecycle scan for an open-only approval.
 
 ## Operating Checks
 

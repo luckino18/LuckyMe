@@ -20,9 +20,9 @@ Current objective: preserve the deployed minimum-ticket/refund
 - Backend submit relay: disabled for production
 - Production pool fallback: unavailable/error state, not fake data
 - Historical on-chain status on 2026-07-07: config and all four pools were
-  initialized and their first rounds opened. Current post-cleanup status is
-  Mini round 5 active and waiting for its first ticket (`startTs=0`, `endTs=0`);
-  `activeRound: null` for Normal, High, and Premium.
+  initialized and their first rounds opened. Current status is Mini 5, Normal
+  6, High 6 and Premium 6 active and waiting for their first tickets; all have
+  `startTs=0` and `endTs=0`.
 - Historical v1.0 store APK:
   `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
 - Historical v1.0 APK SHA-256:
@@ -59,11 +59,14 @@ The next full-lifecycle invocation unexpectedly prioritized the already
 archived Mini round 2 sidecar cleanup and returned `1969680` lamports to the
 treasury with signature
 `eyPNoNN1UoknTpr9bbq6P3xZFvo1czxwbnje93M7eeJJbc2H8SjL33Z1yVffCMkpRE6PJzAGp6QHbr97w4AkS95`.
-Execution stopped immediately; Normal 6, High 6 and Premium 6 remain absent.
+Execution stopped immediately. After the strict scope fix and a new explicit
+approval, Normal 6, High 6 and Premium 6 were opened individually and verified.
+See `docs/mainnet-open-round-only-execution-2026-07-12.md`.
 The keeper now has a separately confirmed `open_round_only` scope with an exact
 `pool:roundId` allowlist which returns before all cleanup, refund, ORAO and
 settlement paths. The timer remains `disabled` and `inactive`, the write
-override is absent, and the base unit is dry-run-only.
+override is absent, and the base unit is dry-run-only. The keeper balance after
+the three approved openings is `0.589832185 SOL`.
 
 The required production keeper is still
 `6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV8N`.

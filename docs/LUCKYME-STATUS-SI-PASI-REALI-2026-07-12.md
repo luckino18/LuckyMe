@@ -24,7 +24,7 @@ Store și pornirea rundelor sunt două operațiuni separate.
 | API | Live la `https://api.lucky-me.app` |
 | Site | Live; WalletConnect funcțional prin proiectul Reown controlat de proprietar |
 | APK Seeker | `1.1.0`, code 3, semnat EAS și verificat; SHA-256 `b0da48983e84fd361fe27e06a6ac3d5193b7fb9d0f04621ca963dbc6321af42d` |
-| Pool-uri | Mini 5 este deschisă și așteaptă primul bilet; Normal, High și Premium au `activeRound: null` |
+| Pool-uri | Mini 5, Normal 6, High 6 și Premium 6 sunt deschise și așteaptă primul bilet |
 | Keeper | Serviciul este oprit intenționat; nu există permisiune de scriere activă |
 | dApp Store | Contul și trimiterea din Publisher Portal nu sunt încă finalizate |
 
@@ -81,8 +81,8 @@ alegem ulterior fluxul opțional prin CLI.
 1. Se aprobă explicit alimentarea keeperului real `6BUw...` peste rezerva de
    `0.05 SOL`. Suma și walletul sursă se confirmă înainte de orice tranzacție.
 2. Se activează permisiunea de scriere și timerul keeperului pe VPS.
-3. Keeperul deschide strict rundele rămase Normal 6, High 6 și Premium 6;
-   Mini 5 este deja deschisă.
+3. Rundele sunt deja deschise. Se păstrează timerul oprit până la aprobarea
+   separată a automatizării complete.
 4. Se verifică API-ul, site-ul și o intrare reală controlată de pe Seeker.
 
 Fără pașii 1–3 aplicația poate fi publicată și deschisă, dar utilizatorii nu pot
