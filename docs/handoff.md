@@ -155,7 +155,9 @@ shasum -a 256 /Users/victor/Desktop/LuckyMe-Seeker-MINIMUM-TICKETS-TEST-1.1.0-20
   while using a local fee payer for transaction fees.
 - The temporary deployment wallet was drained after setup and verified at
   `0 SOL`.
-- The 32-character value `13ad45e384e61cf9c9c391ca0f3ea074` is treated as the
-  WalletConnect Project ID for web wallet flows. The Expo/EAS project ID used
+- The owner-controlled Reown project `LuckyMe Web` uses public Project ID
+  `5d4fd67345e3a0d071c527fd2c1067bb` for web WalletConnect flows. Its domain
+  allowlist contains both `https://lucky-me.app` and
+  `https://www.lucky-me.app`. The Expo/EAS project ID used
   by the APK for push tokens is
   `e054857c-6dfb-46ec-9d60-09ce2150dcc4`.

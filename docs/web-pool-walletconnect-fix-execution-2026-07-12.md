@@ -1,8 +1,7 @@
 # Web pool alignment and WalletConnect recovery — 2026-07-12
 
-Status: **frontend code deployed and verified; Reown bare-origin allowlist still
-requires the project owner's authenticated dashboard session.** No program,
-IDL, SDK, backend, keeper, APK, economic, or on-chain files were deployed.
+Status: **completed and live on both production origins.** No program, IDL,
+SDK, backend, keeper, APK, economic, or on-chain files were deployed.
 
 ## Root causes
 
@@ -78,12 +77,19 @@ On `https://www.lucky-me.app`:
 - the final bundle emitted no warning/error on retry;
 - no external `wcm-modal` remained in the DOM.
 
-On `https://lucky-me.app`, Reown closed the relay WebSocket with code `3000` and
-`Unauthorized: origin not allowed`. The UI reached its 12-second pairing-URI
-timeout, showed a human error and Try again, and never remained infinite. A
-second attempt behaved the same. `https://www.lucky-me.app` is authorized;
-`https://lucky-me.app` must still be added to the Reown project allowlist from
-an authenticated owner session at `dashboard.reown.com`.
+The legacy public Project ID was controlled by an unknown account. It allowed
+`https://www.lucky-me.app` but closed the bare-origin relay WebSocket with code
+`3000` and `Unauthorized: origin not allowed`. The new owner-controlled Reown
+project `LuckyMe Web` uses public Project ID
+`5d4fd67345e3a0d071c527fd2c1067bb`. Its allowlist contains exactly:
+
+- `https://lucky-me.app`
+- `https://www.lucky-me.app`
+
+After deploying the new public ID, both origins produced a local QR and Copy
+URI in about five seconds. Neither smoke test emitted a WalletConnect bundle
+warning/error. Pairing was cancelled after verification; no wallet approval or
+session connection was completed.
 
 Wallet Standard remains the first path for detected compatible extensions.
 The direct mock test calls `standard:connect` and does not route Phantom,
@@ -128,13 +134,21 @@ Final Cancel/Try again cache-buster deployment:
 - backup: `/opt/backups/luckyme-web-wallet-cancel-retry-20260712T012541Z`
 - previous site: `/var/www/luckyme/public.prev-20260712T012541Z`
 
+Owner-controlled Reown project deployment:
+
+- staging: `/opt/luckyme/.release-staging/web-reown-owner-project-20260712T091255Z`
+- backup: `/opt/backups/luckyme-web-reown-owner-project-20260712T091255Z`
+- previous site: `/var/www/luckyme/public.prev-20260712T091255Z`
+
 Final deployed hashes:
 
 - `app.js`: `2bc19eaffe8a1d70be8cd5a9555d7da552686a45bf013c9c4f886ed5424b66aa`
 - `assets/vendor/walletconnect-bundle.js`:
   `6da9f252f89bef98f9ab332c2d33fcb63d19a15362ad7b34bb5eb161cbd76db4`
 - `play/index.html`:
-  `6ca850fc3b9079234d85733a3118b975646c2324207fec4226b70c9b55e1578e`
+  `7a940dd3f941c72615dbe9f8a7c9c298207ac6e5d059eb3970c811da22645fea`
+- `config.js`:
+  `0a9acdd2a502a629408017c6c0e7dbc55bb02657c37dd6da87a19d143304c4d6`
 - `styles.css`:
   `dd436aef3bc8147c3cb86d8097cb28cfd21ef9ba6f373590e94daf8d68f399ad`
 
