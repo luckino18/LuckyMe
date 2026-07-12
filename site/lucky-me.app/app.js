@@ -7,10 +7,12 @@ import {
   STANDARD_EVENTS,
   base58Encode,
   compatibleWalletStandardOptions,
+  connectWalletStandardOption,
   createWalletStandardRegistry,
   mergeCompatibleWalletOptions,
   selectSolanaMainnetAccount,
-} from "./wallet-standard.js";
+} from "./wallet-standard.js?v=20260712-pool-walletconnect-fix";
+import { createWalletConnectFlow } from "./walletconnect-flow.js?v=20260712-pool-walletconnect-fix";
 
 const API_BASE = "https://api.lucky-me.app";
 const PROGRAM_ID = "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3";
@@ -23,8 +25,7 @@ const WALLETCONNECT_SOLANA_METHODS = [
   "solana_signAndSendTransaction",
 ];
 const WALLETCONNECT_SOLANA_EVENTS = ["accountsChanged"];
-const WALLETCONNECT_PROVIDER_URL = "https://unpkg.com/@walletconnect/universal-provider@2.23.9/dist/index.umd.js";
-const WALLETCONNECT_MODAL_URL = "https://unpkg.com/@walletconnect/modal@2.7.0/dist/cdn/bundle.js";
+const WALLETCONNECT_BUNDLE_URL = "/assets/vendor/walletconnect-bundle.js?v=20260712-walletconnect-recovery2";
 const OPERATOR_MODE = new URLSearchParams(window.location.search).has("operator");
 const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
 const MOBILE_WALLET_BROWSERS = [
@@ -32,7 +33,6 @@ const MOBILE_WALLET_BROWSERS = [
   { id: "solflare", name: "Solflare" },
   { id: "backpack", name: "Backpack" },
 ];
-const scriptLoaders = new Map();
 const walletStandardRegistry = createWalletStandardRegistry(window);
 
 const POOLS = [
@@ -101,6 +101,9 @@ const state = {
   walletConnectProvider: null,
   walletConnectModal: null,
   walletConnectUri: "",
+  walletConnectQrDataUrl: "",
+  walletConnectBusy: false,
+  walletConnectPhase: "idle",
   selectedPool: null,
   ticketCount: 1,
   preparedTransaction: null,
@@ -508,9 +511,11 @@ function renderPoolCard(pool, compact = false) {
         <div class="fact time-fact"><span class="label">Time left</span><strong>${timing.timeLeft}</strong></div>
         <div class="fact jackpot-fact"><span class="label">Jackpot</span><strong>${jackpotValue}</strong></div>
       </div>
-      ${compact ? "" : `<p>${pool.note} Live state loads only from verified on-chain data.</p>`}
-      <button class="primary-button" data-pool="${pool.id}" ${disablePrimary ? "disabled" : ""}>${actionLabel}</button>
-      ${operatorPoolActions(pool, timing, round)}
+      <div class="pool-card-footer">
+        ${compact ? "" : `<p>${pool.note} Live state loads only from verified on-chain data.</p>`}
+        <button class="primary-button" data-pool="${pool.id}" ${disablePrimary ? "disabled" : ""}>${actionLabel}</button>
+        ${operatorPoolActions(pool, timing, round)}
+      </div>
     </article>
   `;
 }
@@ -844,7 +849,7 @@ function renderWalletModal() {
       ${wallets.length ? `
         <div class="wallet-modal-grid">
           ${wallets.map((wallet) => `
-            <button class="wallet-modal-option" data-connect="${escapeHtml(wallet.id)}">
+            <button class="wallet-modal-option" data-connect="${escapeHtml(wallet.id)}" ${state.walletConnectBusy ? "disabled" : ""}>
               ${walletIconMarkup(wallet)}
               <span>${escapeHtml(wallet.name)}</span>
             </button>
@@ -855,11 +860,20 @@ function renderWalletModal() {
     ${WALLETCONNECT_PROJECT_ID ? `
       <section class="wallet-modal-section">
         <h3>Reown / WalletConnect</h3>
-        <button class="wallet-modal-option walletconnect-option" data-connect="mobile-wallet">
+        <button class="wallet-modal-option walletconnect-option" data-connect="mobile-wallet" ${state.walletConnectBusy ? "disabled" : ""}>
           <span class="wallet-modal-icon">W</span>
           <span>WalletConnect</span>
-          <strong>Connect</strong>
+          <strong>${state.walletConnectBusy ? "Connecting" : "Connect"}</strong>
         </button>
+        ${state.walletConnectBusy ? `
+          <div class="wallet-modal-controls">
+            <button class="secondary-button" data-action="cancel-walletconnect">Cancel</button>
+          </div>
+        ` : ["error", "cancelled"].includes(state.walletConnectPhase) ? `
+          <div class="wallet-modal-controls">
+            <button class="secondary-button" data-action="retry-walletconnect">Try again</button>
+          </div>
+        ` : ""}
       </section>
     ` : ""}
     ${isMobileBrowser() ? `
@@ -867,7 +881,7 @@ function renderWalletModal() {
         <h3>Open wallet browser</h3>
         <div class="wallet-modal-grid">
           ${mobileWalletBrowserOptions().map((wallet) => `
-            <button class="wallet-modal-option" data-connect="mobile-open:${wallet.id}">
+            <button class="wallet-modal-option" data-connect="mobile-open:${wallet.id}" ${state.walletConnectBusy ? "disabled" : ""}>
               <span class="wallet-modal-icon">${escapeHtml(walletInitials(wallet.name))}</span>
               <span>${escapeHtml(wallet.name)}</span>
             </button>
@@ -883,7 +897,10 @@ function renderWalletModal() {
     ${state.walletConnectUri ? `
       <div class="wallet-uri-box wallet-modal-uri">
         <span class="label">WalletConnect session URI</span>
-        <code>${escapeHtml(state.walletConnectUri)}</code>
+        ${state.walletConnectQrDataUrl
+          ? `<img class="walletconnect-qr" src="${escapeHtml(state.walletConnectQrDataUrl)}" alt="WalletConnect pairing QR code" />`
+          : `<div class="walletconnect-qr-loading" role="status">Preparing the local QR code…</div>`}
+        <p>Pairing URI ready. Scan the QR code or copy it to your wallet app.</p>
         <button class="secondary-button" data-action="copy-walletconnect-uri">Copy session URI</button>
       </div>
     ` : ""}
@@ -902,6 +919,9 @@ function openWalletModal() {
 }
 
 function closeWalletModal() {
+  if (walletConnectFlow.busy) {
+    cancelWalletConnect("WalletConnect was cancelled. You can open the selector and try again.");
+  }
   state.walletModalOpen = false;
   dom.walletModal.hidden = true;
   dom.walletModal.setAttribute("aria-hidden", "true");
@@ -985,95 +1005,58 @@ function validatedSignerAddress(address, expectedPublicKey) {
   return publicKey.toBase58();
 }
 
-function loadScript(src) {
-  if (!scriptLoaders.has(src)) {
-    const loader = new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = src;
-      script.async = true;
-      script.crossOrigin = "anonymous";
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Failed to load ${src}`));
-      document.head.appendChild(script);
+let walletConnectBundleFailures = 0;
+let walletConnectDependencies = null;
+let walletConnectBundlePromise = null;
+
+async function loadWalletConnectDependencies() {
+  if (walletConnectDependencies) {
+    return walletConnectDependencies;
+  }
+  if (walletConnectBundlePromise) {
+    return walletConnectBundlePromise;
+  }
+  const bundleUrl = new URL(WALLETCONNECT_BUNDLE_URL, window.location.origin);
+  bundleUrl.searchParams.set("retry", String(walletConnectBundleFailures));
+  walletConnectBundlePromise = import(bundleUrl.href).then((dependencies) => {
+    if (
+      typeof dependencies?.UniversalProvider?.init !== "function" ||
+      typeof dependencies?.createWalletConnectQrDataUrl !== "function"
+    ) {
+      throw new Error("WalletConnect bundle is incomplete");
+    }
+    walletConnectDependencies = dependencies;
+    return dependencies;
+  }).catch((error) => {
+    walletConnectBundleFailures += 1;
+    walletConnectBundlePromise = null;
+    throw error;
+  });
+  return walletConnectBundlePromise;
+}
+
+function subscribeWalletConnectEvents(provider) {
+  releaseWalletEventSubscription();
+  const cleanups = [];
+  const subscribe = (event, listener) => {
+    provider.on?.(event, listener);
+    cleanups.push(() => {
+      if (typeof provider.off === "function") {
+        provider.off(event, listener);
+      } else {
+        provider.removeListener?.(event, listener);
+      }
     });
-    scriptLoaders.set(src, loader);
-  }
+  };
 
-  return scriptLoaders.get(src);
-}
-
-async function loadWalletConnectProviderClass() {
-  await loadScript(WALLETCONNECT_PROVIDER_URL);
-  const providerModule = window["@walletconnect/universal-provider"];
-  const UniversalProvider = providerModule?.UniversalProvider || providerModule?.default;
-
-  if (typeof UniversalProvider?.init !== "function") {
-    throw new Error("WalletConnect provider failed to load");
-  }
-
-  return UniversalProvider;
-}
-
-async function loadWalletConnectModalClass() {
-  try {
-    globalThis.process = globalThis.process || { env: {} };
-    globalThis.process.env = globalThis.process.env || {};
-    const modalModule = await import(WALLETCONNECT_MODAL_URL);
-    return modalModule?.WalletConnectModal || null;
-  } catch (error) {
-    console.warn("WalletConnect modal failed to load", error);
-    return null;
-  }
-}
-
-async function getWalletConnectProvider() {
-  if (!WALLETCONNECT_PROJECT_ID) {
-    throw new Error("Mobile wallet connection is not configured yet");
-  }
-
-  if (state.walletConnectProvider) {
-    return state.walletConnectProvider;
-  }
-
-  const [UniversalProvider, WalletConnectModal] = await Promise.all([
-    loadWalletConnectProviderClass(),
-    loadWalletConnectModalClass(),
-  ]);
-
-  const provider = await UniversalProvider.init({
-    projectId: WALLETCONNECT_PROJECT_ID,
-    metadata: {
-      name: "LuckyMe",
-      description: "LuckyMe Solana pools",
-      url: window.location.origin,
-      icons: [`${window.location.origin}/assets/brand/apple-touch-icon.png`],
-    },
-  });
-
-  const modal = typeof WalletConnectModal === "function"
-    ? new WalletConnectModal({
-        projectId: WALLETCONNECT_PROJECT_ID,
-        chains: WALLETCONNECT_SOLANA_CHAINS,
-        themeMode: "dark",
-      })
-    : null;
-
-  provider.on("display_uri", (uri) => {
-    state.walletConnectUri = uri;
-    setWalletModalMessage("WalletConnect is ready. Scan the QR prompt or copy the session URI below.", "soft");
-    renderWalletModal();
-    modal?.openModal?.({ uri });
-    showWalletMessage("WalletConnect session ready. Continue in your wallet app.", "soft");
-  });
-
-  provider.on("session_delete", () => {
+  subscribe("session_delete", () => {
     state.walletConnectUri = "";
     if (state.wallet?.type === "walletconnect") {
       void clearConnectedWallet("WalletConnect session ended.");
     }
   });
 
-  provider.on("session_update", ({ params } = {}) => {
+  subscribe("session_update", ({ params } = {}) => {
     if (state.wallet?.type !== "walletconnect") {
       return;
     }
@@ -1095,7 +1078,7 @@ async function getWalletConnectProvider() {
     }
   });
 
-  provider.on("session_event", ({ params } = {}) => {
+  subscribe("session_event", ({ params } = {}) => {
     const event = params?.event;
     if (state.wallet?.type !== "walletconnect" || event?.name !== "accountsChanged") {
       return;
@@ -1120,10 +1103,62 @@ async function getWalletConnectProvider() {
     }
   });
 
-  state.walletConnectProvider = provider;
-  state.walletConnectModal = modal;
-  return provider;
+  state.walletEventCleanup = () => cleanups.splice(0).forEach((cleanup) => {
+    try {
+      cleanup();
+    } catch {
+      // Session cleanup must not block disconnect.
+    }
+  });
 }
+
+const walletConnectFlow = createWalletConnectFlow({
+  loadDependencies: loadWalletConnectDependencies,
+  initializeProvider: (dependencies) => dependencies.UniversalProvider.init({
+    projectId: WALLETCONNECT_PROJECT_ID,
+    metadata: {
+      name: "LuckyMe",
+      description: "LuckyMe Solana pools",
+      url: window.location.origin,
+      icons: [`${window.location.origin}/assets/brand/apple-touch-icon.png`],
+    },
+  }),
+  connectOptions: {
+    optionalNamespaces: {
+      solana: {
+        chains: WALLETCONNECT_SOLANA_CHAINS,
+        methods: WALLETCONNECT_SOLANA_METHODS,
+        events: WALLETCONNECT_SOLANA_EVENTS,
+      },
+    },
+  },
+  onStatus: ({ phase, message, busy }) => {
+    state.walletConnectPhase = phase;
+    state.walletConnectBusy = busy;
+    setWalletModalMessage(message, phase === "error" ? "danger" : "soft");
+    if (phase === "error") {
+      showWalletMessage(message, "danger");
+    }
+  },
+  onUri: ({ uri, dependencies }) => {
+    state.walletConnectUri = uri;
+    state.walletConnectQrDataUrl = "";
+    renderWalletModal();
+    showWalletMessage("WalletConnect session ready. Continue in your wallet app.", "soft");
+    const qrPromise = dependencies.createWalletConnectQrDataUrl(uri);
+    Promise.resolve(qrPromise).then((dataUrl) => {
+      if (state.walletConnectUri !== uri || typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+        return;
+      }
+      state.walletConnectQrDataUrl = dataUrl;
+      renderWalletModal();
+    }).catch(() => {
+      if (state.walletConnectUri === uri) {
+        setWalletModalMessage("The pairing URI is ready. Copy it into your wallet app to continue.", "warning");
+      }
+    });
+  },
+});
 
 function parseWalletConnectAccount(session) {
   const namespace = session?.namespaces?.solana;
@@ -1141,21 +1176,16 @@ function parseWalletConnectAccount(session) {
 }
 
 async function connectWalletConnect() {
-  const provider = await getWalletConnectProvider();
-  releaseWalletEventSubscription();
+  if (!WALLETCONNECT_PROJECT_ID) {
+    throw new Error("Mobile wallet connection is not configured yet");
+  }
   state.walletConnectUri = "";
-  const session = provider.session || await provider.connect({
-    optionalNamespaces: {
-      solana: {
-        chains: WALLETCONNECT_SOLANA_CHAINS,
-        methods: WALLETCONNECT_SOLANA_METHODS,
-        events: WALLETCONNECT_SOLANA_EVENTS,
-      },
-    },
-  });
-
-  state.walletConnectModal?.closeModal?.();
+  state.walletConnectQrDataUrl = "";
+  const { provider, session, modal } = await walletConnectFlow.start();
+  state.walletConnectProvider = provider;
+  state.walletConnectModal = modal;
   state.walletConnectUri = "";
+  state.walletConnectQrDataUrl = "";
 
   const account = parseWalletConnectAccount(session || provider.session);
   state.wallet = {
@@ -1167,6 +1197,18 @@ async function connectWalletConnect() {
     chainId: account.chainId,
     address: account.address,
   };
+  subscribeWalletConnectEvents(provider);
+}
+
+function cancelWalletConnect(message) {
+  const cancelled = walletConnectFlow.cancel(message);
+  state.walletConnectUri = "";
+  state.walletConnectQrDataUrl = "";
+  state.walletConnectBusy = false;
+  if (state.walletModalOpen) {
+    renderWalletModal();
+  }
+  return cancelled;
 }
 
 function releaseWalletEventSubscription() {
@@ -1189,7 +1231,10 @@ function walletAccountChanged(message) {
 async function clearConnectedWallet(message = "Wallet disconnected.") {
   releaseWalletEventSubscription();
   state.wallet = null;
+  state.walletConnectProvider = null;
+  state.walletConnectModal = null;
   state.walletConnectUri = "";
+  state.walletConnectQrDataUrl = "";
   state.preparedTransaction = null;
   renderWalletPill();
   renderWallets();
@@ -1284,13 +1329,7 @@ function subscribeInjectedWalletEvents(provider, walletName) {
 }
 
 async function connectStandard(walletOption) {
-  const standardWallet = walletOption.standardWallet;
-  const result = await standardWallet.features["standard:connect"].connect({ silent: false });
-  const accounts = result?.accounts?.length ? result.accounts : standardWallet.accounts;
-  const account = selectSolanaMainnetAccount(accounts, standardWallet);
-  if (!account) {
-    throw new Error(`${walletOption.name} did not return a compatible Solana mainnet account`);
-  }
+  const { standardWallet, account } = await connectWalletStandardOption(walletOption);
   const address = validatedSignerAddress(account.address, account.publicKey);
   state.wallet = {
     id: walletOption.id,
@@ -1334,7 +1373,6 @@ async function connectWallet(walletId) {
 
   if (walletId === "mobile-wallet") {
     try {
-      setWalletModalMessage("Opening WalletConnect…", "soft");
       await connectWalletConnect();
       closeWalletModal();
       renderWalletPill();
@@ -1342,9 +1380,16 @@ async function connectWallet(walletId) {
       await loadPools();
     } catch (error) {
       state.walletConnectModal?.closeModal?.();
+      state.walletConnectProvider = null;
+      state.walletConnectModal = null;
+      state.walletConnectBusy = false;
+      state.walletConnectUri = "";
+      state.walletConnectQrDataUrl = "";
       const message = error instanceof Error ? error.message : String(error);
-      setWalletModalMessage(message, "danger");
-      showWalletMessage(message, "danger");
+      if (error?.code !== "cancelled") {
+        setWalletModalMessage(message, "danger");
+        showWalletMessage(message, "danger");
+      }
     }
     return;
   }
@@ -1909,6 +1954,10 @@ document.addEventListener("click", async (event) => {
     openWalletModal();
   } else if (action === "close-wallet-modal") {
     closeWalletModal();
+  } else if (action === "cancel-walletconnect") {
+    cancelWalletConnect("WalletConnect was cancelled. You can try again whenever you are ready.");
+  } else if (action === "retry-walletconnect") {
+    await connectWallet("mobile-wallet");
   } else if (action === "copy-walletconnect-uri") {
     await copyWalletConnectUri();
   } else if (action === "ticket-dec") {

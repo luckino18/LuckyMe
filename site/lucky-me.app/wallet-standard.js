@@ -168,6 +168,21 @@ export function selectSolanaMainnetAccount(accounts, wallet) {
   }) || null;
 }
 
+export async function connectWalletStandardOption(walletOption) {
+  const wallet = walletOption?.standardWallet;
+  const connect = wallet?.features?.[STANDARD_CONNECT]?.connect;
+  if (typeof connect !== "function") {
+    throw new Error(`${walletOption?.name || "Wallet"} does not support Wallet Standard connection`);
+  }
+  const result = await connect({ silent: false });
+  const accounts = result?.accounts?.length ? result.accounts : wallet.accounts;
+  const account = selectSolanaMainnetAccount(accounts, wallet);
+  if (!account) {
+    throw new Error(`${walletOption.name} did not return a compatible Solana mainnet account`);
+  }
+  return { standardWallet: wallet, account };
+}
+
 function normalizedWalletName(name) {
   return String(name || "wallet")
     .normalize("NFKC")

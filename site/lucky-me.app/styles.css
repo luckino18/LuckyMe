@@ -519,6 +519,7 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
   border-color: var(--line-purple);
   box-shadow: 0 0 26px rgba(153, 69, 255, 0.08);
 }
+.pool-card-footer { display: flex; min-width: 0; flex-direction: column; gap: 12px; align-self: stretch; }
 .pool-card:nth-child(4n+1) { border-color: var(--line-cyan); box-shadow: 0 0 26px rgba(0, 209, 255, 0.07); background: radial-gradient(circle at 90% 0%, rgba(0, 209, 255, 0.08), transparent 16rem), var(--panel-deep); }
 .pool-card:nth-child(4n+1) .entry { color: var(--cyan); }
 .pool-card:nth-child(4n+2) .entry { color: var(--purple); }
@@ -527,7 +528,8 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
 .pool-card:nth-child(4n) { border-color: rgba(192, 132, 252, 0.3); box-shadow: 0 0 26px rgba(192, 132, 252, 0.1); background: radial-gradient(circle at 90% 0%, rgba(192, 132, 252, 0.1), transparent 16rem), var(--panel-deep); }
 .pool-card:nth-child(4n) .entry { color: #C084FC; }
 
-.pool-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pool-title { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pool-title > div { min-width: 0; }
 .pool-title h3 { margin-top: 3px; }
 
 .pool-chip {
@@ -543,6 +545,9 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
   background: rgba(245, 158, 11, 0.1);
   border: 1px solid rgba(245, 158, 11, 0.26);
   flex: 0 0 auto;
+  max-width: 58%;
+  overflow-wrap: anywhere;
+  text-align: center;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
 }
 .pool-chip.success {
@@ -576,7 +581,8 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
 .time-fact strong { color: var(--cyan); font-variant-numeric: tabular-nums; }
 
 .pool-card p { font-size: 12.5px; color: var(--soft); }
-.pool-card .primary-button { width: 100%; margin-top: auto; }
+.pool-card .primary-button { width: 100%; }
+.pool-card-footer .primary-button { margin-top: auto; }
 
 .minimum-target {
   display: grid;
@@ -751,6 +757,26 @@ body.wallet-modal-open { overflow: hidden; }
 .walletconnect-option { grid-template-columns: auto 1fr auto; min-height: 82px; place-items: center start; text-align: left; }
 .walletconnect-option .wallet-modal-icon { width: 48px; height: 48px; border-radius: 999px; background: #3b99fc; }
 .walletconnect-option strong { justify-self: end; color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+.wallet-modal-option:disabled { cursor: wait; transform: none; opacity: 0.58; }
+.wallet-modal-controls { display: flex; justify-content: flex-end; margin-top: 10px; }
+.wallet-modal-controls .secondary-button { min-width: 130px; }
+.walletconnect-qr {
+  width: min(100%, 320px);
+  height: auto;
+  justify-self: center;
+  padding: 10px;
+  border-radius: 14px;
+  background: #fff;
+}
+.walletconnect-qr-loading {
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.025);
+}
 
 @media (max-width: 700px) {
   .wallet-modal-backdrop { align-items: end; padding: 0; }
@@ -1001,6 +1027,29 @@ body.wallet-modal-open { overflow: hidden; }
 @media (min-width: 1360px) {
   .pool-grid, #home-pools { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .wallet-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 620px) {
+  .pool-title > div {
+    display: grid;
+    grid-template-rows: minmax(38px, auto) auto;
+    align-content: start;
+  }
+  @supports (grid-template-rows: subgrid) {
+    .pool-card {
+      display: grid;
+      grid-row: span 5;
+      grid-template-rows: subgrid;
+    }
+  }
+}
+
+@media (min-width: 1360px) {
+  @supports not (grid-template-rows: subgrid) {
+    .pool-title { min-height: 61px; }
+    .minimum-target { min-height: 185px; }
+    .facts-grid { min-height: 282px; }
+  }
 }
 
 /* ---------------- responsive ---------------- */

@@ -6,6 +6,7 @@ import {
   SOLANA_SIGN_TRANSACTION,
   base58Encode,
   compatibleWalletStandardOptions,
+  connectWalletStandardOption,
   createWalletStandardRegistry,
   isCompatibleInjectedProvider,
   isCompatibleWalletStandardWallet,
@@ -156,4 +157,33 @@ test("Wallet Standard raw signatures are encoded as Solana base58 strings", () =
   assert.equal(base58Encode(new Uint8Array()), "");
   assert.equal(base58Encode(new Uint8Array([0, 0])), "11");
   assert.equal(base58Encode(new TextEncoder().encode("Hello World")), "JxF12TrwUP45BMd");
+});
+
+test("detected Wallet Standard wallet connects directly without WalletConnect", async () => {
+  let connectCalls = 0;
+  const expectedAccount = account();
+  const wallet = standardWallet("Direct Wallet", {
+    accounts: [],
+    features: {
+      "standard:connect": {
+        version: "1.0.0",
+        connect: async ({ silent }) => {
+          connectCalls += 1;
+          assert.equal(silent, false);
+          return { accounts: [expectedAccount] };
+        },
+      },
+      [SOLANA_SIGN_TRANSACTION]: {
+        version: "1.0.0",
+        supportedTransactionVersions: ["legacy"],
+        signTransaction: async () => [],
+      },
+    },
+  });
+  const [option] = compatibleWalletStandardOptions([wallet]);
+
+  const connected = await connectWalletStandardOption(option);
+  assert.equal(connectCalls, 1);
+  assert.equal(connected.standardWallet, wallet);
+  assert.equal(connected.account, expectedAccount);
 });

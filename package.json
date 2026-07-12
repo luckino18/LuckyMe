@@ -35,14 +35,20 @@
     "randomness:settle": "node scripts/randomness-settle.mjs",
     "settlement:keeper": "node scripts/settlement-keeper.mjs",
     "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
-    "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/backend-minimums-ui.test.mjs tests/app-production-env.test.mjs tests/deploy-safety.test.mjs tests/docs-scripts.test.mjs tests/legacy-empty-rent-recovery.test.mjs tests/lifecycle-rent-wallet.test.mjs tests/wallet-standard.test.mjs tests/push-notifications.test.mjs",
+    "build:web:walletconnect": "node scripts/build-walletconnect-browser.mjs",
+    "capture:web-fix-screenshots": "node scripts/capture-web-fix-screenshots.mjs",
+    "test": "node --test sim/*.test.mjs tests/backend-config.test.mjs tests/backend-minimums-ui.test.mjs tests/app-production-env.test.mjs tests/deploy-safety.test.mjs tests/docs-scripts.test.mjs tests/legacy-empty-rent-recovery.test.mjs tests/lifecycle-rent-wallet.test.mjs tests/wallet-standard.test.mjs tests/walletconnect-flow.test.mjs tests/pool-card-layout.test.mjs tests/push-notifications.test.mjs",
     "sim:preview": "node sim/preview.mjs"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "0.32.1",
     "@ledgerhq/hw-app-solana": "^7.10.5",
     "@ledgerhq/hw-transport-node-hid": "^6.33.5",
-    "@solana/web3.js": "1.98.4"
+    "@solana/web3.js": "1.98.4",
+    "@walletconnect/universal-provider": "2.23.9",
+    "esbuild": "0.25.6",
+    "playwright-core": "1.55.0",
+    "qrcode": "1.5.4"
   },
   "dependencies": {
     "@orao-network/solana-vrf": "0.8.0"
