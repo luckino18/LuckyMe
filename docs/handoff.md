@@ -27,6 +27,13 @@ Current objective: preserve the deployed minimum-ticket/refund
   `/Users/victor/Desktop/LuckyMe-Seeker-STORE-FINAL-v2-2026-07-08.apk`
 - Historical v1.0 APK SHA-256:
   `c104ec372270dc175d54d26bf472edd9f489813324f66c9a6766df423fc05bc2`
+- Current Seeker APK with the responsive How To fix:
+  `/Users/victor/Desktop/LuckyMe-Seeker-HOW-TO-FIX-1.1.1-code4-2026-07-12.apk`
+- Current APK SHA-256:
+  `edd66851314cb777adb8351cd4cbbdcae9631835a692371792989b9c2e85f55d`.
+- Current APK version: `1.1.1` (`versionCode 4`). Its EAS signer certificate is
+  unchanged, so it updates the code-3 EAS build in place. See
+  `docs/seeker-apk-1.1.1-how-to-verification-2026-07-12.md`.
 - APK signing: EAS-managed Android credentials
   `Build Credentials iNPMBDRiCC (default)`, verified with APK Signature Scheme
   v2. Signer certificate SHA-256:
