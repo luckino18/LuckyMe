@@ -856,6 +856,19 @@ function page(
     .how-step h3 { margin-bottom: 4px; }
     .how-step p { font-size: 13.5px; }
 
+    .how-to-page {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      overflow-x: clip;
+    }
+    .how-to-page > *,
+    .how-to-page section,
+    .how-to-page .how-step > div,
+    .how-to-page .pool-rules-wrap {
+      min-width: 0;
+      max-width: 100%;
+    }
     .pool-rules-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
     .pool-rules-table { width: 100%; min-width: 570px; border-collapse: collapse; }
     .pool-rules-table th,
@@ -1266,6 +1279,72 @@ function page(
       .cta-row { grid-template-columns: 1fr; }
       .badge-grid { grid-template-columns: 1fr; }
       h1 { font-size: 26px; }
+    }
+
+    @media (max-width: 520px) {
+      .how-to-page .pool-rules-wrap {
+        overflow: visible;
+        border: 0;
+      }
+      .how-to-page .pool-rules-table,
+      .how-to-page .pool-rules-table tbody,
+      .how-to-page .pool-rules-table tr,
+      .how-to-page .pool-rules-table td {
+        display: block;
+        width: 100%;
+        min-width: 0;
+      }
+      .how-to-page .pool-rules-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .how-to-page .pool-rules-table tbody {
+        display: grid;
+        gap: 10px;
+      }
+      .how-to-page .pool-rules-table tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.025);
+      }
+      .how-to-page .pool-rules-table td {
+        padding: 10px 11px;
+        border-bottom: 1px solid var(--line);
+        overflow-wrap: anywhere;
+      }
+      .how-to-page .pool-rules-table td:nth-child(even) {
+        border-left: 1px solid var(--line);
+      }
+      .how-to-page .pool-rules-table td:first-child {
+        grid-column: 1 / -1;
+        border-left: 0;
+        font-size: 14px;
+      }
+      .how-to-page .pool-rules-table td:last-child {
+        grid-column: 1 / -1;
+        border-bottom: 0;
+      }
+      .how-to-page .pool-rules-table td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 4px;
+        color: var(--soft);
+        font-size: 9.5px;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1804,14 +1883,14 @@ function walletBody() {
 
 function howToPlayBody() {
   const tableRows = POOLS.map((pool) => String.raw`<tr>
-    <td>${pool.name}</td>
-    <td class="mono">${pool.entry}</td>
-    <td class="mono">${pool.minimumTickets} total</td>
-    <td>${pool.winners}</td>
-    <td>${pool.limits}</td>
+    <td data-label="Pool">${pool.name}</td>
+    <td data-label="Ticket" class="mono">${pool.entry}</td>
+    <td data-label="Target tickets" class="mono">${pool.minimumTickets} total</td>
+    <td data-label="Winners">${pool.winners}</td>
+    <td data-label="Wallet limit">${pool.limits}</td>
   </tr>`).join("\n    ");
 
-  return String.raw`<main class="stack">
+  return String.raw`<main class="stack how-to-page">
   <section class="hero-card">
     <div class="hero-copy">
       <p class="eyebrow">How to Play</p>

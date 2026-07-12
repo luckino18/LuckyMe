@@ -179,6 +179,19 @@ test("site and How to Play keep targets, refund wording, and wallet modal consis
   assert.match(app, /payload\.summary\?\.totalTicketsBefore/);
 });
 
+test("Seeker How To stays within the phone viewport", () => {
+  const seekerScreens = fs.readFileSync("app-seeker/src/stitchScreens.ts", "utf8");
+
+  assert.match(seekerScreens, /<main class="stack how-to-page">/);
+  assert.match(seekerScreens, /\.how-to-page \{[\s\S]*?max-width: 100%;[\s\S]*?overflow-x: clip;/);
+  assert.match(
+    seekerScreens,
+    /@media \(max-width: 520px\) \{[\s\S]*?\.how-to-page \.pool-rules-table[\s\S]*?min-width: 0;/,
+  );
+  assert.match(seekerScreens, /<td data-label="Target tickets"/);
+  assert.match(seekerScreens, /content: attr\(data-label\)/);
+});
+
 test("reviewed ticket progress is bound through backend and on-chain instruction", () => {
   const backend = fs.readFileSync("backend/src/server.mjs", "utf8");
   const program = fs.readFileSync("programs/luckyme/src/lib.rs", "utf8");
