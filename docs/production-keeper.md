@@ -16,7 +16,6 @@ export LUCKYME_EXPECTED_KEEPER_PUBKEY=6BUwjY5uQhmbkH6L8xx6YhT4ByzSWm6SMpKgop9RDV
 export SETTLEMENT_KEEPER_MIN_BALANCE_LAMPORTS=50000000
 export SETTLEMENT_KEEPER_MAX_ACTIONS=1
 export LUCKYME_SETTLEMENT_ARCHIVE_PATH=/var/lib/luckyme/settlements.jsonl
-export LUCKYME_REFUND_JOURNAL_PATH=/var/lib/luckyme/refunds.jsonl
 ```
 
 Use a dedicated keeper wallet funded only for transaction fees and provider
@@ -106,8 +105,9 @@ The service creates `/var/lib/luckyme` through `StateDirectory=`. The API must
 use the same `LUCKYME_SETTLEMENT_ARCHIVE_PATH` so Activity can show a closed
 round from its append-only record and settlement signature.
 
-The keeper also stores append-only refund progress at
-`LUCKYME_REFUND_JOURNAL_PATH`. On restart it verifies any pending signature
+The keeper derives its append-only refund journal from the settlement archive
+path as `/var/lib/luckyme/settlements.jsonl.refunds.jsonl`. On restart it
+verifies any pending signature
 against the exact program instruction, Round, Entry, player credit, and closed
 Entry state before advancing. Archive and refund records are pinned to the
 Solana genesis hash so data from another cluster cannot be reused.
@@ -224,15 +224,14 @@ npm run refund:crank
 refunds are performed only by `settlement:keeper`, which owns the restart-safe
 journal and enforces `KeeperConfig` authorization.
 
-## Current deployment boundary (2026-07-11)
+## Current deployment boundary (2026-07-12)
 
-The earlier lifecycle/`KeeperConfig` upgrade and legacy empty-round recovery
-are complete. The minimum-ticket/refund binary documented here is a prepared
-release candidate and is not yet deployed. The mainnet keeper timer remains
-disabled and inactive, the live API reports `activeRound: null` for all four
-pools, and the dry-run executes no transaction. Do not install a write override,
-start the timer, open rounds, or deploy this source without the separate
-mainnet approval plan.
+The lifecycle/`KeeperConfig` upgrade, legacy empty-round recovery, and the
+minimum-ticket/refund program/backend/site deployment are complete. The mainnet
+keeper timer remains disabled and inactive, the write override is absent, the
+live API reports `activeRound: null` for all four pools, and the dry-run executes
+no transaction. Do not fund/start the keeper, install a write override, or open
+rounds without separate explicit approval.
 
 ## Operating Checks
 

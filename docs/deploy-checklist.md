@@ -47,23 +47,19 @@ Execution evidence:
 Current live state is deliberately idle: `activeRound: null` for every pool,
 the keeper timer is disabled and inactive, and no new waiting round was opened.
 
-## 2.2 Pending minimum-ticket/refund upgrade (not authorized)
+## 2.2 Minimum-ticket/refund upgrade completed
 
-The later release candidate adds fixed targets `25 / 13 / 3 / 3`, Premium's
-three-wallet rule, no-ORAO refund mode, automatic keeper-only refunds, API/UI
-progress, How to Play, and Seeker `1.1.0`. It is not deployed by the completed
-lifecycle work above.
+The fixed targets `25 / 13 / 3 / 3`, Premium's three-wallet rule, no-ORAO
+refund mode, automatic keeper-only refunds, API/UI progress, and How to Play
+were deployed on 2026-07-12. The program is at slot `432325448`; the matching
+backend/site public smoke checks passed.
 
-Before any live write, follow
-`docs/mainnet-minimum-tickets-upgrade-approval-plan-2026-07-11.md`: recheck the
-program binary hash and ProgramData capacity, fund the temporary upgrade buffer
-only after explicit approval, use the Ledger authority for the upgrade, deploy
-the matching backend/site/keeper, run read-only smoke checks, and keep the
-keeper timer disabled. Opening the four next rounds and enabling keeper writes
-are separate actions requiring separate approval.
+Execution evidence is in
+`docs/mainnet-minimum-tickets-upgrade-execution-2026-07-12.md`. The upload
+buffer rent was recovered and the temporary payer swept to zero.
 
-No upgrade, SOL transfer, live service deployment, round opening, keeper start,
-or other mainnet transaction is authorized merely by this checklist.
+No round opening, keeper funding, write override, or keeper start is authorized
+merely by this checklist. Those operational actions remain separate.
 
 ## 3. Backend HTTPS Deployment
 

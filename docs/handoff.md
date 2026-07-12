@@ -1,7 +1,7 @@
 # LuckyMe Handoff
 
-Current objective: preserve the completed lifecycle deployment while preparing
-the separately gated minimum-ticket/refund `MAINNET_RELEASE` release candidate.
+Current objective: preserve the deployed minimum-ticket/refund
+`MAINNET_RELEASE` while keeping keeper writes and new rounds separately gated.
 
 ## Current Release Shape
 
@@ -64,7 +64,7 @@ the VPS signer. Full Stage 2 evidence is in
 `docs/mainnet-stage2-rent-recovery-execution-2026-07-11.md` and
 `docs/mainnet-stage2-rent-recovery-evidence-2026-07-11.json`.
 
-## Minimum-ticket release candidate status
+## Minimum-ticket deployment status
 
 Source now implements Mini `25`, Normal `13`, High `3`, and Premium `3`
 minimum tickets; Premium also requires three distinct wallets. The first ticket
@@ -88,10 +88,13 @@ The final production program artifact is `359312` bytes with SHA-256
 `ab541a8eac1c3525199f9f409e4134274484183a1b67c9826fa0badf7cbb9576`;
 the IDL and SDK hashes are recorded in the release-candidate report.
 All local test suites and the mainnet keeper dry-run pass; the dry-run executes
-zero transactions. This new binary and its matching backend/site/keeper have
-not been deployed. The live timer remains disabled and inactive. See
-`docs/mainnet-minimum-tickets-upgrade-approval-plan-2026-07-11.md` before any
-transfer, upgrade, deployment, round opening, or keeper start.
+zero transactions. The approved binary and its matching backend/site were
+deployed on 2026-07-12 at program slot `432325448`. Buffer rent was recovered,
+the temporary payer was swept to zero, and the exact net fee was `0.00182 SOL`.
+The live timer remains disabled/inactive, the write override is absent, and all
+pools remain idle. See
+`docs/mainnet-minimum-tickets-upgrade-execution-2026-07-12.md`. Funding or
+starting the keeper and opening the next four rounds require separate approval.
 
 ## Main Files Changed In This Pass
 

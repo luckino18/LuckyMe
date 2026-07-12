@@ -58,10 +58,9 @@ Based on the official Solana Mobile publishing docs, prepare:
   `e249bc55...2067`, passes v2 signature and ZIP checks, embeds the production
   Program ID/API/mainnet configuration, and contains the LuckyMe adaptive/round
   launcher artwork.
-- The synchronized Program ID and lifecycle upgrade are deployed on
-  mainnet-beta, but the later minimum-ticket program source is not. The live API
-  currently returns `activeRound: null` for every pool and keeper writes remain
-  disabled.
+- The synchronized minimum-ticket program, backend, and site are deployed on
+  mainnet-beta. The live API currently returns `activeRound: null` for every
+  pool and keeper writes remain disabled pending separate approval.
 - The VPS backend exposes Expo push notification registration and the push
   keeper dry-run passed against the production configuration.
 

@@ -1,8 +1,10 @@
 # Mainnet minimum-ticket upgrade approval plan — 2026-07-11
 
-Status: **prepared and tested; no action in this plan has been executed.** The
-live keeper timer remains disabled/inactive, the temporary upload payer has
-`0 SOL`, and the live API reports `activeRound: null` for all four pools.
+Status: **approved actions completed and verified on 2026-07-12.** The keeper
+timer remains disabled/inactive, the temporary upload payer is back at `0 SOL`,
+and the live API reports `activeRound: null` for all four pools. Execution
+signatures and final balances are recorded in
+`mainnet-minimum-tickets-upgrade-execution-2026-07-12.md`.
 
 ## Fixed identities
 
@@ -65,7 +67,7 @@ upgrade; any remainder must then be swept back to the authority. Recalculate
 rent and ordinary fees immediately before signing; stop if the required amount
 or artifact hash differs.
 
-## Approved-order simulation — not execution
+## Approved execution order
 
 1. Reconfirm timer/service are disabled and inactive; save the live program,
    authority, KeeperConfig, pool, balance, and API snapshots.
@@ -104,11 +106,12 @@ loader workflow cost was `0.001760 SOL`; both must be rechecked before use.
 Once players enter a round under the new instruction/API contract, rollback
 requires a separate incident plan and must not be improvised.
 
-## Approval wording
+## Approval consumed
 
-This document is a simulation and does not authorize a mainnet write. A future
-approval must name this exact program hash and funding ceiling, for example:
+The following approval was received and consumed for this completed execution:
 
 `APROB upgrade-ul minimum-tickets cu program hash ab541a8e...b9576 si transfer temporar maxim 2.5038206 SOL, fara pornire keeper si fara deschidere runde.`
 
-Opening rounds and enabling keeper writes require later, separate approvals.
+The separately approved `0.00089088 SOL` supplementary top-up was also consumed
+and swept with the recovered buffer rent. Opening rounds and enabling keeper
+writes still require later, separate approvals.

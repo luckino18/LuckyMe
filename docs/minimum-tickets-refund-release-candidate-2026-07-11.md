@@ -1,8 +1,8 @@
 # Minimum-ticket/refund release candidate — 2026-07-11
 
-Status: **source and tests complete; mainnet deployment not executed.** EAS APK
-build `52056b37-8b78-44fc-b30b-0319a96c92cb` is recorded below after final
-artifact verification.
+Status: **program, backend, and site deployed and verified on 2026-07-12.** EAS
+APK build `52056b37-8b78-44fc-b30b-0319a96c92cb` is recorded below. Keeper
+writes and new Round openings remain deliberately disabled.
 
 ## Player rules implemented
 
@@ -91,8 +91,8 @@ horizontal overflow and no browser console warning/error:
 - Expected upgrade workflow fee: `0.001805 SOL`; total including funding and
   final sweep transactions: approximately `0.001815 SOL`, without priority fee.
 
-See `mainnet-minimum-tickets-upgrade-approval-plan-2026-07-11.md` for the exact
-still-unapproved transaction order and rollback boundary.
+See `mainnet-minimum-tickets-upgrade-execution-2026-07-12.md` for transaction
+signatures, recovered rent, exact fees, and the current approval boundary.
 
 ## Target-level fee sensitivity
 
@@ -144,13 +144,13 @@ the established EAS lane uses `e249bc55...2067`. A Seeker currently running the
 code-2 test APK must uninstall it before installing the EAS-signed code-3 APK.
 An EAS-signed older build can update in place.
 
-## Live boundary at handoff
+## Live boundary after deployment
 
-- Program slot remains `432234649`; no threshold upgrade was submitted.
-- Authority balance: `2.54600544 SOL`.
+- Program slot: `432325448`; the approved threshold upgrade is verified.
+- Authority balance: `2.54418544 SOL` after exactly `0.00182 SOL` total fees.
 - Temporary upload payer: `0 SOL`.
 - Keeper balance: `0.001437625 SOL`, below its write reserve.
 - Live API: `activeRound: null` for all pools.
-- Keeper timer: disabled/inactive; no round, ORAO request, refund, SOL transfer,
-  site deployment, backend deployment, or mainnet transaction was executed in
-  this release-candidate pass.
+- Matching site/backend are live; public smoke checks passed.
+- Keeper timer: disabled/inactive; no round, ORAO request, refund, or keeper
+  write was executed.

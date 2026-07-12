@@ -9,11 +9,10 @@ Pool math is transparent: fixed ticket price, total tickets, winner chance,
 prize, jackpot contribution, and treasury fee. Results and payouts are executed
 by the Solana program.
 
-> Release-candidate boundary (2026-07-11): this branch contains the new
-> minimum-ticket and automatic-refund program, keeper, backend, web, and Seeker
-> code. The source is intentionally ahead of the program and services currently
-> running on mainnet. No minimum-ticket program upgrade, live site/backend
-> deployment, or keeper start is implied by this repository state.
+> Deployment boundary (2026-07-12): the minimum-ticket and automatic-refund
+> program, backend, and web release are live on mainnet. The keeper remains
+> disabled and no new Round is open, so ticket purchases remain unavailable
+> until a separate operational approval.
 
 ## Funded-round rules
 
