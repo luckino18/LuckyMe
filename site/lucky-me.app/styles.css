@@ -837,7 +837,7 @@ body.wallet-modal-open { overflow: hidden; }
   border-radius: 13px;
   background: rgba(14, 20, 32, 0.72);
 }
-.ticket-quick-select > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.ticket-quantity-options { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .quantity-button {
   min-width: 48px;
   min-height: 38px;
@@ -852,6 +852,34 @@ body.wallet-modal-open { overflow: hidden; }
 .quantity-button:hover, .quantity-button.selected {
   border-color: var(--purple);
   background: rgba(153, 69, 255, 0.2);
+}
+.custom-ticket-quantity {
+  display: grid;
+  gap: 4px;
+  min-width: 142px;
+  color: var(--soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.custom-ticket-quantity input {
+  width: 142px;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--text);
+  background: rgba(3, 5, 10, 0.54);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: none;
+}
+.custom-ticket-quantity input:focus {
+  outline: 2px solid rgba(0, 209, 255, 0.32);
+  border-color: var(--hover-line);
 }
 
 @media (max-width: 560px) {

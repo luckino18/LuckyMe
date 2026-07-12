@@ -187,6 +187,9 @@ test("web purchase supports visible multi-ticket presets and wallet-compatible s
   assert.match(app, /\[1, 5, 10, 20, 25\]/);
   assert.match(app, /data-ticket-count="\$\{value\}"/);
   assert.match(app, /ticketCountButton\.dataset\.ticketCount/);
+  assert.match(app, /Custom amount/);
+  assert.match(app, /aria-label="Custom ticket quantity"/);
+  assert.match(app, /max="\$\{ticketLimit\}"/);
   assert.match(app, /pool\.id === "premium" \? ""/);
   assert.doesNotMatch(app, /options:\s*\{\s*commitment:/);
   assert.match(app, /preflightCommitment: "confirmed"/);

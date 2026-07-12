@@ -1539,8 +1539,12 @@ function renderReview() {
     </div>
     ${pool.id === "premium" ? "" : `<div class="ticket-quick-select" role="group" aria-label="Quick ticket quantity">
       <span class="label">Ticket quantity</span>
-      <div>
+      <div class="ticket-quantity-options">
         ${[1, 5, 10, 20, 25].filter((value) => value <= ticketLimit).map((value) => `<button class="quantity-button ${ticketCount === value ? "selected" : ""}" data-ticket-count="${value}" type="button">${value}</button>`).join("")}
+        <label class="custom-ticket-quantity">
+          <span>Custom amount</span>
+          <input data-ticket-input type="number" min="1" max="${ticketLimit}" step="1" value="${ticketCount}" inputmode="numeric" aria-label="Custom ticket quantity" />
+        </label>
       </div>
     </div>`}
     ${state.lastError ? `<div class="notice danger">${state.lastError}</div>` : ""}
