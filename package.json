@@ -29,6 +29,7 @@
     "rent:recover:legacy-empty": "node scripts/recover-legacy-empty-round-rent.mjs",
     "incident:forensics": "node scripts/incident-forensics.mjs",
     "push:round-alerts": "node scripts/push-round-alerts.mjs",
+    "monitor:operations": "node scripts/operations-monitor.mjs",
     "refund:crank": "node scripts/refund-cranker.mjs",
     "randomness:request": "node scripts/randomness-request.mjs",
     "randomness:status": "node scripts/randomness-status.mjs",

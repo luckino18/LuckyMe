@@ -136,6 +136,24 @@ test("production round-alert timer scans every minute with guarded live delivery
   assert.match(timer, /Persistent=true/);
 });
 
+test("operations monitor covers keeper, RPC, stuck rounds, transactions, and notification failures", async () => {
+  const [monitor, service, timer, pkg] = await Promise.all([
+    readFile(new URL("../scripts/operations-monitor.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/luckyme-operations-monitor.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/systemd/luckyme-operations-monitor.timer", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+  assert.match(monitor, /keeper_balance_low/);
+  assert.match(monitor, /rpc_unreachable/);
+  assert.match(monitor, /round_stuck/);
+  assert.match(monitor, /`\$\{name\}_service_failed`/);
+  assert.match(monitor, /\["settlement", "luckyme-settlement-keeper\.timer"/);
+  assert.match(monitor, /\["notifications", "luckyme-push-alerts\.timer"/);
+  assert.match(service, /ExecStart=\/usr\/bin\/npm run monitor:operations/);
+  assert.match(timer, /OnUnitActiveSec=60/);
+  assert.match(pkg, /"monitor:operations": "node scripts\/operations-monitor\.mjs"/);
+});
+
 test("push token registration rejects invalid Expo tokens and supports unregister", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "luckyme-push-test-"));
   const storePath = path.join(dir, "tokens.json");

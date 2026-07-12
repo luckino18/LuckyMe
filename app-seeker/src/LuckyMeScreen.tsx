@@ -49,7 +49,7 @@ type NotificationOptInState =
 type StitchMessage =
   | { type: "navigate"; screen: StitchScreenId; pool?: string }
   | { type: "refresh" }
-  | { type: "action"; action: "ticket-dec" | "ticket-inc" | "buy-entry"; pool?: string }
+  | { type: "action"; action: "ticket-dec" | "ticket-inc" | "buy-entry"; pool?: string; ticketCount?: number }
   | { type: "link"; link: LegalLinkKey }
   | { type: "external"; url: string }
   | undefined;
@@ -112,6 +112,7 @@ function parseStitchMessage(data: string): StitchMessage {
       pool?: string;
       type?: string;
       screen?: StitchScreenId;
+      ticketCount?: number;
       link?: string;
       url?: string;
     };
@@ -134,7 +135,12 @@ function parseStitchMessage(data: string): StitchMessage {
         message.action === "ticket-inc" ||
         message.action === "buy-entry")
     ) {
-      return { type: "action", action: message.action, pool: message.pool };
+      return {
+        type: "action",
+        action: message.action,
+        pool: message.pool,
+        ticketCount: Number.isFinite(message.ticketCount) ? message.ticketCount : undefined,
+      };
     }
 
     if (message?.type === "navigate" && message.screen && message.screen in STITCH_SCREENS) {
@@ -258,6 +264,46 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
         return null;
       }
 
+      const pickerRoot = document.querySelector('[data-ticket-picker-root]');
+      const pickerInput = pickerRoot ? pickerRoot.querySelector('[data-ticket-input]') : null;
+      let localTicketCount = pickerInput ? Number(pickerInput.value || 1) : 1;
+
+      function clampLocalTicketCount(value) {
+        const limit = pickerRoot ? Number(pickerRoot.getAttribute('data-ticket-limit') || 1) : 1;
+        const parsed = Math.trunc(Number(value));
+        return Math.max(1, Math.min(limit, Number.isFinite(parsed) ? parsed : 1));
+      }
+
+      function updateLocalTicketCount(value) {
+        localTicketCount = clampLocalTicketCount(value);
+        if (!pickerRoot) return;
+        const price = Number(pickerRoot.getAttribute('data-ticket-price') || 0);
+        const sold = Number(pickerRoot.getAttribute('data-ticket-sold') || 0);
+        const minimum = Number(pickerRoot.getAttribute('data-ticket-minimum') || 0);
+        const after = sold + localTicketCount;
+        const remaining = Math.max(0, minimum - after);
+        const input = pickerRoot.querySelector('[data-ticket-input]');
+        const total = pickerRoot.querySelector('[data-ticket-total]');
+        const afterNode = pickerRoot.querySelector('[data-ticket-after]');
+        const remainingNode = pickerRoot.querySelector('[data-ticket-remaining]');
+        if (input) input.value = String(localTicketCount);
+        if (total) total.textContent = String(Number((price * localTicketCount).toFixed(9))) + ' SOL total';
+        if (afterNode) afterNode.textContent = after + ' / ' + minimum;
+        if (remainingNode) remainingNode.textContent = remaining + (remaining === 1 ? ' ticket' : ' tickets');
+        pickerRoot.querySelectorAll('[data-ticket-count]').forEach(function (button) {
+          button.classList.toggle('selected', Number(button.getAttribute('data-ticket-count')) === localTicketCount);
+        });
+      }
+
+      if (pickerInput) {
+        pickerInput.addEventListener('input', function () {
+          if (pickerInput.value !== '') updateLocalTicketCount(pickerInput.value);
+        });
+        pickerInput.addEventListener('change', function () {
+          updateLocalTicketCount(pickerInput.value);
+        });
+      }
+
       document.querySelectorAll('a, button').forEach(function (element) {
         element.addEventListener('click', function (event) {
           const actionCarrier = element.closest ? element.closest('[data-action]') : null;
@@ -265,11 +311,28 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
           if (dataAction) {
             event.preventDefault();
             event.stopPropagation();
+            if (dataAction === 'ticket-dec') {
+              updateLocalTicketCount(localTicketCount - 1);
+              return;
+            }
+            if (dataAction === 'ticket-inc') {
+              updateLocalTicketCount(localTicketCount + 1);
+              return;
+            }
             post({
               type: 'action',
               action: dataAction,
-              pool: actionCarrier.getAttribute('data-pool') || ''
+              pool: actionCarrier.getAttribute('data-pool') || '',
+              ticketCount: localTicketCount
             });
+            return;
+          }
+
+          const ticketCount = element.getAttribute('data-ticket-count');
+          if (ticketCount) {
+            event.preventDefault();
+            event.stopPropagation();
+            updateLocalTicketCount(ticketCount);
             return;
           }
 
@@ -825,9 +888,9 @@ export function LuckyMeScreen() {
     }
   }, [walletAddress]);
 
-  const buyEntry = useCallback(async (pool = selectedPool) => {
+  const buyEntry = useCallback(async (pool = selectedPool, requestedCount = ticketCount) => {
     const poolId = pool || selectedPool;
-    const count = clampTicketCount(poolId, ticketCount);
+    const count = clampTicketCount(poolId, requestedCount);
     const livePool = livePools.find((candidate) => candidate.id === poolId);
     setSelectedPool(poolId);
     setTicketCount(count);
@@ -1025,7 +1088,7 @@ export function LuckyMeScreen() {
       } else if (message.action === "ticket-inc") {
         setTicketCount((current) => clampTicketCount(message.pool ?? selectedPool, current + 1));
       } else if (message.action === "buy-entry") {
-        buyEntry(message.pool ?? selectedPool);
+        buyEntry(message.pool ?? selectedPool, message.ticketCount ?? ticketCount);
       }
       return;
     }

@@ -150,6 +150,17 @@ test("Seeker configures a dedicated Android notification icon", () => {
   assert.equal(readFileSync("app-seeker/assets/notification-icon.png").subarray(1, 4).toString(), "PNG");
 });
 
+test("Seeker ticket picker supports manual and preset quantities without native rerenders", () => {
+  const screen = readFileSync(LUCKYME_SCREEN, "utf8");
+  const stitch = readFileSync(STITCH_SCREENS, "utf8");
+  assert.match(stitch, /data-ticket-input type="number"/);
+  assert.match(stitch, /\[5, 10, 20, 25\]/);
+  assert.match(screen, /let localTicketCount/);
+  assert.match(screen, /updateLocalTicketCount/);
+  assert.match(screen, /ticketCount: localTicketCount/);
+  assert.match(screen, /buyEntry\(message\.pool \?\? selectedPool, message\.ticketCount \?\? ticketCount\)/);
+});
+
 test("Seeker entry readiness is evaluated for the selected pool", () => {
   const screen = readFileSync(LUCKYME_SCREEN, "utf8");
   const stitch = readFileSync(STITCH_SCREENS, "utf8");

@@ -190,6 +190,9 @@ test("web purchase supports visible multi-ticket presets and wallet-compatible s
   assert.match(app, /Custom amount/);
   assert.match(app, /aria-label="Custom ticket quantity"/);
   assert.match(app, /max="\$\{ticketLimit\}"/);
+  assert.doesNotMatch(app, /Submitted: \$\{signature\}\. Confirming chain state/);
+  assert.match(app, /purchased successfully/);
+  assert.match(app, /purchaseNotice/);
   assert.match(app, /pool\.id === "premium" \? ""/);
   assert.doesNotMatch(app, /options:\s*\{\s*commitment:/);
   assert.match(app, /preflightCommitment: "confirmed"/);

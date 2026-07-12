@@ -108,6 +108,7 @@ const state = {
   ticketCount: 1,
   preparedTransaction: null,
   lastError: "",
+  purchaseNotice: "",
 };
 
 const dom = {
@@ -399,6 +400,7 @@ function setTicketCount(value) {
     : 1;
   state.preparedTransaction = null;
   state.lastError = "";
+  state.purchaseNotice = "";
 }
 
 function renderMinimumTarget(pool, livePool, round) {
@@ -1548,6 +1550,7 @@ function renderReview() {
       </div>
     </div>`}
     ${state.lastError ? `<div class="notice danger">${state.lastError}</div>` : ""}
+    ${state.purchaseNotice ? `<div class="notice success">${state.purchaseNotice}</div>` : ""}
     <div class="wallet-actions">
       ${connected ? "" : `<button class="primary-button" data-route="wallet">Connect wallet</button>`}
       <button class="primary-button" data-action="buy" ${canBuy ? "" : "disabled"}>${buyLabel}</button>
@@ -1566,6 +1569,7 @@ async function prepareTransaction() {
     return null;
   }
   state.lastError = "";
+  state.purchaseNotice = "";
   state.preparedTransaction = null;
   renderReview();
 
@@ -1627,13 +1631,17 @@ async function signAndSendPreparedTransaction() {
   }
 
   state.lastError = "";
+  state.purchaseNotice = "";
   renderReview();
 
   try {
     const signature = await signAndSendTransactionPayload(state.preparedTransaction);
     state.preparedTransaction.signature = signature;
-    state.lastError = signature ? `Submitted: ${signature}. Confirming chain state...` : "Transaction submitted. Confirming chain state...";
     await refreshAfterTransaction();
+    const confirmedEntry = roundUserEntry(activeRound(state.selectedPool));
+    state.purchaseNotice = confirmedEntry
+      ? `${confirmedEntry.ticketCount} ${ticketWord(confirmedEntry.ticketCount)} purchased successfully.`
+      : `${state.ticketCount} ${ticketWord(state.ticketCount)} purchased successfully.`;
   } catch (error) {
     state.lastError = error instanceof Error ? error.message : String(error);
   }

@@ -949,16 +949,30 @@ function page(
     }
 
     .ticket-value {
+      width: 100%;
       min-height: 48px;
-      display: grid;
-      place-items: center;
+      padding: 8px 12px;
       border-radius: 13px;
       border: 1px solid var(--line-purple);
       background: rgba(153, 69, 255, 0.10);
       color: #fff;
       font-size: 18px;
       font-weight: 850;
+      text-align: center;
     }
+
+    .ticket-value:focus { outline: 2px solid rgba(0, 209, 255, 0.32); }
+    .ticket-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .ticket-preset {
+      min-height: 42px;
+      border: 1px solid var(--line-strong);
+      border-radius: 11px;
+      background: var(--panel);
+      color: #fff;
+      font: inherit;
+      font-weight: 850;
+    }
+    .ticket-preset.selected { border-color: var(--purple); background: rgba(153, 69, 255, 0.20); }
 
     .button-disabled {
       opacity: 0.55;
@@ -2033,7 +2047,7 @@ function reviewBody(options: StitchRenderOptions = {}) {
       : canBuy
         ? "Sign in wallet"
         : facts.status;
-  return String.raw`<main class="stack">
+  return String.raw`<main class="stack" data-ticket-picker-root data-ticket-price="${escapeHtml(priceSol(pool, facts.live))}" data-ticket-limit="${pool.id === "premium" ? 1 : 1000}" data-ticket-sold="${facts.threshold.sold}" data-ticket-minimum="${facts.threshold.minimumTickets}">
   <section class="section-header">
     <div>
       <span class="label">Review</span>
@@ -2049,8 +2063,8 @@ function reviewBody(options: StitchRenderOptions = {}) {
       <div class="row"><span class="label">Time left</span><strong ${countdownAttributes(facts.round)}>${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
       <div class="row"><span class="label">Valid draw target</span><strong class="mono">${facts.threshold.minimumTickets} total tickets</strong></div>
       <div class="row"><span class="label">Sold now</span><strong class="mono">${hasRound ? `${facts.threshold.sold} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
-      <div class="row"><span class="label">After this purchase</span><strong class="mono">${hasRound ? `${ticketsAfterPurchase} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
-      <div class="row"><span class="label">Still needed after</span><strong class="mono">${hasRound ? `${remainingAfterPurchase} ${ticketWord(remainingAfterPurchase)}` : "Unavailable"}</strong></div>
+      <div class="row"><span class="label">After this purchase</span><strong class="mono" data-ticket-after>${hasRound ? `${ticketsAfterPurchase} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
+      <div class="row"><span class="label">Still needed after</span><strong class="mono" data-ticket-remaining>${hasRound ? `${remainingAfterPurchase} ${ticketWord(remainingAfterPurchase)}` : "Unavailable"}</strong></div>
       <div class="row"><span class="label">Players</span><strong class="mono">${escapeHtml(facts.players)}</strong></div>
       ${alreadyEntered ? `<div class="row"><span class="label">My tickets</span><strong class="mono success">${escapeHtml(facts.myTickets)}</strong></div>` : ""}
       <div class="row"><span class="label">Wallet</span><strong class="mono">${escapeHtml(wallet)}</strong></div>
@@ -2061,13 +2075,16 @@ function reviewBody(options: StitchRenderOptions = {}) {
   <section class="panel">
     <div class="row" style="margin-bottom: 12px;">
       <span class="label">Tickets</span>
-      <strong class="mono">${escapeHtml(total)} SOL total</strong>
+      <strong class="mono" data-ticket-total>${escapeHtml(total)} SOL total</strong>
     </div>
     <div class="ticket-picker">
       <button class="ticket-step" data-action="ticket-dec" data-pool="${pool.id}">-</button>
-      <div class="ticket-value mono">${count}</div>
+      <input class="ticket-value mono" data-ticket-input type="number" min="1" max="${pool.id === "premium" ? 1 : 1000}" step="1" inputmode="numeric" value="${count}" aria-label="Ticket quantity" ${pool.id === "premium" ? "disabled" : ""} />
       <button class="ticket-step" data-action="ticket-inc" data-pool="${pool.id}">+</button>
     </div>
+    ${pool.id === "premium" ? "" : `<div class="ticket-presets" role="group" aria-label="Quick ticket quantity">
+      ${[5, 10, 20, 25].map((value) => `<button class="ticket-preset${count === value ? " selected" : ""}" data-ticket-count="${value}" type="button">${value}</button>`).join("")}
+    </div>`}
     <p class="muted" style="font-size: 12.5px; margin-top: 10px;">${pool.id === "premium"
       ? "Premium allows one ticket per wallet and needs three distinct wallets."
       : `The target is based on total tickets sold, not the number of players. One wallet can buy multiple ${pool.name} tickets in this entry.`}</p>
