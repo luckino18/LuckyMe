@@ -1,25 +1,28 @@
 # Keeper rent-return upgrade plan — 2026-07-13
 
-Status: **program buffer uploaded and verified; final upgrade not executed.**
+Status: **program buffer uploaded, verified, and assigned to the Ledger upgrade
+authority; final upgrade not executed.**
 
 ## Buffer upload completed
 
 - Buffer: `6QSaBY1kBzfaRjQ4sWdaj7XoYx2LzGjUv7tik7SbfFam`
-- Buffer authority: `9DvCoJTwdf8CcQUPiLBWEu5Zx4GiYCg8G7LwKaZtZbFc`
+- Buffer authority: `AApgoYncyfpadcMwZBvbCtzp3L9QdocgsYTmrPR2wEds`
 - Buffer balance: `2.50413144 SOL`
 - Data length: `359616` bytes
 - On-chain buffer SHA-256:
   `d40def532680f1cfdd063e5895597f6543934e4a37089f295b21f9d7435e9732`
 - Verification: byte-for-byte identical to `target/deploy/luckyme.so`
-- Upload payer remainder: `0.00407856 SOL`
+- Upload payer remainder after authority transfer: `0.00407356 SOL`
 - Upload spend: `0.00179000 SOL` in transaction fees, plus recoverable
   buffer rent
 - Existing program remains unchanged at deployment slot `432325448`
 
 The public RPC throttled the initial serial upload. Safe resume retained the
 same buffer and completed the missing writes over QUIC. No second buffer rent
-was paid. Buffer authority has not been transferred and the program upgrade
-instruction has not been executed.
+was paid. Buffer-authority transfer completed with finalized signature
+`643bR7hNEpyyBaZz8fXcqqzuEbg7eXGNEmNyRRHa1Yq4CQoA46bEhfic2jdfdxpNpV2H4hNMZy4eBptM4W1P6fWt`
+and a `0.000005 SOL` fee. The program upgrade instruction has not been
+executed; the live program remains at slot `432325448`.
 
 ## Correction
 
