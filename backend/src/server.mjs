@@ -52,6 +52,9 @@ const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES ?? 100_000);
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 120);
 const PROGRAM_STATE_CACHE_TTL_MS = Number(process.env.PROGRAM_STATE_CACHE_TTL_MS ?? 10_000);
+const PLAYER_STATE_CACHE_MAX_ENTRIES = Number(
+  process.env.PLAYER_STATE_CACHE_MAX_ENTRIES ?? 2_000,
+);
 const SETTLEMENT_ARCHIVE_PATH = process.env.LUCKYME_SETTLEMENT_ARCHIVE_PATH ?? "";
 const ENABLE_TRANSACTION_SUBMIT = process.env.ENABLE_TRANSACTION_SUBMIT === "true";
 const RELEASE_MODE = process.env.LUCKYME_RELEASE_MODE ?? "MAINNET_RELEASE";
@@ -113,6 +116,7 @@ const REFUND_STATUSES = new Set(["none", "pending", "completed"]);
 const rateBuckets = new Map();
 const programStateCache = new Map();
 const programStateInflight = new Map();
+let programStateVersion = 0;
 
 class ReadonlyPublicKeyWallet {
   constructor(publicKey) {
@@ -431,16 +435,20 @@ async function getProgramState({ player } = {}) {
 
     const config = await program.account.config.fetch(configAddress);
     const pools = [];
+    const poolAddresses = ONCHAIN_POOLS.map((poolSpec) =>
+      derivePool(configAddress, poolSpec.id),
+    );
+    const poolAccounts = await program.account.pool.fetchMultiple(poolAddresses);
 
-    for (const poolSpec of ONCHAIN_POOLS) {
+    for (const [poolIndex, poolSpec] of ONCHAIN_POOLS.entries()) {
       const slug = poolSpec.slug;
-      const poolAddress = derivePool(configAddress, poolSpec.id);
+      const poolAddress = poolAddresses[poolIndex];
       const poolVault = derivePoolVault(poolAddress);
       const jackpotVault = deriveJackpotVault(poolAddress);
       const staticPool = STATIC_POOL_BY_SLUG.get(slug);
+      const pool = poolAccounts[poolIndex];
 
-      const poolExists = await accountExists(connection, poolAddress);
-      if (!poolExists) {
+      if (!pool) {
         if (!STRICT_ONCHAIN) {
           pools.push({
             ...poolPayloadFromStatic(staticPool, poolSpec),
@@ -457,12 +465,7 @@ async function getProgramState({ player } = {}) {
         continue;
       }
 
-      const pool = await program.account.pool.fetch(poolAddress);
       const currentRound = numberFromAnchor(pool.currentRound);
-      const fetchedActiveRound = currentRound > 0
-        ? await fetchRound(program, poolAddress, currentRound, player, poolSpec)
-        : null;
-      const activeRound = fetchedActiveRound?.missing ? null : fetchedActiveRound;
       const onchainRecentRounds = await fetchRecentRounds(
         program,
         poolAddress,
@@ -470,6 +473,10 @@ async function getProgramState({ player } = {}) {
         player,
         poolSpec,
       );
+      const fetchedActiveRound = onchainRecentRounds.find(
+        (round) => !round?.missing && Number(round.roundId) === currentRound,
+      ) ?? null;
+      const activeRound = fetchedActiveRound?.missing ? null : fetchedActiveRound;
       const recentRounds = mergeArchivedRounds(
         onchainRecentRounds,
         slug,
@@ -552,13 +559,14 @@ async function getProgramState({ player } = {}) {
 }
 
 async function getCachedProgramState({ player } = {}) {
-  if (!Number.isFinite(PROGRAM_STATE_CACHE_TTL_MS) || PROGRAM_STATE_CACHE_TTL_MS <= 0) {
-    return getProgramState({ player });
+  const publicRecord = await getCachedPublicProgramState();
+  if (!player || !publicRecord.state?.onchain?.available) {
+    return publicRecord.state;
   }
 
-  const cacheKey = player ? `player:${player.toBase58()}` : "public";
-  const cached = programStateCache.get(cacheKey);
+  const cacheKey = `player:${player.toBase58()}:${publicRecord.version}`;
   const now = Date.now();
+  const cached = programStateCache.get(cacheKey);
 
   if (cached && now - cached.storedAt <= PROGRAM_STATE_CACHE_TTL_MS) {
     return cached.state;
@@ -569,13 +577,15 @@ async function getCachedProgramState({ player } = {}) {
     return inflight;
   }
 
-  const promise = getProgramState({ player })
+  const promise = enrichProgramStateForPlayer(publicRecord.state, player)
     .then((state) => {
       if (state?.onchain?.available) {
         programStateCache.set(cacheKey, {
           state,
           storedAt: Date.now(),
+          version: publicRecord.version,
         });
+        prunePlayerStateCache();
       }
       return state;
     })
@@ -585,6 +595,151 @@ async function getCachedProgramState({ player } = {}) {
 
   programStateInflight.set(cacheKey, promise);
   return promise;
+}
+
+async function getCachedPublicProgramState() {
+  const cacheKey = "public";
+  const now = Date.now();
+  const cacheEnabled = Number.isFinite(PROGRAM_STATE_CACHE_TTL_MS) &&
+    PROGRAM_STATE_CACHE_TTL_MS > 0;
+  const cached = programStateCache.get(cacheKey);
+
+  if (cacheEnabled && cached && now - cached.storedAt <= PROGRAM_STATE_CACHE_TTL_MS) {
+    return cached;
+  }
+
+  const inflight = programStateInflight.get(cacheKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  const promise = getProgramState()
+    .then((state) => {
+      const record = {
+        state,
+        storedAt: Date.now(),
+        version: ++programStateVersion,
+      };
+      if (state?.onchain?.available && cacheEnabled) {
+        programStateCache.set(cacheKey, record);
+      }
+      return record;
+    })
+    .finally(() => {
+      programStateInflight.delete(cacheKey);
+    });
+
+  programStateInflight.set(cacheKey, promise);
+  return promise;
+}
+
+function prunePlayerStateCache() {
+  if (!Number.isSafeInteger(PLAYER_STATE_CACHE_MAX_ENTRIES) || PLAYER_STATE_CACHE_MAX_ENTRIES <= 0) {
+    return;
+  }
+  const playerKeys = [...programStateCache.keys()].filter((key) => key.startsWith("player:"));
+  const overflow = playerKeys.length - PLAYER_STATE_CACHE_MAX_ENTRIES;
+  if (overflow <= 0) {
+    return;
+  }
+  playerKeys
+    .sort((left, right) =>
+      (programStateCache.get(left)?.storedAt ?? 0) - (programStateCache.get(right)?.storedAt ?? 0)
+    )
+    .slice(0, overflow)
+    .forEach((key) => programStateCache.delete(key));
+}
+
+async function enrichProgramStateForPlayer(state, player, options = {}) {
+  const playerAddress = player.toBase58();
+  const roundAddresses = collectPlayerRoundAddresses(state);
+  const entryByRound = new Map();
+
+  if (roundAddresses.length > 0) {
+    const program = options.program ?? createClient({
+      requireSigner: false,
+      url: ANCHOR_PROVIDER_URL,
+    }).program;
+    const entryAddresses = roundAddresses.map((round) => deriveEntry(round, player));
+    const accounts = await program.account.entry.fetchMultiple(entryAddresses);
+
+    for (let index = 0; index < roundAddresses.length; index += 1) {
+      const round = roundAddresses[index];
+      const account = accounts[index] ?? null;
+      if (!account) {
+        entryByRound.set(round.toBase58(), null);
+        continue;
+      }
+      if (!account.round.equals(round) || !account.player.equals(player)) {
+        throw new Error(`Player Entry identity mismatch for round ${round.toBase58()}`);
+      }
+      const ticketCount = bigintFromAnchor(account.ticketCount);
+      entryByRound.set(round.toBase58(), {
+        address: entryAddresses[index].toBase58(),
+        player: playerAddress,
+        ticketStart: stringFromAnchor(account.ticketStart),
+        ticketCount: ticketCount.toString(),
+        lamports: stringFromAnchor(account.lamports),
+        chancePercent: null,
+      });
+    }
+  }
+
+  const enrichRound = (round) => {
+    if (!round || round.missing) {
+      return round;
+    }
+    const totalTickets = BigInt(round.totalTickets ?? 0);
+    if (round.archived) {
+      const archivedEntry = (round.entries ?? []).find((entry) => entry.player === playerAddress);
+      return {
+        ...round,
+        userEntry: archivedEntry
+          ? {
+              ...archivedEntry,
+              chancePercent: formatPercentRatio(BigInt(archivedEntry.ticketCount ?? 0), totalTickets),
+            }
+          : undefined,
+      };
+    }
+    const entry = entryByRound.get(round.address) ?? null;
+    return {
+      ...round,
+      userEntry: entry
+        ? {
+            ...entry,
+            chancePercent: formatPercentRatio(BigInt(entry.ticketCount), totalTickets),
+          }
+        : null,
+    };
+  };
+
+  return {
+    ...state,
+    pools: (state.pools ?? []).map((pool) => ({
+      ...pool,
+      activeRound: enrichRound(pool.activeRound),
+      recentRounds: (pool.recentRounds ?? []).map(enrichRound),
+    })),
+  };
+}
+
+function collectPlayerRoundAddresses(state) {
+  const rounds = new Map();
+  for (const pool of state.pools ?? []) {
+    for (const round of [pool.activeRound, ...(pool.recentRounds ?? [])]) {
+      if (!round || round.missing || round.archived || !round.address) {
+        continue;
+      }
+      try {
+        const address = new PublicKey(round.address);
+        rounds.set(address.toBase58(), address);
+      } catch {
+        throw new Error(`Invalid Round address in cached program state: ${round.address}`);
+      }
+    }
+  }
+  return [...rounds.values()];
 }
 
 async function getPublicConfig() {
@@ -1688,64 +1843,15 @@ async function fetchRound(program, poolAddress, roundId, player = null, poolSpec
   const roundAddress = deriveRound(poolAddress, roundId);
   try {
     const round = await program.account.round.fetch(roundAddress);
-    const totalTickets = bigintFromAnchor(round.totalTickets);
-    const refundState = getRefundState(round, poolSpec);
-    const providerRandomness = await getRoundRandomnessState(
-      program.provider.connection,
+    return roundPayloadFromAccount(
       program,
       poolAddress,
       roundAddress,
       roundId,
-      totalTickets,
       round,
+      player,
+      poolSpec,
     );
-    const minimumFields = poolSpec
-      ? roundPolicyFields(poolSpec, round, {
-          refundState,
-          providerRandomness,
-        })
-      : {};
-    return {
-      address: roundAddress.toBase58(),
-      roundId: numberFromAnchor(round.roundId),
-      startTs: numberFromAnchor(round.startTs),
-      endTs: numberFromAnchor(round.endTs),
-      ticketPriceLamports: stringFromAnchor(round.ticketPriceLamports),
-      totalTickets: totalTickets.toString(),
-      totalLamports: stringFromAnchor(round.totalLamports),
-      totalSol: lamportsToSol(bigintFromAnchor(round.totalLamports)),
-      entrantCount: round.entrantCount,
-      settled: round.settled,
-      jackpotTriggered: round.jackpotTriggered,
-      winnerCount: numberFromAnchor(round.winnerCount ?? 0),
-      winner: round.winner.toBase58(),
-      winnerSecond: round.winnerSecond?.toBase58?.() ?? DEFAULT_PUBLIC_KEY,
-      winnerThird: round.winnerThird?.toBase58?.() ?? DEFAULT_PUBLIC_KEY,
-      winners: [
-        round.winner,
-        round.winnerSecond,
-        round.winnerThird,
-      ]
-        .filter((winner) => winner && winner.toBase58() !== DEFAULT_PUBLIC_KEY)
-        .map((winner, index) => ({
-          rank: index + 1,
-          winner: winner.toBase58(),
-        })),
-      jackpotWinner: round.jackpotWinner.toBase58(),
-      randomnessCommitment: Buffer.from(round.randomnessCommitment).toString("hex"),
-      randomness: Buffer.from(round.randomness).toString("hex"),
-      randomnessMode: RANDOMNESS_MODE,
-      randomnessProofStatus: randomnessProofStatus(round),
-      providerRandomness,
-      ...minimumFields,
-      refundDelaySeconds: REFUND_DELAY_SECONDS,
-      refundAfterTs: refundState.refundAfterTs,
-      refundAvailable: refundState.refundAvailable,
-      refundMode: refundState.refundMode,
-      userEntry: player
-        ? await fetchUserEntry(program, roundAddress, player, totalTickets)
-        : undefined,
-    };
   } catch {
     return {
       address: roundAddress.toBase58(),
@@ -1753,6 +1859,75 @@ async function fetchRound(program, poolAddress, roundId, player = null, poolSpec
       missing: true,
     };
   }
+}
+
+async function roundPayloadFromAccount(
+  program,
+  poolAddress,
+  roundAddress,
+  roundId,
+  round,
+  player = null,
+  poolSpec = null,
+) {
+  const totalTickets = bigintFromAnchor(round.totalTickets);
+  const refundState = getRefundState(round, poolSpec);
+  const providerRandomness = await getRoundRandomnessState(
+    program.provider.connection,
+    program,
+    poolAddress,
+    roundAddress,
+    roundId,
+    totalTickets,
+    round,
+  );
+  const minimumFields = poolSpec
+    ? roundPolicyFields(poolSpec, round, {
+        refundState,
+        providerRandomness,
+      })
+    : {};
+  return {
+    address: roundAddress.toBase58(),
+    roundId: numberFromAnchor(round.roundId),
+    startTs: numberFromAnchor(round.startTs),
+    endTs: numberFromAnchor(round.endTs),
+    ticketPriceLamports: stringFromAnchor(round.ticketPriceLamports),
+    totalTickets: totalTickets.toString(),
+    totalLamports: stringFromAnchor(round.totalLamports),
+    totalSol: lamportsToSol(bigintFromAnchor(round.totalLamports)),
+    entrantCount: round.entrantCount,
+    settled: round.settled,
+    jackpotTriggered: round.jackpotTriggered,
+    winnerCount: numberFromAnchor(round.winnerCount ?? 0),
+    winner: round.winner.toBase58(),
+    winnerSecond: round.winnerSecond?.toBase58?.() ?? DEFAULT_PUBLIC_KEY,
+    winnerThird: round.winnerThird?.toBase58?.() ?? DEFAULT_PUBLIC_KEY,
+    winners: [
+      round.winner,
+      round.winnerSecond,
+      round.winnerThird,
+    ]
+      .filter((winner) => winner && winner.toBase58() !== DEFAULT_PUBLIC_KEY)
+      .map((winner, index) => ({
+        rank: index + 1,
+        winner: winner.toBase58(),
+      })),
+    jackpotWinner: round.jackpotWinner.toBase58(),
+    randomnessCommitment: Buffer.from(round.randomnessCommitment).toString("hex"),
+    randomness: Buffer.from(round.randomness).toString("hex"),
+    randomnessMode: RANDOMNESS_MODE,
+    randomnessProofStatus: randomnessProofStatus(round),
+    providerRandomness,
+    ...minimumFields,
+    refundDelaySeconds: REFUND_DELAY_SECONDS,
+    refundAfterTs: refundState.refundAfterTs,
+    refundAvailable: refundState.refundAvailable,
+    refundMode: refundState.refundMode,
+    userEntry: player
+      ? await fetchUserEntry(program, roundAddress, player, totalTickets)
+      : undefined,
+  };
 }
 
 async function getRoundRandomness(poolInput, roundIdInput) {
@@ -2081,9 +2256,44 @@ async function fetchRecentRounds(program, poolAddress, currentRound, player = nu
     roundIds.push(roundId);
   }
 
-  return Promise.all(
-    roundIds.map((roundId) => fetchRound(program, poolAddress, roundId, player, poolSpec)),
-  );
+  const roundAddresses = roundIds.map((roundId) => deriveRound(poolAddress, roundId));
+  let accounts;
+  try {
+    accounts = await program.account.round.fetchMultiple(roundAddresses);
+  } catch {
+    return Promise.all(
+      roundIds.map((roundId) => fetchRound(program, poolAddress, roundId, player, poolSpec)),
+    );
+  }
+
+  return Promise.all(roundIds.map(async (roundId, index) => {
+    const roundAddress = roundAddresses[index];
+    const round = accounts[index] ?? null;
+    if (!round) {
+      return {
+        address: roundAddress.toBase58(),
+        roundId,
+        missing: true,
+      };
+    }
+    try {
+      return await roundPayloadFromAccount(
+        program,
+        poolAddress,
+        roundAddress,
+        roundId,
+        round,
+        player,
+        poolSpec,
+      );
+    } catch {
+      return {
+        address: roundAddress.toBase58(),
+        roundId,
+        missing: true,
+      };
+    }
+  }));
 }
 
 function mergeArchivedRounds(
@@ -3058,6 +3268,8 @@ export {
   archiveIdentityMatches,
   archivedRoundPayload,
   assertRoundMinimumReached,
+  collectPlayerRoundAddresses,
+  enrichProgramStateForPlayer,
   getRefundState,
   minimumPolicyForPool,
   roundMinimumState,

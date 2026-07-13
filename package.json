@@ -38,7 +38,7 @@
     "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
     "build:web:walletconnect": "node scripts/build-walletconnect-browser.mjs",
     "capture:web-fix-screenshots": "node scripts/capture-web-fix-screenshots.mjs",
-    "test": "node --test sim/*.test.mjs tests/admin-control.test.mjs tests/backend-config.test.mjs tests/backend-minimums-ui.test.mjs tests/app-production-env.test.mjs tests/deploy-safety.test.mjs tests/docs-scripts.test.mjs tests/legacy-empty-rent-recovery.test.mjs tests/lifecycle-rent-wallet.test.mjs tests/wallet-standard.test.mjs tests/walletconnect-flow.test.mjs tests/pool-card-layout.test.mjs tests/push-notifications.test.mjs",
+    "test": "node --test sim/*.test.mjs tests/admin-control.test.mjs tests/backend-config.test.mjs tests/backend-minimums-ui.test.mjs tests/backend-rpc-cache.test.mjs tests/app-production-env.test.mjs tests/deploy-safety.test.mjs tests/docs-scripts.test.mjs tests/legacy-empty-rent-recovery.test.mjs tests/lifecycle-rent-wallet.test.mjs tests/wallet-standard.test.mjs tests/walletconnect-flow.test.mjs tests/pool-card-layout.test.mjs tests/push-notifications.test.mjs",
     "sim:preview": "node sim/preview.mjs"
   },
   "devDependencies": {
