@@ -1,6 +1,25 @@
 # Keeper rent-return upgrade plan — 2026-07-13
 
-Status: **implemented and tested locally; not deployed to mainnet.**
+Status: **program buffer uploaded and verified; final upgrade not executed.**
+
+## Buffer upload completed
+
+- Buffer: `6QSaBY1kBzfaRjQ4sWdaj7XoYx2LzGjUv7tik7SbfFam`
+- Buffer authority: `9DvCoJTwdf8CcQUPiLBWEu5Zx4GiYCg8G7LwKaZtZbFc`
+- Buffer balance: `2.50413144 SOL`
+- Data length: `359616` bytes
+- On-chain buffer SHA-256:
+  `d40def532680f1cfdd063e5895597f6543934e4a37089f295b21f9d7435e9732`
+- Verification: byte-for-byte identical to `target/deploy/luckyme.so`
+- Upload payer remainder: `0.00407856 SOL`
+- Upload spend: `0.00179000 SOL` in transaction fees, plus recoverable
+  buffer rent
+- Existing program remains unchanged at deployment slot `432325448`
+
+The public RPC throttled the initial serial upload. Safe resume retained the
+same buffer and completed the missing writes over QUIC. No second buffer rent
+was paid. Buffer authority has not been transferred and the program upgrade
+instruction has not been executed.
 
 ## Correction
 
@@ -77,4 +96,3 @@ No mainnet transaction is authorized by this document. Before deployment:
     authority;
 12. verify a later completed round returns Round and RoundRandomness rent to
     keeper while Treasury receives only the 2% house fee.
-
