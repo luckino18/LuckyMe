@@ -87,13 +87,16 @@ test("a missing current Round PDA stays unavailable until the keeper opens the n
 });
 
 test("temporary LuckyMe accounts have explicit rent cleanup paths", () => {
-  assert.match(programSource, /close = treasury,\s*seeds = \[b"round_randomness"/);
+  assert.equal(programSource.match(/close = keeper/g)?.length, 4);
+  assert.doesNotMatch(programSource, /close = treasury/);
+  assert.match(programSource, /close = keeper,\s*seeds = \[b"round_randomness"/);
   assert.match(programSource, /pub fn close_settled_entry/);
   assert.match(programSource, /pub fn close_settled_round/);
-  assert.match(programSource, /close = treasury, has_one = pool/);
+  assert.match(programSource, /close = keeper, has_one = pool/);
   assert.match(programSource, /close = player,\s*constraint = entry\.round/);
   assert.match(programSource, /pub struct KeeperConfig/);
   assert.match(programSource, /keeper_config\.keeper == keeper\.key\(\)/);
+  assert.match(programSource, /rent_recipient: ctx\.accounts\.keeper\.key\(\)/);
   assert.match(programSource, /PreviousRoundStillExists/);
 });
 

@@ -332,6 +332,7 @@ export type Luckyme = {
       "accounts": [
         {
           "name": "keeper",
+          "writable": true,
           "signer": true
         },
         {
@@ -442,6 +443,7 @@ export type Luckyme = {
       "accounts": [
         {
           "name": "keeper",
+          "writable": true,
           "signer": true
         },
         {

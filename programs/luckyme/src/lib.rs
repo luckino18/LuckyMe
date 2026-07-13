@@ -798,7 +798,8 @@ pub mod luckyme {
         round.randomness = randomness;
         // Preserve the ORAO seed in the durable round account so the backend can
         // continue verifying the provider request after the temporary LuckyMe
-        // sidecar account is closed and its rent is returned to treasury.
+        // sidecar account is closed and its rent is returned to the authorized
+        // keeper that funded the operational lifecycle.
         round.randomness_commitment = fulfilled.seed;
 
         let round_randomness = &mut ctx.accounts.round_randomness;
@@ -1027,7 +1028,7 @@ pub mod luckyme {
             pool: ctx.accounts.pool.key(),
             round: ctx.accounts.round.key(),
             round_id: ctx.accounts.round.round_id,
-            rent_recipient: ctx.accounts.treasury.key(),
+            rent_recipient: ctx.accounts.keeper.key(),
         });
 
         Ok(())
@@ -1471,7 +1472,7 @@ pub struct SettleRoundWithProviderRandomness<'info> {
     pub round: Box<Account<'info, Round>>,
     #[account(
         mut,
-        close = treasury,
+        close = keeper,
         seeds = [b"round_randomness", round.key().as_ref()],
         bump = round_randomness.bump,
         constraint = round_randomness.round == round.key()
@@ -1562,7 +1563,7 @@ pub struct CloseEmptyRoundAfterTimeout<'info> {
     pub keeper_config: Account<'info, KeeperConfig>,
     #[account(has_one = config)]
     pub pool: Account<'info, Pool>,
-    #[account(mut, close = treasury, has_one = pool)]
+    #[account(mut, close = keeper, has_one = pool)]
     pub round: Account<'info, Round>,
     #[account(mut, address = config.treasury)]
     pub treasury: SystemAccount<'info>,
@@ -1595,6 +1596,7 @@ pub struct CloseSettledEntry<'info> {
 
 #[derive(Accounts)]
 pub struct CloseSettledRandomness<'info> {
+    #[account(mut)]
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
@@ -1608,7 +1610,7 @@ pub struct CloseSettledRandomness<'info> {
     pub round: Account<'info, Round>,
     #[account(
         mut,
-        close = treasury,
+        close = keeper,
         seeds = [b"round_randomness", round.key().as_ref()],
         bump = round_randomness.bump,
         constraint = round_randomness.round == round.key()
@@ -1620,6 +1622,7 @@ pub struct CloseSettledRandomness<'info> {
 
 #[derive(Accounts)]
 pub struct CloseSettledRound<'info> {
+    #[account(mut)]
     pub keeper: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
@@ -1632,7 +1635,7 @@ pub struct CloseSettledRound<'info> {
     pub keeper_config: Account<'info, KeeperConfig>,
     #[account(has_one = config)]
     pub pool: Account<'info, Pool>,
-    #[account(mut, close = treasury, has_one = pool)]
+    #[account(mut, close = keeper, has_one = pool)]
     pub round: Account<'info, Round>,
     #[account(
         seeds = [b"round_randomness", round.key().as_ref()],

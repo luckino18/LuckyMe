@@ -644,6 +644,7 @@ async function cleanupSettledRound(poolSpec, pool, round, roundAccount) {
       action: "close_settled_randomness",
       roundId,
       roundRandomness: roundRandomness.toBase58(),
+      rentRecipient: keeper.toBase58(),
     };
     planned.push(summary);
     if (!DRY_RUN && canExecute()) {
@@ -697,6 +698,7 @@ async function cleanupSettledRound(poolSpec, pool, round, roundAccount) {
     action: "close_settled_round",
     roundId,
     round: round.toBase58(),
+    rentRecipient: keeper.toBase58(),
     treasury: configAccount.treasury.toBase58(),
   };
   planned.push(summary);

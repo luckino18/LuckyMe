@@ -1326,7 +1326,7 @@ async function closeSettledRoundAccounts({
   if (closeRandomness) {
     assert.ok(randomnessInfo, "round randomness sidecar exists before cleanup");
     const treasuryBefore = await provider.connection.getBalance(treasury, "confirmed");
-    await program.methods
+    const signature = await program.methods
       .closeSettledRandomness()
       .accounts({
         keeper: authority.publicKey,
@@ -1338,8 +1338,18 @@ async function closeSettledRoundAccounts({
       })
       .rpc();
     await waitForAccountClosed(provider, roundRandomness, "RoundRandomness cleanup");
+    const transaction = await provider.connection.getTransaction(signature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    assert.ok(transaction?.meta, "RoundRandomness cleanup transaction is available");
     const treasuryAfter = await provider.connection.getBalance(treasury, "confirmed");
-    assert.equal(treasuryAfter - treasuryBefore, randomnessInfo.lamports);
+    const keeperDelta = transactionLamportDelta(transaction, authority.publicKey);
+    assert.ok(
+      Math.abs(keeperDelta + transaction.meta.fee - randomnessInfo.lamports) <= 16,
+      "keeper receives the RoundRandomness rent, allowing local-validator lamport dust",
+    );
+    assert.equal(treasuryAfter, treasuryBefore);
   } else {
     assert.equal(randomnessInfo, null, "no sidecar may remain before Round closure");
   }
@@ -1347,7 +1357,7 @@ async function closeSettledRoundAccounts({
   const roundInfo = await provider.connection.getAccountInfo(round, "confirmed");
   assert.ok(roundInfo, "round account exists before cleanup");
   const treasuryBefore = await provider.connection.getBalance(treasury, "confirmed");
-  await program.methods
+  const signature = await program.methods
     .closeSettledRound()
     .accounts({
       keeper: authority.publicKey,
@@ -1360,8 +1370,26 @@ async function closeSettledRoundAccounts({
     })
     .rpc();
   await waitForAccountClosed(provider, round, "Round cleanup");
+  const transaction = await provider.connection.getTransaction(signature, {
+    commitment: "confirmed",
+    maxSupportedTransactionVersion: 0,
+  });
+  assert.ok(transaction?.meta, "Round cleanup transaction is available");
   const treasuryAfter = await provider.connection.getBalance(treasury, "confirmed");
-  assert.equal(treasuryAfter - treasuryBefore, roundInfo.lamports);
+  const keeperDelta = transactionLamportDelta(transaction, authority.publicKey);
+  assert.ok(
+    Math.abs(keeperDelta + transaction.meta.fee - roundInfo.lamports) <= 16,
+    "keeper receives the Round rent, allowing local-validator lamport dust",
+  );
+  assert.equal(treasuryAfter, treasuryBefore);
+}
+
+function transactionLamportDelta(transaction, address) {
+  const message = transaction.transaction.message;
+  const accountKeys = message.staticAccountKeys ?? message.accountKeys;
+  const index = accountKeys.findIndex((key) => key.equals(address));
+  assert.ok(index >= 0, `transaction contains ${address.toBase58()}`);
+  return transaction.meta.postBalances[index] - transaction.meta.preBalances[index];
 }
 
 async function buyTickets({ program, player, config, pool, round, entry, poolVault, ticketCount }) {
