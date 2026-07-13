@@ -326,6 +326,7 @@
       "accounts": [
         {
           "name": "keeper",
+          "writable": true,
           "signer": true
         },
         {
@@ -436,6 +437,7 @@
       "accounts": [
         {
           "name": "keeper",
+          "writable": true,
           "signer": true
         },
         {

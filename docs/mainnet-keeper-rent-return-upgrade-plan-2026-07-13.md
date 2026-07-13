@@ -1,7 +1,30 @@
 # Keeper rent-return upgrade plan — 2026-07-13
 
-Status: **program buffer uploaded, verified, and assigned to the Ledger upgrade
-authority; final upgrade not executed.**
+Status: **completed and verified on mainnet.**
+
+## Mainnet execution completed
+
+- Program upgrade signature:
+  `4CY2qZmwZopcD7AqMjiftwmzeLrtBkr4nu7TnTcGLVwCEUtk7T8kPDMqGcpDGbwBr6gb8PpPaK3orTKRH2ZEU4df`
+- Finalized deployment slot: `432637845`
+- ProgramData and upgrade authority are unchanged.
+- The first `359616` deployed bytes have SHA-256
+  `d40def532680f1cfdd063e5895597f6543934e4a37089f295b21f9d7435e9732`;
+  all remaining ProgramData capacity is zero-filled.
+- The buffer was closed by the successful upgrade and its rent was recovered.
+- Recovered funds sweep signature:
+  `vC1WR4gaV8osbpZJLXhwmjR792f5nxFMahbznST9iAoDMiBUS4akWJmEs4BcLy1QdNUsGUcKUooSyw65Wwm2Ggs`
+- Temporary payer final balance: `0 SOL`.
+- Ledger authority balance after the sweep: `2.54754744 SOL`.
+- Matching keeper, SDK, and generated IDL were activated on the VPS with
+  rollback backup
+  `/opt/backups/luckyme-keeper-rent-return-20260713T115206Z`.
+- Post-upgrade manual dry-run returned `executed: []` and all four pools in
+  `wait_first_ticket`.
+- The restarted production timer also completed with `executed: []`.
+- Settlement, push-alert, and operations-monitor timers are enabled/active;
+  the settlement service is inactive/success between timer invocations.
+- No game transaction was submitted during the upgrade workflow.
 
 ## Buffer upload completed
 
@@ -15,14 +38,13 @@ authority; final upgrade not executed.**
 - Upload payer remainder after authority transfer: `0.00407356 SOL`
 - Upload spend: `0.00179000 SOL` in transaction fees, plus recoverable
   buffer rent
-- Existing program remains unchanged at deployment slot `432325448`
+- Pre-upgrade program slot was `432325448`.
 
 The public RPC throttled the initial serial upload. Safe resume retained the
 same buffer and completed the missing writes over QUIC. No second buffer rent
 was paid. Buffer-authority transfer completed with finalized signature
 `643bR7hNEpyyBaZz8fXcqqzuEbg7eXGNEmNyRRHa1Yq4CQoA46bEhfic2jdfdxpNpV2H4hNMZy4eBptM4W1P6fWt`
-and a `0.000005 SOL` fee. The program upgrade instruction has not been
-executed; the live program remains at slot `432325448`.
+and a `0.000005 SOL` fee. The later final upgrade is recorded above.
 
 ## Correction
 
@@ -80,9 +102,10 @@ If the authority funds the upload payer, top it up by at least `0.46176 SOL`
 before execution. Buffer rent is recoverable after a successful upgrade; only
 ordinary transaction and ORAO operation fees remain spent.
 
-## Mainnet execution boundary
+## Approved execution checklist
 
-No mainnet transaction is authorized by this document. Before deployment:
+The owner separately approved the final mainnet upgrade after the buffer and
+authority checks. The executed sequence was:
 
 1. temporarily stop the settlement keeper timer and confirm no transaction is
    in flight;
