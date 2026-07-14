@@ -70,15 +70,18 @@ Current waiting rounds:
 
 ## Validation at snapshot time
 
-- Project tests: `111/111` after adding the admin-control regression coverage
+- Project tests: `114/114` after adding admin-control and RPC-cache regression coverage
 - Mainnet release audit: passed
 - Seeker TypeScript typecheck: passed
 - Admin TypeScript typecheck: passed
 - APK package/signature/permissions: passed
 - Live API and service status: passed read-only
 
-The RPC optimization is intentionally kept on the separate local branch
-`local/rpc-optimization` and is not part of this store-review snapshot.
+The RPC optimization was integrated after the store-review snapshot and
+deployed only to the production API on 2026-07-14. It does not change the
+Solana program, APK, web assets, transaction instructions, or API response
+shape. Deployment evidence is in
+`docs/rpc-optimization-deployment-2026-07-14.md`.
 
 See `docs/disaster-recovery.md` for restoration boundaries and the Desktop
 backup inventory.

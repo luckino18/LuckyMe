@@ -138,6 +138,9 @@ Important backend behavior:
   economics, and public release checks.
 - `GET /pools` reads the Solana program state. In `MAINNET_RELEASE`, unavailable
   on-chain state returns an unavailable/error state rather than fake pool data.
+- Public pool state is cached once per short state window; wallet-specific
+  Entry data is enriched separately with bounded caching and batched RPC reads.
+  Concurrent requests for the same wallet share one in-flight read.
 - `POST /transactions/buy-tickets` builds and simulates an unsigned ticket
   transaction for the connected wallet.
 - `POST /transactions/refund-entry` is retired and returns `410`; below-target
