@@ -21,6 +21,10 @@ For 1,000 players, cleanup drops from 1,000 transactions to 125 transactions, bu
 - Anchor localnet lifecycle test: passed.
 - Full project suite: 149 passed, 0 failed.
 - Dedicated 1,000-player model: passed.
+- Real local-validator stress: 1,000 funded wallets, 1,000 confirmed buys, and 1,000 real Entry PDAs passed.
+- Measured settlement-to-next-round rotation in the 1,000-player stress run: 514 ms.
+- Measured cleanup for all 1,000 Entry PDAs: 125 transactions in 8,355 ms locally.
+- The new round remained open throughout historical cleanup, and sampled players received the exact Entry rent.
 - Refund-pending rotation rejection: passed.
 - Eight Entry close instructions serialize to 910 bytes, below Solana's 1,232-byte packet limit.
 - Production program size: 376,752 bytes.

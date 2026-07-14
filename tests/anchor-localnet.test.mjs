@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import test from "node:test";
 import anchor from "@coral-xyz/anchor";
-import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction } from "@solana/web3.js";
 import {
   BN,
   ORAO_VRF_PROGRAM_ID,
@@ -30,6 +30,9 @@ const PREMIUM_POOL_ID = 4;
 const PREMIUM_TICKET_PRICE_LAMPORTS = 100_000_000;
 const HIGH_POOL_ID = 3;
 const HIGH_TICKET_PRICE_LAMPORTS = 50_000_000;
+const NORMAL_POOL_ID = 2;
+const NORMAL_TICKET_PRICE_LAMPORTS = 10_000_000;
+const STRESS_PLAYERS = Number.parseInt(process.env.LUCKYME_STRESS_PLAYERS ?? "0", 10);
 // Leave enough local-validator time for the three sequential premium buys.
 // Two seconds made the third transaction race the on-chain end timestamp.
 const ROUND_DURATION_SECONDS = 5;
@@ -42,6 +45,10 @@ test("localnet buy, settlement, and refund-mode state machine", async () => {
   const idl = readIdl();
   const program = new anchor.Program(idl, provider);
   const authority = provider.wallet.payer;
+  if (STRESS_PLAYERS > 0) {
+    await testScalableRoundStress({ program, provider, authority, playerCount: STRESS_PLAYERS });
+    return;
+  }
   const treasuryWallet = Keypair.generate();
   await fund(provider, treasuryWallet.publicKey);
   const treasury = treasuryWallet.publicKey;
@@ -137,6 +144,264 @@ test("localnet buy, settlement, and refund-mode state machine", async () => {
     poolVault: highPoolVault,
   });
 });
+
+async function testScalableRoundStress({ program, provider, authority, playerCount }) {
+  assert.equal(playerCount, 1_000, "the release stress gate must use exactly 1,000 players");
+  const startedAt = Date.now();
+  const treasuryWallet = Keypair.generate();
+  await fund(provider, treasuryWallet.publicKey);
+  const treasury = treasuryWallet.publicKey;
+  const config = deriveConfig();
+  const keeperConfig = deriveKeeperConfig(config);
+  const pool = derivePool(config, NORMAL_POOL_ID);
+  const poolVault = derivePoolVault(pool);
+  const jackpotVault = deriveJackpotVault(pool);
+  const round = deriveRound(pool, 1);
+  const nextRound = deriveRound(pool, 2);
+  const players = Array.from({ length: playerCount }, () => Keypair.generate());
+  const entries = players.map((player) => ({
+    player: player.publicKey,
+    address: deriveEntry(round, player.publicKey),
+  }));
+  const reveal = Buffer.from("stress-1000-player-reveal-000000", "utf8");
+  assert.equal(reveal.length, 32);
+
+  await program.methods
+    .initializeConfig(treasury, 200, 300, 1, new BN(450))
+    .accounts({ authority: authority.publicKey, config, systemProgram: SystemProgram.programId })
+    .rpc();
+  await program.methods
+    .initializeKeeperConfig(authority.publicKey)
+    .accounts({ authority: authority.publicKey, config, keeperConfig, systemProgram: SystemProgram.programId })
+    .rpc();
+  await program.methods
+    .initializePool(NORMAL_POOL_ID, new BN(NORMAL_TICKET_PRICE_LAMPORTS))
+    .accounts({
+      authority: authority.publicKey,
+      config,
+      pool,
+      poolVault,
+      jackpotVault,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+  await program.methods
+    .openRound([...commitmentForReveal(reveal)])
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      keeperConfig,
+      pool,
+      previousRound: deriveRound(pool, 0),
+      round,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  const buyStartedAt = Date.now();
+  let pending = entries.map((_, index) => index);
+  let attempts = 0;
+  while (pending.length > 0) {
+    const state = await program.account.round.fetch(round);
+    const totalTickets = Number(state.totalTickets.toString());
+    const endTs = Number(state.endTs.toString());
+    if (endTs > 0 && endTs <= Math.floor(Date.now() / 1_000) + 3) {
+      throw new Error(`Stress buys missed the round deadline with ${pending.length} players pending`);
+    }
+    const wave = pending.slice(0, 25);
+    await Promise.allSettled(wave.map(async (playerIndex, offset) => {
+      // Preserve reviewed-total ordering while still keeping enough RPC calls
+      // in flight to generate realistic load against the shared Round account.
+      await new Promise((resolve) => setTimeout(resolve, offset * 8));
+      const player = players[playerIndex];
+      return program.methods
+        .buyTickets(new BN(1), new BN(totalTickets + offset))
+        .preInstructions([
+          SystemProgram.transfer({
+            fromPubkey: authority.publicKey,
+            toPubkey: player.publicKey,
+            lamports: 20_000_000,
+          }),
+        ])
+        .accounts({
+          player: player.publicKey,
+          config,
+          pool,
+          round,
+          entry: entries[playerIndex].address,
+          poolVault,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([player])
+        .rpc({ commitment: "processed", preflightCommitment: "processed", skipPreflight: true });
+    }));
+    const waveInfos = await provider.connection.getMultipleAccountsInfo(
+      wave.map((index) => entries[index].address),
+      "processed",
+    );
+    const completed = new Set(
+      wave.filter((_, offset) => waveInfos[offset] !== null),
+    );
+    pending = pending.filter((index) => !completed.has(index));
+    attempts += wave.length;
+    if (pending.length % 100 === 0) {
+      console.log(`stress-buy-progress=${playerCount - pending.length}/${playerCount}`);
+    }
+    if (attempts > playerCount * 30) {
+      throw new Error(`Stress buy retry ceiling reached with ${pending.length} players pending`);
+    }
+  }
+
+  let roundAccount = await program.account.round.fetch(round);
+  assert.equal(roundAccount.totalTickets.toString(), String(playerCount));
+  assert.equal(roundAccount.entrantCount, playerCount);
+  const buyDurationMs = Date.now() - buyStartedAt;
+
+  const decodedEntries = [];
+  for (let offset = 0; offset < entries.length; offset += 100) {
+    const chunk = entries.slice(offset, offset + 100);
+    const accounts = await program.account.entry.fetchMultiple(chunk.map((entry) => entry.address));
+    accounts.forEach((account, index) => {
+      assert.ok(account, `stress Entry ${offset + index} exists`);
+      decodedEntries.push({
+        ...chunk[index],
+        ticketStart: BigInt(account.ticketStart.toString()),
+        ticketEndExclusive: BigInt(account.ticketStart.toString()) + BigInt(account.ticketCount.toString()),
+      });
+    });
+  }
+
+  await waitForClock(
+    provider,
+    Number(roundAccount.endTs),
+    "1,000-player stress round end",
+    150_000,
+  );
+  const randomness = deriveRoundRandomness(round, BigInt(playerCount), reveal);
+  const [winnerTicket] = selectWinnerTickets(randomness, BigInt(playerCount), 1);
+  const jackpotTicket = randomModDomain(randomness, "jackpot-winner", 0, BigInt(playerCount));
+  const winnerEntry = findEntryByTicket(decodedEntries, winnerTicket);
+  const jackpotEntry = findEntryByTicket(decodedEntries, jackpotTicket);
+  await program.methods
+    .settleRound([...reveal])
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      keeperConfig,
+      pool,
+      round,
+      poolVault,
+      jackpotVault,
+      winner: winnerEntry.player,
+      winnerEntry: winnerEntry.address,
+      jackpotWinner: jackpotEntry.player,
+      jackpotEntry: jackpotEntry.address,
+      treasury,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+  roundAccount = await program.account.round.fetch(round);
+  assert.equal(roundAccount.settled, true);
+
+  const rotationStartedAt = Date.now();
+  await program.methods
+    .openRoundAfterSettlement([...commitmentForReveal(Buffer.alloc(32, 71))])
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      keeperConfig,
+      pool,
+      previousRound: round,
+      round: nextRound,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+  const rotationDurationMs = Date.now() - rotationStartedAt;
+  const [rotatedPool, rotatedRound] = await Promise.all([
+    program.account.pool.fetch(pool),
+    program.account.round.fetch(nextRound),
+  ]);
+  assert.equal(rotatedPool.currentRound.toString(), "2");
+  assert.equal(rotatedRound.startTs.toString(), "0");
+  assert.equal(rotatedRound.endTs.toString(), "0");
+
+  const sampleIndexes = [0, Math.floor(playerCount / 2), playerCount - 1];
+  const sampleBefore = new Map();
+  for (const index of sampleIndexes) {
+    const [entryInfo, playerBalance] = await Promise.all([
+      provider.connection.getAccountInfo(entries[index].address, "confirmed"),
+      provider.connection.getBalance(entries[index].player, "confirmed"),
+    ]);
+    assert.ok(entryInfo);
+    sampleBefore.set(index, { rent: entryInfo.lamports, playerBalance });
+  }
+
+  const cleanupStartedAt = Date.now();
+  let cleanupTransactions = 0;
+  for (let offset = 0; offset < entries.length; offset += 8 * 8) {
+    const transactionWave = [];
+    for (let batchOffset = offset; batchOffset < Math.min(offset + 8 * 8, entries.length); batchOffset += 8) {
+      const transaction = new Transaction();
+      for (const entry of entries.slice(batchOffset, batchOffset + 8)) {
+        transaction.add(await program.methods
+          .closeSettledEntry()
+          .accounts({
+            keeper: authority.publicKey,
+            config,
+            keeperConfig,
+            player: entry.player,
+            round,
+            entry: entry.address,
+          })
+          .instruction());
+      }
+      transactionWave.push(provider.sendAndConfirm(transaction, [], {
+        commitment: "confirmed",
+        preflightCommitment: "confirmed",
+      }));
+      cleanupTransactions += 1;
+    }
+    await Promise.all(transactionWave);
+    assert.ok(await provider.connection.getAccountInfo(nextRound, "confirmed"));
+  }
+  const cleanupDurationMs = Date.now() - cleanupStartedAt;
+  assert.equal(cleanupTransactions, 125);
+
+  for (let offset = 0; offset < entries.length; offset += 100) {
+    const infos = await provider.connection.getMultipleAccountsInfo(
+      entries.slice(offset, offset + 100).map((entry) => entry.address),
+      "confirmed",
+    );
+    assert.ok(infos.every((info) => info === null), `all stress Entries close in chunk ${offset / 100}`);
+  }
+  for (const index of sampleIndexes) {
+    const playerAfter = await provider.connection.getBalance(entries[index].player, "confirmed");
+    const before = sampleBefore.get(index);
+    assert.equal(playerAfter - before.playerBalance, before.rent, `Entry rent returned for sample player ${index}`);
+  }
+
+  await closeSettledRoundAccounts({
+    program,
+    provider,
+    authority,
+    treasury,
+    config,
+    keeperConfig,
+    pool,
+    round,
+  });
+  assert.ok(await provider.connection.getAccountInfo(nextRound, "confirmed"));
+
+  console.log(JSON.stringify({
+    stressPlayers: playerCount,
+    entryAccounts: playerCount,
+    buyDurationMs,
+    rotationDurationMs,
+    cleanupTransactions,
+    cleanupDurationMs,
+    totalDurationMs: Date.now() - startedAt,
+  }));
+}
 
 async function testSettlementFlow({ program, provider, authority, treasury, config, keeperConfig, pool, poolVault, jackpotVault }) {
   const player = Keypair.generate();
@@ -1472,9 +1737,9 @@ async function fund(provider, publicKey) {
   await provider.connection.confirmTransaction({ signature, ...latest }, "confirmed");
 }
 
-async function waitForClock(provider, targetUnixTs, label) {
+async function waitForClock(provider, targetUnixTs, label, timeoutMs = 30_000) {
   const startedAt = Date.now();
-  while (Date.now() - startedAt < 30_000) {
+  while (Date.now() - startedAt < timeoutMs) {
     const clock = await readClock(provider);
     if (clock.unixTimestamp >= BigInt(targetUnixTs)) {
       return;
