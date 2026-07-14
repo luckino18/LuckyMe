@@ -666,6 +666,39 @@ async function testPremiumSettlementFlow({ program, provider, authority, treasur
     assert.equal(after - balancesBefore.get(key), expectedDeltas.get(key));
   }
 
+  const nextRound = deriveRound(pool, 2);
+  const nextCommitment = commitmentForReveal(Buffer.alloc(32, 44));
+  await program.methods
+    .openRoundAfterSettlement([...nextCommitment])
+    .accounts({
+      keeper: authority.publicKey,
+      config,
+      keeperConfig,
+      pool,
+      previousRound: round,
+      round: nextRound,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+  const [rotatedPool, rotatedRound] = await Promise.all([
+    program.account.pool.fetch(pool),
+    program.account.round.fetch(nextRound),
+  ]);
+  assert.equal(rotatedPool.currentRound.toString(), "2");
+  assert.equal(rotatedRound.roundId.toString(), "2");
+  assert.equal(rotatedRound.startTs.toString(), "0");
+  assert.equal(rotatedRound.endTs.toString(), "0");
+  assert.equal(
+    (await provider.connection.getAccountInfo(round)) !== null,
+    true,
+    "previous settled Round remains available for background cleanup",
+  );
+  assert.equal(
+    (await provider.connection.getAccountInfo(entries[0].address)) !== null,
+    true,
+    "previous Entry remains available for background cleanup",
+  );
+
   await closeSettledRoundAccounts({
     program,
     provider,
@@ -962,6 +995,30 @@ async function testRefundModeFlow({ program, provider, authority, treasury, conf
   assert.equal(roundAccount.entrantCount, 1);
 
   assert.equal(await provider.connection.getAccountInfo(entryOne), null);
+
+  const nextRound = deriveRound(pool, 3);
+  const nextCommitment = commitmentForReveal(Buffer.alloc(32, 45));
+  await expectAnchorError(
+    () =>
+      program.methods
+        .openRoundAfterSettlement([...nextCommitment])
+        .accounts({
+          keeper: authority.publicKey,
+          config,
+          keeperConfig,
+          pool,
+          previousRound: round,
+          round: nextRound,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    "RefundsPending",
+  );
+  assert.equal(
+    await provider.connection.getAccountInfo(nextRound),
+    null,
+    "a refund-mode round cannot rotate while one player is still unpaid",
+  );
 
   await expectAnchorError(
     () =>

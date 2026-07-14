@@ -39,15 +39,38 @@ test("keeper refunds rounds below approved minimums before requesting ORAO", () 
   assert.match(programSource, /require_round_below_draw_minimum\(&ctx\.accounts\.pool, &ctx\.accounts\.round\)/);
 });
 
-test("keeper cannot open the next round until the settled Round account is closed", () => {
+test("keeper rotates immediately after archive while historical cleanup continues", () => {
   assert.match(
     keeperSource,
-    /await cleanupSettledRound\(poolSpec, pool, round, roundAccount\);[\s\S]{0,260}!\(await accountExists\(connection, round\)\)/,
+    /const archived = await archiveSettledRound\(poolSpec, pool, round, roundAccount\);/,
   );
-  assert.doesNotMatch(
+  assert.match(
     keeperSource,
-    /executeSettleProviderRound\([\s\S]*?if \(!DRY_RUN && OPEN_NEXT_AFTER_SETTLEMENT[\s\S]*?executeOpenRound/,
+    /await executeOpenRoundAfterSettlement\(poolSpec, pool, round, currentRound \+ 1\)/,
   );
+  assert.match(programSource, /pub fn open_round_after_settlement/);
+  assert.match(programSource, /previous_round\.settled/);
+  assert.match(programSource, /previous_round\.total_lamports == 0[\s\S]*previous_round\.entrant_count == 0/);
+});
+
+test("settled Entry cleanup batches eight players into one simulated transaction", () => {
+  assert.match(keeperSource, /SETTLEMENT_KEEPER_ENTRY_CLEANUP_BATCH_SIZE \?\? "8"/);
+  assert.match(keeperSource, /const batch = entries\.slice\(0, ENTRY_CLEANUP_BATCH_SIZE\)/);
+  assert.match(keeperSource, /action: "close_settled_entry_batch"/);
+  assert.match(keeperSource, /const transaction = new Transaction\(\)/);
+  assert.match(keeperSource, /simulateAndSendTransaction\(transaction, summary\)/);
+});
+
+test("live actions across all pools run before historical cleanup", () => {
+  assert.match(
+    keeperSource,
+    /for \(const poolSpec of pools\) \{[\s\S]*?await handlePool\(poolSpec\);[\s\S]*?if \(ACTION_SCOPE !== OPEN_ROUND_ONLY_SCOPE && executed\.length < MAX_ACTIONS\) \{[\s\S]*?await cleanupHistoricalPool\(poolSpec\);/,
+  );
+  const liveHandler = keeperSource.slice(
+    keeperSource.indexOf("async function handlePool"),
+    keeperSource.indexOf("async function cleanupHistoricalPool"),
+  );
+  assert.doesNotMatch(liveHandler, /cleanupHistoricalRounds/);
 });
 
 test("open-round-only scope returns before lifecycle and historical cleanup paths", () => {

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import oraoVrf from "@orao-network/solana-vrf";
+import { Transaction } from "@solana/web3.js";
 import {
   ORAO_VRF_PROGRAM_ID,
   POOLS,
@@ -52,6 +53,10 @@ const CLEANUP_SCAN_ROUNDS = positiveInteger(
   "SETTLEMENT_KEEPER_CLEANUP_SCAN_ROUNDS",
 );
 const REFUND_DELAY_SECONDS = 600;
+const ENTRY_CLEANUP_BATCH_SIZE = positiveInteger(
+  process.env.SETTLEMENT_KEEPER_ENTRY_CLEANUP_BATCH_SIZE ?? "8",
+  "SETTLEMENT_KEEPER_ENTRY_CLEANUP_BATCH_SIZE",
+);
 const POOL_BY_SLUG = new Map(POOLS.map((pool) => [pool.slug, pool]));
 const OPEN_ROUND_ONLY_SCOPE = "open_round_only";
 const ACTION_SCOPE = process.env.SETTLEMENT_KEEPER_ACTION_SCOPE ?? "full_lifecycle";
@@ -158,6 +163,19 @@ for (const poolSpec of pools) {
   await handlePool(poolSpec);
 }
 
+// Historical rent cleanup is deliberately lower priority than every live-round
+// action across every pool. With a one-transaction execution limit, doing this
+// inside handlePool could let an old Mini entry delay a Normal/High/Premium
+// settlement for another minute (or for an entire large cleanup backlog).
+if (ACTION_SCOPE !== OPEN_ROUND_ONLY_SCOPE && executed.length < MAX_ACTIONS) {
+  for (const poolSpec of pools) {
+    if (executed.length >= MAX_ACTIONS) {
+      break;
+    }
+    await cleanupHistoricalPool(poolSpec);
+  }
+}
+
 printDone();
 
 async function handlePool(poolSpec) {
@@ -200,15 +218,20 @@ async function handlePool(poolSpec) {
       await executeNextRefund(poolSpec, pool, round, roundAccount);
       return;
     }
-    await cleanupSettledRound(poolSpec, pool, round, roundAccount);
-    if (
-      !DRY_RUN &&
-      OPEN_NEXT_AFTER_SETTLEMENT &&
-      executed.length < MAX_ACTIONS &&
-      !(await accountExists(connection, round))
-    ) {
-      await executeOpenRound(poolSpec, pool, currentRound + 1);
+    const archived = await archiveSettledRound(poolSpec, pool, round, roundAccount);
+    if (!archived) {
+      planned.push({
+        pool: poolSpec.slug,
+        action: "skip_rotation_archive_missing",
+        roundId: currentRound,
+      });
+      return;
     }
+    if (OPEN_NEXT_AFTER_SETTLEMENT) {
+      await executeOpenRoundAfterSettlement(poolSpec, pool, round, currentRound + 1);
+      return;
+    }
+    await cleanupSettledRound(poolSpec, pool, round, roundAccount);
     return;
   }
 
@@ -219,13 +242,11 @@ async function handlePool(poolSpec) {
       roundId: currentRound,
       round: round.toBase58(),
     });
-    await cleanupHistoricalRounds(poolSpec, pool, currentRound);
     return;
   }
 
   if (!expired) {
     planned.push({ pool: poolSpec.slug, action: "skip_round_open", roundId: currentRound, endTs });
-    await cleanupHistoricalRounds(poolSpec, pool, currentRound);
     return;
   }
 
@@ -257,7 +278,16 @@ async function handlePool(poolSpec) {
     totalTickets,
   });
 
-  if (executed.length < MAX_ACTIONS) {
+}
+
+async function cleanupHistoricalPool(poolSpec) {
+  const pool = derivePool(config, poolSpec.id);
+  if (!(await accountExists(connection, pool))) {
+    return;
+  }
+  const poolAccount = await program.account.pool.fetch(pool);
+  const currentRound = Number(poolAccount.currentRound.toString());
+  if (currentRound > 1) {
     await cleanupHistoricalRounds(poolSpec, pool, currentRound);
   }
 }
@@ -706,27 +736,35 @@ async function cleanupSettledRound(poolSpec, pool, round, roundAccount) {
 
   const entries = await fetchEntriesForRound(round);
   if (entries.length) {
-    const entry = entries[0];
+    const batch = entries.slice(0, ENTRY_CLEANUP_BATCH_SIZE);
     const summary = {
       pool: poolSpec.slug,
-      action: "close_settled_entry",
+      action: "close_settled_entry_batch",
       roundId,
-      entry: entry.address.toBase58(),
-      player: entry.player.toBase58(),
+      entryCount: batch.length,
+      remainingBefore: entries.length,
+      entries: batch.map((entry) => ({
+        entry: entry.address.toBase58(),
+        player: entry.player.toBase58(),
+      })),
     };
     planned.push(summary);
     if (!DRY_RUN && canExecute()) {
-      const method = program.methods
-        .closeSettledEntry()
-        .accounts({
-          keeper,
-          config,
-          keeperConfig,
-          player: entry.player,
-          round,
-          entry: entry.address,
-        });
-      const signature = await simulateAndSend(method, summary);
+      const transaction = new Transaction();
+      for (const entry of batch) {
+        transaction.add(await program.methods
+          .closeSettledEntry()
+          .accounts({
+            keeper,
+            config,
+            keeperConfig,
+            player: entry.player,
+            round,
+            entry: entry.address,
+          })
+          .instruction());
+      }
+      const signature = await simulateAndSendTransaction(transaction, summary);
       executed.push({ ...summary, signature });
     }
     return;
@@ -1162,6 +1200,49 @@ async function executeOpenRound(poolSpec, pool, roundId) {
   executed.push({ ...summary, signature });
 }
 
+async function executeOpenRoundAfterSettlement(poolSpec, pool, previousRound, roundId) {
+  const round = deriveRound(pool, roundId);
+  if (await accountExists(connection, round)) {
+    planned.push({
+      pool: poolSpec.slug,
+      action: "skip_rotated_round_exists",
+      roundId,
+      round: round.toBase58(),
+    });
+    return;
+  }
+  const commitment = crypto
+    .createHash("sha256")
+    .update(Buffer.from("luckyme-commit"))
+    .update(crypto.randomBytes(32))
+    .digest();
+  const summary = {
+    pool: poolSpec.slug,
+    action: "open_round_after_settlement",
+    roundId,
+    previousRound: previousRound.toBase58(),
+    round: round.toBase58(),
+    commitment: commitment.toString("hex"),
+  };
+  planned.push(summary);
+  if (DRY_RUN || !canExecute()) {
+    return;
+  }
+  const method = program.methods
+    .openRoundAfterSettlement([...commitment])
+    .accounts({
+      keeper,
+      config,
+      keeperConfig,
+      pool,
+      previousRound,
+      round,
+      systemProgram: SystemProgram.programId,
+    });
+  const signature = await simulateAndSend(method, summary);
+  executed.push({ ...summary, signature });
+}
+
 async function fetchEntriesForRound(round) {
   const accounts = await program.account.entry.all([
     {
@@ -1309,6 +1390,20 @@ async function simulateAndSend(method, summary, preSendCheck = null) {
     await preSendCheck();
   }
   return method.rpc();
+}
+
+async function simulateAndSendTransaction(transaction, summary, preSendCheck = null) {
+  await assertKeeperReadyForWrite();
+  if (preSendCheck) await preSendCheck();
+  const simulation = await provider.simulate(transaction, [], "confirmed");
+  summary.simulation = {
+    ok: true,
+    logCount: Array.isArray(simulation?.logs) ? simulation.logs.length : null,
+    unitsConsumed: simulation?.unitsConsumed ?? null,
+  };
+  await assertKeeperReadyForWrite();
+  if (preSendCheck) await preSendCheck();
+  return provider.sendAndConfirm(transaction, [], provider.opts);
 }
 
 async function assertRoundEligibleForProviderSpend(poolSpec, round, roundId) {

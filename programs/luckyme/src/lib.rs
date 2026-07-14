@@ -201,6 +201,67 @@ pub mod luckyme {
         Ok(())
     }
 
+    pub fn open_round_after_settlement(
+        ctx: Context<OpenRoundAfterSettlement>,
+        randomness_commitment: [u8; 32],
+    ) -> Result<()> {
+        require!(!ctx.accounts.config.paused, LuckyMeError::Paused);
+        require!(
+            randomness_commitment != [0; 32],
+            LuckyMeError::InvalidRandomnessCommitment
+        );
+        require!(
+            ctx.accounts.previous_round.settled,
+            LuckyMeError::RoundStillOpen
+        );
+        if round_is_refund_mode(&ctx.accounts.previous_round) {
+            require!(
+                ctx.accounts.previous_round.total_tickets == 0
+                    && ctx.accounts.previous_round.total_lamports == 0
+                    && ctx.accounts.previous_round.entrant_count == 0,
+                LuckyMeError::RefundsPending
+            );
+        }
+
+        let pool = &mut ctx.accounts.pool;
+        let round = &mut ctx.accounts.round;
+        let round_id = pool
+            .current_round
+            .checked_add(1)
+            .ok_or(LuckyMeError::MathOverflow)?;
+
+        pool.current_round = round_id;
+        round.pool = pool.key();
+        round.round_id = round_id;
+        round.start_ts = 0;
+        round.end_ts = 0;
+        round.ticket_price_lamports = pool.ticket_price_lamports;
+        round.total_tickets = 0;
+        round.total_lamports = 0;
+        round.entrant_count = 0;
+        round.settled = false;
+        round.jackpot_triggered = false;
+        round.winner_count = 0;
+        round.winner = Pubkey::default();
+        round.winner_second = Pubkey::default();
+        round.winner_third = Pubkey::default();
+        round.jackpot_winner = Pubkey::default();
+        round.randomness_commitment = randomness_commitment;
+        round.randomness = [0; 32];
+        round.bump = ctx.bumps.round;
+
+        emit!(RoundOpened {
+            pool: pool.key(),
+            round: round.key(),
+            round_id,
+            start_ts: round.start_ts,
+            end_ts: round.end_ts,
+            ticket_price_lamports: round.ticket_price_lamports,
+            randomness_commitment,
+        });
+        Ok(())
+    }
+
     pub fn buy_tickets(
         ctx: Context<BuyTickets>,
         ticket_count: u64,
@@ -1322,6 +1383,38 @@ pub struct OpenRound<'info> {
     )]
     /// CHECK: Canonical previous Round PDA. Its data must be empty before advancing.
     pub previous_round: UncheckedAccount<'info>,
+    #[account(
+        init,
+        payer = keeper,
+        space = 8 + Round::LEN,
+        seeds = [b"round", pool.key().as_ref(), &(pool.current_round + 1).to_le_bytes()],
+        bump
+    )]
+    pub round: Account<'info, Round>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct OpenRoundAfterSettlement<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(
+        seeds = [b"keeper_config", config.key().as_ref()],
+        bump = keeper_config.bump,
+        has_one = config,
+        constraint = keeper_config.keeper == keeper.key() @ LuckyMeError::UnauthorizedKeeper
+    )]
+    pub keeper_config: Account<'info, KeeperConfig>,
+    #[account(mut, has_one = config)]
+    pub pool: Account<'info, Pool>,
+    #[account(
+        has_one = pool,
+        seeds = [b"round", pool.key().as_ref(), &pool.current_round.to_le_bytes()],
+        bump = previous_round.bump
+    )]
+    pub previous_round: Account<'info, Round>,
     #[account(
         init,
         payer = keeper,
