@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <title>LuckyMe Admin</title>
-    <link rel="stylesheet" href="/admin/admin.css?v=20260714-treasury1" />
+    <link rel="stylesheet" href="/admin/admin.css?v=20260714-history1" />
   </head>
   <body>
     <main class="shell">
@@ -31,11 +31,20 @@
         <div class="entry-pools" id="entry-pools"></div>
       </section>
       <section class="panel">
+        <div class="panel-title"><div><span class="eyebrow">Permanent settlement records</span><h2>Winner archive</h2></div></div>
+        <p class="panel-copy">Filter completed rounds by pool and round number. Amounts are the prizes paid to each winning wallet.</p>
+        <div class="history-filters">
+          <label>Pool<select id="history-pool"><option value="">All pools</option><option value="mini">Mini</option><option value="normal">Normal</option><option value="high">High</option><option value="premium">Premium</option></select></label>
+          <label>Round<input id="history-round" type="number" min="1" step="1" inputmode="numeric" placeholder="All rounds" /></label>
+        </div>
+        <div class="winner-history" id="winner-history"></div>
+      </section>
+      <section class="panel">
         <div class="panel-title"><div><span class="eyebrow">Services</span><h2>Automation</h2></div></div>
         <div class="services" id="services"></div>
       </section>
       <p class="readonly">Read-only panel. It cannot send transactions, open rounds, or change server settings.</p>
     </main>
-    <script src="/admin/admin.js?v=20260714-treasury1" defer></script>
+    <script src="/admin/admin.js?v=20260714-history1" defer></script>
   </body>
 </html>

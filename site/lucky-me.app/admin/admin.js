@@ -2,6 +2,21 @@ const $ = (id) => document.getElementById(id);
 const safe = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[char]));
 const stateLabel = (state) => state?.ActiveState === "active" || (state?.ActiveState === "inactive" && state?.Result === "success") ? "Healthy" : "Attention";
 const sol = (lamports) => `${(Number(lamports ?? 0) / 1_000_000_000).toFixed(6)} SOL`;
+let winnerRounds = [];
+
+function renderWinnerHistory() {
+  const pool = $("history-pool").value;
+  const roundFilter = $("history-round").value.trim();
+  const rounds = winnerRounds.filter((round) =>
+    (!pool || round.pool === pool) && (!roundFilter || String(round.roundId) === roundFilter));
+  $("winner-history").innerHTML = rounds.length ? rounds.map((round) => {
+    const winners = (round.winners ?? []).map((winner) => `<div class="history-winner"><span>#${safe(winner.rank)}</span><code class="wallet-address">${safe(winner.wallet)}</code><strong>${safe(sol(winner.prizeLamports))}</strong></div>`).join("");
+    const jackpot = round.jackpot ? `<div class="history-winner jackpot"><span>Jackpot</span><code class="wallet-address">${safe(round.jackpot.wallet)}</code><strong>${safe(sol(round.jackpot.prizeLamports))}</strong></div>` : "";
+    const empty = !winners && !jackpot ? `<p class="entry-empty">No winner — ${safe(round.outcome === "cancelled_below_minimum" ? "round refunded" : round.outcome)}</p>` : "";
+    const explorer = /^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(round.settlementSignature ?? "") ? `<a class="explorer" href="https://solscan.io/tx/${encodeURIComponent(round.settlementSignature)}" target="_blank" rel="noopener noreferrer">Settlement transaction</a>` : "";
+    return `<article class="history-round"><div class="entry-heading"><div><span class="eyebrow">${safe(round.pool)}</span><h3>Round ${safe(round.roundId)}</h3></div><div class="entry-total"><strong>${safe(round.totalTickets)} tickets</strong><span>${safe(sol(round.totalLamports))} played</span></div></div><div class="history-winners">${winners}${jackpot}${empty}</div><div class="history-footer"><span>${round.archivedAt ? safe(new Date(round.archivedAt).toLocaleString()) : "Archived"}</span>${explorer}</div></article>`;
+  }).join("") : `<p class="entry-empty history-empty">No archived round matches this filter.</p>`;
+}
 
 function render(report) {
   $("overall").textContent = report.ok ? "All systems healthy" : `${report.alerts.length} alert${report.alerts.length === 1 ? "" : "s"}`;
@@ -34,8 +49,13 @@ function render(report) {
       : `<p class="entry-empty">No tickets in this round.</p>`;
     return `<article class="entry-pool"><div class="entry-heading"><div><span class="eyebrow">${safe(round.pool)}</span><h3>Round ${safe(round.roundId)}</h3></div><div class="entry-total"><strong>${safe(round.totalTickets)} tickets</strong><span>${safe(round.walletCount ?? entries.length)} wallets</span></div></div><div class="entry-wallets">${wallets}</div></article>`;
   }).join("");
+  winnerRounds = Array.isArray(report.checks?.winnerHistory?.rounds) ? report.checks.winnerHistory.rounds : [];
+  renderWinnerHistory();
   $("services").innerHTML = ["settlement","notifications"].map((name) => { const check=report.checks?.[name]??{}; return `<article class="service"><h3>${safe(name)}</h3><div class="kv"><span>Timer</span><strong>${safe(check.timer?.ActiveState)}</strong></div><div class="kv"><span>Enabled</span><strong>${safe(check.timer?.UnitFileState)}</strong></div><div class="kv"><span>Last run</span><strong>${safe(stateLabel(check.service))}</strong></div><div class="kv"><span>Exit</span><strong>${safe(check.service?.ExecMainStatus ?? "0")}</strong></div></article>`; }).join("");
 }
+
+$("history-pool").addEventListener("change", renderWinnerHistory);
+$("history-round").addEventListener("input", renderWinnerHistory);
 
 async function refresh() {
   try {

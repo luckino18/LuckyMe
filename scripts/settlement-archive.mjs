@@ -38,6 +38,15 @@ export function hasArchivedSettlement(filePath, pool, roundId, identity = {}) {
     Object.entries(identity).every(([key, value]) => record[key] === value));
 }
 
+export function latestArchivedSettlement(filePath, pool, roundId, identity = {}) {
+  return readSettlementArchive(filePath, { strict: true })
+    .filter((record) =>
+      record.pool === pool &&
+      Number(record.roundId) === Number(roundId) &&
+      Object.entries(identity).every(([key, value]) => record[key] === value))
+    .at(-1) ?? null;
+}
+
 export function appendSettlementArchive(filePath, record) {
   if (!filePath) {
     throw new Error("LUCKYME_SETTLEMENT_ARCHIVE_PATH is required before closing settled rounds");

@@ -27,7 +27,7 @@ import {
 import {
   appendRefundJournalEvent,
   appendSettlementArchive,
-  hasArchivedSettlement,
+  latestArchivedSettlement,
   refundProgressForRound,
 } from "./settlement-archive.mjs";
 import { isConfirmedRefundTransaction } from "./refund-transaction-verifier.mjs";
@@ -525,10 +525,19 @@ async function executeSettleProviderRound({
     .map((ticket, index) => findEntryByTicket(entries, ticket, `winner ${index + 1}`));
   const jackpotTicket = randomModDomain(randomness, "jackpot-winner", 0, totalTickets);
   const jackpotEntry = findEntryByTicket(entries, jackpotTicket, "jackpot");
-  const mainPrize = BigInt(roundAccount.totalLamports.toString())
-    - bpsAmount(roundAccount.totalLamports, configAccount.houseFeeBps)
-    - bpsAmount(roundAccount.totalLamports, configAccount.jackpotBps);
+  const houseFee = bpsAmount(roundAccount.totalLamports, configAccount.houseFeeBps);
+  const jackpotAdd = bpsAmount(roundAccount.totalLamports, configAccount.jackpotBps);
+  const mainPrize = BigInt(roundAccount.totalLamports.toString()) - houseFee - jackpotAdd;
   const prizePayouts = mainPrizePayouts(mainPrize, poolConfig);
+  const jackpotTriggered = randomModDomain(
+    randomness,
+    "jackpot-roll",
+    0,
+    BigInt(configAccount.jackpotOddsDenominator.toString()),
+  ) === 0n;
+  const jackpotPayout = jackpotTriggered
+    ? BigInt(poolAccount.jackpotLamports.toString()) + jackpotAdd
+    : 0n;
   const winnerEntry = winnerEntries[0];
   const summary = {
     pool: poolSpec.slug,
@@ -568,8 +577,39 @@ async function executeSettleProviderRound({
   const signature = await simulateAndSend(method, summary);
   executed.push({ ...summary, signature });
 
-  const settledRound = await program.account.round.fetch(round);
-  await archiveSettledRound(poolSpec, pool, round, settledRound, signature);
+  const settledRound = await fetchSettledRoundForArchive(round, {
+    winners: winnerEntries.map((entry) => entry.player),
+    randomness,
+  });
+  await archiveSettledRound(poolSpec, pool, round, settledRound, signature, {
+    houseFeeBps: Number(configAccount.houseFeeBps),
+    jackpotBps: Number(configAccount.jackpotBps),
+    houseFeeLamports: houseFee.toString(),
+    jackpotAddLamports: jackpotAdd.toString(),
+    mainPrizeLamports: mainPrize.toString(),
+    prizePayouts: prizePayouts.map(String),
+    winningTickets: winnerTickets.map(String),
+    jackpotPayoutLamports: jackpotPayout.toString(),
+  });
+}
+
+async function fetchSettledRoundForArchive(round, expected, attempts = 8) {
+  let latest = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    latest = await program.account.round.fetch(round);
+    const actualWinners = [latest.winner, latest.winnerSecond, latest.winnerThird]
+      .filter((winner) => winner && !winner.equals(SystemProgram.programId));
+    const winnersMatch = expected.winners.every((winner, index) =>
+      actualWinners[index]?.equals(winner));
+    const randomnessMatches = Buffer.from(latest.randomness).equals(Buffer.from(expected.randomness));
+    if (latest.settled && winnersMatch && randomnessMatches) {
+      return latest;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  throw new Error(
+    `Settled Round ${round.toBase58()} did not converge before archive write`,
+  );
 }
 
 async function executeCloseEmptyRound(poolSpec, pool, round, roundId) {
@@ -886,7 +926,14 @@ async function executeNextRefund(poolSpec, pool, round, roundAccount, details = 
   }
 }
 
-async function archiveSettledRound(poolSpec, pool, round, roundAccount, settlementSignature = null) {
+async function archiveSettledRound(
+  poolSpec,
+  pool,
+  round,
+  roundAccount,
+  settlementSignature = null,
+  settlementEconomics = null,
+) {
   const roundId = Number(roundAccount.roundId.toString());
   if (!SETTLEMENT_ARCHIVE_PATH) {
     planned.push({ pool: poolSpec.slug, action: "archive_path_missing", roundId });
@@ -904,7 +951,13 @@ async function archiveSettledRound(poolSpec, pool, round, roundAccount, settleme
     poolAddress: pool.toBase58(),
     address: round.toBase58(),
   };
-  if (hasArchivedSettlement(SETTLEMENT_ARCHIVE_PATH, poolSpec.slug, roundId, archiveIdentity)) {
+  const latestArchive = latestArchivedSettlement(
+    SETTLEMENT_ARCHIVE_PATH,
+    poolSpec.slug,
+    roundId,
+    archiveIdentity,
+  );
+  if (latestArchive && archiveMatchesSettledState(latestArchive, roundAccount)) {
     return true;
   }
 
@@ -934,9 +987,18 @@ async function archiveSettledRound(poolSpec, pool, round, roundAccount, settleme
     return false;
   }
 
+  const economics = settlementEconomics ?? await settlementEconomicsForRound(
+    poolSpec,
+    pool,
+    roundAccount,
+  );
   const winners = [roundAccount.winner, roundAccount.winnerSecond, roundAccount.winnerThird]
     .filter((winner) => winner && !winner.equals(SystemProgram.programId))
-    .map((winner, index) => ({ rank: index + 1, winner: winner.toBase58() }));
+    .map((winner, index) => ({
+      rank: index + 1,
+      winner: winner.toBase58(),
+      prizeLamports: economics.prizePayouts[index] ?? "0",
+    }));
   const entries = await fetchEntriesForRound(round);
   const archivedEntries = refundMode
     ? refundProgress.originalEntries
@@ -981,6 +1043,14 @@ async function archiveSettledRound(poolSpec, pool, round, roundAccount, settleme
     winnerSecond: roundAccount.winnerSecond.toBase58(),
     winnerThird: roundAccount.winnerThird.toBase58(),
     winners,
+    houseFeeBps: economics.houseFeeBps,
+    jackpotBps: economics.jackpotBps,
+    houseFeeLamports: economics.houseFeeLamports,
+    jackpotAddLamports: economics.jackpotAddLamports,
+    mainPrizeLamports: economics.mainPrizeLamports,
+    prizePayouts: economics.prizePayouts,
+    winningTickets: economics.winningTickets,
+    jackpotPayoutLamports: economics.jackpotPayoutLamports,
     jackpotTriggered: roundAccount.jackpotTriggered,
     jackpotWinner: roundAccount.jackpotWinner.toBase58(),
     randomnessCommitment: Buffer.from(roundAccount.randomnessCommitment).toString("hex"),
@@ -999,6 +1069,47 @@ async function archiveSettledRound(poolSpec, pool, round, roundAccount, settleme
   appendSettlementArchive(SETTLEMENT_ARCHIVE_PATH, record);
   planned.push({ pool: poolSpec.slug, action: "archive_settled_round", roundId });
   return true;
+}
+
+async function settlementEconomicsForRound(poolSpec, pool, roundAccount) {
+  const [configAccount, poolAccount] = await Promise.all([
+    program.account.config.fetch(config),
+    program.account.pool.fetch(pool),
+  ]);
+  const totalLamports = BigInt(roundAccount.totalLamports.toString());
+  const houseFee = bpsAmount(totalLamports, configAccount.houseFeeBps);
+  const jackpotAdd = bpsAmount(totalLamports, configAccount.jackpotBps);
+  const mainPrize = totalLamports - houseFee - jackpotAdd;
+  const payouts = mainPrizePayouts(mainPrize, poolSettlementConfig(poolAccount, poolSpec));
+  return {
+    houseFeeBps: Number(configAccount.houseFeeBps),
+    jackpotBps: Number(configAccount.jackpotBps),
+    houseFeeLamports: houseFee.toString(),
+    jackpotAddLamports: jackpotAdd.toString(),
+    mainPrizeLamports: mainPrize.toString(),
+    prizePayouts: payouts.map(String),
+    winningTickets: [],
+    jackpotPayoutLamports: "0",
+  };
+}
+
+function archiveMatchesSettledState(record, roundAccount) {
+  const winners = [roundAccount.winner, roundAccount.winnerSecond, roundAccount.winnerThird]
+    .filter((winner) => winner && !winner.equals(SystemProgram.programId))
+    .map((winner, index) => ({ rank: index + 1, winner: winner.toBase58() }));
+  const archivedWinners = (record.winners ?? []).map(({ rank, winner }) => ({
+    rank,
+    winner,
+  }));
+  return Boolean(
+    record?.settled === true &&
+    Number(record.winnerCount) === Number(roundAccount.winnerCount) &&
+    record.winner === roundAccount.winner.toBase58() &&
+    record.winnerSecond === roundAccount.winnerSecond.toBase58() &&
+    record.winnerThird === roundAccount.winnerThird.toBase58() &&
+    JSON.stringify(archivedWinners) === JSON.stringify(winners) &&
+    record.randomness === Buffer.from(roundAccount.randomness).toString("hex")
+  );
 }
 
 async function executeOpenRound(poolSpec, pool, roundId) {

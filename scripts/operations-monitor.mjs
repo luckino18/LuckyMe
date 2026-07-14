@@ -4,6 +4,8 @@ import { promisify } from "node:util";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { loadEntryWallets } from "./admin-entry-snapshot.mjs";
 import { calculateTreasuryEstimateLamports } from "./admin-treasury-estimate.mjs";
+import { buildWinnerHistory } from "./admin-winner-history.mjs";
+import { readSettlementArchive } from "./settlement-archive.mjs";
 
 const execFileAsync = promisify(execFile);
 const apiUrl = process.env.LUCKYME_API_URL ?? "https://api.lucky-me.app";
@@ -16,10 +18,12 @@ const minimumKeeperBalance = Number(
 );
 const stuckGraceSeconds = Number(process.env.LUCKYME_STUCK_ROUND_GRACE_SECONDS ?? "1800");
 const adminStatusPath = process.env.LUCKYME_ADMIN_STATUS_PATH ?? "";
+const settlementArchivePath = process.env.LUCKYME_SETTLEMENT_ARCHIVE_PATH ?? "";
 
 const checks = {};
 const alerts = [];
 let treasuryEconomics = null;
+let poolConfigs = [];
 
 function alert(code, message, details = {}) {
   alerts.push({ code, message, ...details });
@@ -92,6 +96,7 @@ try {
 
 try {
   const payload = await json(`${apiUrl}/pools`);
+  poolConfigs = payload.pools ?? [];
   const now = Math.floor(Date.now() / 1000);
   const rounds = [];
   for (const pool of payload.pools ?? []) {
@@ -131,6 +136,16 @@ try {
 } catch (error) {
   checks.rounds = { ok: false, error: error.message };
   alert("pool_state_unreachable", "Pool state check failed", { error: error.message });
+}
+
+try {
+  if (!settlementArchivePath) throw new Error("Settlement archive path is not configured");
+  checks.winnerHistory = {
+    ok: true,
+    rounds: buildWinnerHistory(readSettlementArchive(settlementArchivePath, { strict: true }), poolConfigs),
+  };
+} catch (error) {
+  checks.winnerHistory = { ok: false, error: error.message, rounds: [] };
 }
 
 for (const [name, timer, service] of [

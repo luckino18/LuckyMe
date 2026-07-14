@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   appendRefundJournalEvent,
   appendSettlementArchive,
+  latestArchivedSettlement,
   readSettlementArchive,
   refundProgressForRound,
 } from "../scripts/settlement-archive.mjs";
@@ -124,6 +125,50 @@ test("settlement archive identities cannot cross Solana genesis hashes", () => {
   assert.equal(appendSettlementArchive(file, { ...base, genesisHash: "mainnet-genesis" }), false);
   assert.equal(appendSettlementArchive(file, { ...base, genesisHash: "localnet-genesis" }), true);
   assert.equal(readSettlementArchive(file).length, 2);
+});
+
+test("settlement archive preserves append-only corrected on-chain account states", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "luckyme-corrected-archive-"));
+  const file = path.join(dir, "settlements.jsonl");
+  const base = {
+    genesisHash: "mainnet-genesis",
+    programId: "program-1",
+    pool: "mini",
+    roundId: 7,
+    poolAddress: "pool-1",
+    address: "round-7",
+  };
+  assert.equal(appendSettlementArchive(file, {
+    ...base,
+    accountDataHash: "stale-hash",
+    winnerCount: 0,
+    winners: [],
+  }), true);
+  assert.equal(appendSettlementArchive(file, {
+    ...base,
+    accountDataHash: "confirmed-hash",
+    winnerCount: 1,
+    winners: [{ rank: 1, winner: "winner-wallet" }],
+  }), true);
+  const records = readSettlementArchive(file);
+  assert.equal(records.length, 2);
+  assert.equal(records.at(-1).accountDataHash, "confirmed-hash");
+  assert.equal(records.at(-1).winners[0].winner, "winner-wallet");
+  assert.equal(
+    latestArchivedSettlement(file, "mini", 7, {
+      genesisHash: "mainnet-genesis",
+      programId: "program-1",
+      poolAddress: "pool-1",
+      address: "round-7",
+    }).accountDataHash,
+    "confirmed-hash",
+  );
+});
+
+test("keeper waits for post-settlement RPC convergence before archiving winners", () => {
+  assert.match(keeperSource, /fetchSettledRoundForArchive\(round/);
+  assert.match(keeperSource, /latest\.settled && winnersMatch && randomnessMatches/);
+  assert.match(keeperSource, /did not converge before archive write/);
 });
 
 test("a stale append lock cannot permanently stop keeper recovery after restart", () => {
@@ -251,6 +296,8 @@ test("keeper archive lookup uses stable PDA identity while cleanup mutates entra
     keeperSource,
     /const archiveIdentity = \{[^}]*accountDataHash/s,
   );
+  assert.match(keeperSource, /latestArchivedSettlement\(/);
+  assert.match(keeperSource, /archiveMatchesSettledState\(latestArchive, roundAccount\)/);
 });
 
 test("web wallet selector is a popup with detected wallets and WalletConnect", () => {
