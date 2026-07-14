@@ -3,6 +3,7 @@ import { chmod, rename, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { loadEntryWallets } from "./admin-entry-snapshot.mjs";
+import { calculateTreasuryEstimateLamports } from "./admin-treasury-estimate.mjs";
 
 const execFileAsync = promisify(execFile);
 const apiUrl = process.env.LUCKYME_API_URL ?? "https://api.lucky-me.app";
@@ -18,6 +19,7 @@ const adminStatusPath = process.env.LUCKYME_ADMIN_STATUS_PATH ?? "";
 
 const checks = {};
 const alerts = [];
+let treasuryEconomics = null;
 
 function alert(code, message, details = {}) {
   alerts.push({ code, message, ...details });
@@ -57,6 +59,19 @@ try {
 }
 
 try {
+  const config = await json(`${apiUrl}/config`);
+  const houseFeeBps = Number(config?.economics?.houseFeeBps);
+  if (!Number.isInteger(houseFeeBps) || houseFeeBps < 0 || houseFeeBps > 10_000) {
+    throw new Error("API returned an invalid houseFeeBps value");
+  }
+  const treasury = new PublicKey(config.treasury).toBase58();
+  treasuryEconomics = { treasury, houseFeeBps };
+  checks.treasury = { ok: true, ...treasuryEconomics };
+} catch (error) {
+  checks.treasury = { ok: false, error: error.message };
+}
+
+try {
   const connection = new Connection(rpcUrl, "confirmed");
   const [balance, slot] = await Promise.all([
     connection.getBalance(keeper, "confirmed"),
@@ -92,6 +107,11 @@ try {
       totalTickets: String(round?.totalTickets ?? "0"),
       totalLamports: String(round?.totalLamports ?? "0"),
       entrantCount: Number(round?.entrantCount ?? 0),
+      minimumReached: Boolean(round?.minimumReached),
+      treasuryEstimateLamports: treasuryEconomics
+        ? calculateTreasuryEstimateLamports(round?.totalLamports ?? "0", treasuryEconomics.houseFeeBps)
+        : null,
+      treasuryHouseFeeBps: treasuryEconomics?.houseFeeBps ?? null,
     };
     rounds.push(summary);
     if (summary.endTs > 0 && now > summary.endTs + stuckGraceSeconds && !summary.settled) {

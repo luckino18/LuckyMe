@@ -10,6 +10,7 @@ import {
   unregisterPushToken,
 } from "../backend/src/push-notifications.mjs";
 import { attachEntryWallets } from "../scripts/admin-entry-snapshot.mjs";
+import { calculateTreasuryEstimateLamports } from "../scripts/admin-treasury-estimate.mjs";
 
 const EXPO_TOKEN = "ExponentPushToken[luckyme_test-token_123]";
 
@@ -168,13 +169,23 @@ test("read-only admin panel uses a protected monitor snapshot", async () => {
   assert.match(service, /LUCKYME_ADMIN_STATUS_PATH=\/var\/www\/luckyme\/public\/admin\/status\.json/);
   assert.match(page, /Read-only panel/);
   assert.match(page, /Live ticket wallets/);
+  assert.match(page, /Treasury estimate/);
   assert.match(page, /noindex,nofollow,noarchive/);
   assert.match(client, /fetch\("\/admin\/status\.json"/);
   assert.match(client, /round\.entries/);
   assert.match(client, /wallet-address/);
+  assert.match(client, /treasuryEstimateLamports/);
   assert.doesNotMatch(client, /fetch\([^)]*method:\s*["']POST/);
   assert.match(nginx, /auth_basic_user_file \/etc\/nginx\/luckyme-admin\.htpasswd/);
   assert.match(nginx, /Content-Security-Policy/);
+});
+
+test("admin Treasury estimate uses exact on-chain basis-point rounding", () => {
+  assert.equal(calculateTreasuryEstimateLamports("135000000", 200), "2700000");
+  assert.equal(calculateTreasuryEstimateLamports("5000000", 200), "100000");
+  assert.equal(calculateTreasuryEstimateLamports("1", 200), "0");
+  assert.throws(() => calculateTreasuryEstimateLamports("1.5", 200), /unsigned integer/);
+  assert.throws(() => calculateTreasuryEstimateLamports("100", 10001), /cannot exceed/);
 });
 
 test("admin entry snapshot groups only validated current-round wallets", () => {

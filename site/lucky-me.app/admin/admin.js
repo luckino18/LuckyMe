@@ -16,6 +16,17 @@ function render(report) {
     ["Open alerts", String(report.alerts?.length ?? 0), report.ok ? "No action required" : "Review details above"],
   ].map(([title,value,copy]) => `<article class="card"><span class="eyebrow">${safe(title)}</span><strong class="card-value ${value === "Healthy" || value === "0" ? "good" : ""}">${safe(value)}</strong><p class="card-copy">${safe(copy)}</p></article>`).join("");
   $("rounds").innerHTML = (report.checks?.rounds ?? []).map((round) => `<article class="round"><h3>${safe(round.pool)}</h3><div class="kv"><span>Round</span><strong>${safe(round.roundId)}</strong></div><div class="kv"><span>Outcome</span><strong>${safe(round.outcome)}</strong></div><div class="kv"><span>Started</span><strong>${round.startTs > 0 ? new Date(round.startTs * 1000).toLocaleTimeString() : "Waiting"}</strong></div><div class="kv"><span>Settled</span><strong>${round.settled ? "Yes" : "No"}</strong></div></article>`).join("");
+  $("treasury-pools").innerHTML = (report.checks?.rounds ?? []).map((round) => {
+    const bps = Number(round.treasuryHouseFeeBps);
+    const percent = round.treasuryHouseFeeBps != null && Number.isFinite(bps) ? `${(bps / 100).toFixed(2)}%` : "—";
+    const estimate = round.treasuryEstimateLamports == null ? "Unavailable" : sol(round.treasuryEstimateLamports);
+    const settlementCopy = Number(round.totalTickets ?? 0) === 0
+      ? "No tickets sold yet"
+      : round.minimumReached
+        ? "Target reached · paid at settlement"
+        : "Paid only if the round reaches its target";
+    return `<article class="treasury-pool"><span class="eyebrow">${safe(round.pool)} · round ${safe(round.roundId)}</span><strong class="treasury-value">${safe(estimate)}</strong><div class="kv"><span>Treasury rate</span><strong>${safe(percent)}</strong></div><div class="kv"><span>Ticket value</span><strong>${safe(sol(round.totalLamports))}</strong></div><p class="treasury-copy">${safe(settlementCopy)}</p></article>`;
+  }).join("");
   $("entry-pools").innerHTML = (report.checks?.rounds ?? []).map((round) => {
     const entries = Array.isArray(round.entries) ? round.entries : [];
     const wallets = entries.length
