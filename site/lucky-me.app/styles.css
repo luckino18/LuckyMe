@@ -898,7 +898,7 @@ body.wallet-modal-open { overflow: hidden; }
   height: 72px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
   padding: 7px;
   border-radius: 18px;
@@ -1038,7 +1038,7 @@ body.wallet-modal-open { overflow: hidden; }
     box-shadow: 12px 0 44px rgba(0, 0, 0, 0.35);
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: 92px repeat(5, 54px);
+    grid-template-rows: 92px repeat(6, 54px);
     align-items: stretch;
     gap: 8px;
   }

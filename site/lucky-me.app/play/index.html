@@ -13,7 +13,7 @@
     <meta property="og:title" content="LuckyMe Play" />
     <meta property="og:description" content="Fixed-entry Solana pools. Approve every action inside your own wallet." />
     <meta property="og:image" content="https://lucky-me.app/assets/brand/og-image.png" />
-    <link rel="stylesheet" href="/styles.css?v=20260712-custom-ticket-quantity" />
+    <link rel="stylesheet" href="/styles.css?v=20260715-social-nav" />
   </head>
   <body class="app-body">
     <div class="app-shell">
@@ -54,7 +54,6 @@
                 <button class="primary-button" data-route="pools">View pools</button>
                 <button class="secondary-button" data-route="how">How to Play</button>
                 <button class="secondary-button" data-action="open-wallet-modal">Connect wallet</button>
-                <a class="secondary-button" href="https://x.com/LuckyMeSolana" target="_blank" rel="noopener noreferrer">Follow us on X</a>
               </div>
             </div>
           </section>
@@ -167,11 +166,25 @@
               <a class="secondary-button" href="/terms/">Terms</a>
               <a class="secondary-button" href="/privacy/">Privacy</a>
               <a class="secondary-button" href="/support/">Support</a>
-              <a class="secondary-button" href="https://x.com/LuckyMeSolana" target="_blank" rel="noopener noreferrer">X</a>
-              <button class="secondary-button" disabled>Discord soon</button>
             </div>
           </section>
           <button class="secondary-button" data-route="how">Back to How to Play</button>
+        </section>
+
+        <section class="screen" data-screen="social" hidden>
+          <div class="screen-head">
+            <div>
+              <span class="label">Community</span>
+              <h2>Social</h2>
+            </div>
+          </div>
+          <section class="panel">
+            <p>Follow LuckyMe for product updates, round news, and community announcements.</p>
+            <div class="wallet-actions link-actions">
+              <a class="secondary-button" href="https://x.com/LuckyMeSolana" target="_blank" rel="noopener noreferrer">Follow LuckyMe on X</a>
+              <button class="secondary-button" disabled>Discord — Coming soon</button>
+            </div>
+          </section>
         </section>
 
         <section class="screen" data-screen="review" hidden>
@@ -205,6 +218,10 @@
         <button class="nav-item" data-route="how" aria-label="How to Play">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 1 1 3.5 2.2c-.8.4-1.3 1-1.3 1.8"/><path d="M12 17h.01"/></svg>
           <span>How to Play</span>
+        </button>
+        <button class="nav-item" data-route="social" aria-label="Social">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
+          <span>Social</span>
         </button>
       </nav>
     </div>
