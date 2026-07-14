@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <title>LuckyMe Admin</title>
-    <link rel="stylesheet" href="/admin/admin.css?v=20260712-admin1" />
+    <link rel="stylesheet" href="/admin/admin.css?v=20260714-entries1" />
   </head>
   <body>
     <main class="shell">
@@ -21,11 +21,16 @@
         <div class="rounds" id="rounds"></div>
       </section>
       <section class="panel">
+        <div class="panel-title"><div><span class="eyebrow">On-chain entries</span><h2>Live ticket wallets</h2></div></div>
+        <p class="panel-copy">Current-round wallets and ticket counts, refreshed from Solana every minute.</p>
+        <div class="entry-pools" id="entry-pools"></div>
+      </section>
+      <section class="panel">
         <div class="panel-title"><div><span class="eyebrow">Services</span><h2>Automation</h2></div></div>
         <div class="services" id="services"></div>
       </section>
       <p class="readonly">Read-only panel. It cannot send transactions, open rounds, or change server settings.</p>
     </main>
-    <script src="/admin/admin.js?v=20260712-admin1" defer></script>
+    <script src="/admin/admin.js?v=20260714-entries1" defer></script>
   </body>
 </html>

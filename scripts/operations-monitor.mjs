@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { chmod, rename, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { Connection, PublicKey } from "@solana/web3.js";
+import { loadEntryWallets } from "./admin-entry-snapshot.mjs";
 
 const execFileAsync = promisify(execFile);
 const apiUrl = process.env.LUCKYME_API_URL ?? "https://api.lucky-me.app";
@@ -77,21 +78,35 @@ try {
 try {
   const payload = await json(`${apiUrl}/pools`);
   const now = Math.floor(Date.now() / 1000);
-  checks.rounds = [];
+  const rounds = [];
   for (const pool of payload.pools ?? []) {
     const round = pool.activeRound;
     const summary = {
       pool: pool.id,
       roundId: round?.roundId ?? null,
+      roundAddress: round?.address ?? null,
       startTs: Number(round?.startTs ?? 0),
       endTs: Number(round?.endTs ?? 0),
       settled: Boolean(round?.settled),
       outcome: round?.roundOutcome ?? null,
+      totalTickets: String(round?.totalTickets ?? "0"),
+      totalLamports: String(round?.totalLamports ?? "0"),
+      entrantCount: Number(round?.entrantCount ?? 0),
     };
-    checks.rounds.push(summary);
+    rounds.push(summary);
     if (summary.endTs > 0 && now > summary.endTs + stuckGraceSeconds && !summary.settled) {
       alert("round_stuck", `${pool.id} round ${summary.roundId} is past its processing grace period`, summary);
     }
+  }
+  try {
+    checks.rounds = await loadEntryWallets(rounds, { rpcUrl });
+    checks.entryScan = {
+      ok: true,
+      walletCount: checks.rounds.reduce((total, round) => total + round.walletCount, 0),
+    };
+  } catch (error) {
+    checks.rounds = rounds.map((round) => ({ ...round, entries: [], walletCount: 0 }));
+    checks.entryScan = { ok: false, error: error.message };
   }
 } catch (error) {
   checks.rounds = { ok: false, error: error.message };

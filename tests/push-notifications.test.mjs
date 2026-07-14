@@ -9,6 +9,7 @@ import {
   sendExpoPushNotifications,
   unregisterPushToken,
 } from "../backend/src/push-notifications.mjs";
+import { attachEntryWallets } from "../scripts/admin-entry-snapshot.mjs";
 
 const EXPO_TOKEN = "ExponentPushToken[luckyme_test-token_123]";
 
@@ -166,11 +167,66 @@ test("read-only admin panel uses a protected monitor snapshot", async () => {
   assert.match(monitor, /rename\(temporaryPath, adminStatusPath\)/);
   assert.match(service, /LUCKYME_ADMIN_STATUS_PATH=\/var\/www\/luckyme\/public\/admin\/status\.json/);
   assert.match(page, /Read-only panel/);
+  assert.match(page, /Live ticket wallets/);
   assert.match(page, /noindex,nofollow,noarchive/);
   assert.match(client, /fetch\("\/admin\/status\.json"/);
+  assert.match(client, /round\.entries/);
+  assert.match(client, /wallet-address/);
   assert.doesNotMatch(client, /fetch\([^)]*method:\s*["']POST/);
   assert.match(nginx, /auth_basic_user_file \/etc\/nginx\/luckyme-admin\.htpasswd/);
   assert.match(nginx, /Content-Security-Policy/);
+});
+
+test("admin entry snapshot groups only validated current-round wallets", () => {
+  const key = (value) => ({ toBase58: () => value });
+  const miniRound = "GKwsvpTeCejnDopJSnbCNAsbE4PhScFgYk7GR7dziFUX";
+  const normalRound = "7HxPngqLTDmJuePj5TFB2ECG3tQrmVgkm6HA1p8YECyG";
+  const rounds = [
+    { pool: "mini", roundId: 7, roundAddress: miniRound },
+    { pool: "normal", roundId: 6, roundAddress: normalRound },
+  ];
+  const result = attachEntryWallets(rounds, [
+    {
+      publicKey: key("4FbQCmt71TEyrfroW1BLdzWYKNB6Qvuir1EDAfBso5pk"),
+      account: {
+        round: key(miniRound),
+        player: key("GvcV1D3wLPGoia9VkHBiTrJN3ZKBhMF6mEh1862DDCXR"),
+        ticketStart: 1n,
+        ticketCount: 10n,
+        lamports: 50_000_000n,
+      },
+    },
+    {
+      publicKey: key("gm4MuKDp3Lu2goSJTDyrkQ55UMuGPzGJQ8TgaspMAPh"),
+      account: {
+        round: key(miniRound),
+        player: key("Cy2M8D8LWaqzZrhdbMD7244kxZmmaXCUpbU9FEZyt7t5"),
+        ticketStart: 0n,
+        ticketCount: 1n,
+        lamports: 5_000_000n,
+      },
+    },
+  ]);
+
+  assert.equal(result[0].walletCount, 2);
+  assert.deepEqual(result[0].entries.map((entry) => [entry.player, entry.ticketCount]), [
+    ["Cy2M8D8LWaqzZrhdbMD7244kxZmmaXCUpbU9FEZyt7t5", "1"],
+    ["GvcV1D3wLPGoia9VkHBiTrJN3ZKBhMF6mEh1862DDCXR", "10"],
+  ]);
+  assert.equal(result[1].walletCount, 0);
+  assert.equal(result[1].entries.length, 0);
+  assert.equal("entries" in rounds[0], false);
+});
+
+test("admin wallet discovery is RPC read-only", async () => {
+  const [snapshot, monitor] = await Promise.all([
+    readFile(new URL("../scripts/admin-entry-snapshot.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/operations-monitor.mjs", import.meta.url), "utf8"),
+  ]);
+  assert.match(snapshot, /createClientImpl\(\{ requireSigner: false, url: rpcUrl \}\)/);
+  assert.match(snapshot, /program\.account\.entry\.all\(\)/);
+  assert.match(monitor, /loadEntryWallets\(rounds, \{ rpcUrl \}\)/);
+  assert.doesNotMatch(snapshot, /sendAndConfirm|signTransaction|\.methods\./);
 });
 
 test("push token registration rejects invalid Expo tokens and supports unregister", async () => {
