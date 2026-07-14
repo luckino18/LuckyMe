@@ -2,9 +2,9 @@
 Description=Run LuckyMe settlement keeper every minute
 
 [Timer]
-OnBootSec=120
-OnUnitActiveSec=60
-AccuracySec=10
+OnActiveSec=5
+OnUnitInactiveSec=60
+AccuracySec=5
 Persistent=true
 Unit=luckyme-settlement-keeper.service
 

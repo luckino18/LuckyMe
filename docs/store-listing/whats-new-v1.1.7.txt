@@ -1,0 +1,1 @@
+LuckyMe 1.1.7 removes unused sensitive Android permissions and keeps only the permissions required for mainnet access and opted-in round notifications. It also includes the latest ticket picker, smooth countdown, notification icon, automatic settlement flow, and reliability improvements verified on Solana Seeker.

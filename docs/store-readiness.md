@@ -9,10 +9,11 @@ candidate.
 - Wallet chain: `solana:mainnet`
 - Solana cluster: `mainnet-beta`
 - App package: `com.luckyme.seeker`
-- Version: `1.1.0` (`versionCode 3`)
+- Version: `1.1.7` (`versionCode 10`)
 - EAS profile: `dapp-store`
 - Android artifact: signed APK
 - Program ID: `4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3`
+- Submission: uploaded through the Publisher Portal; review result pending
 
 Local validator flows are developer/testing mode only. They are not the store
 positioning and must not be used for production screenshots or release copy.
@@ -49,18 +50,17 @@ Based on the official Solana Mobile publishing docs, prepare:
   `c104ec372270dc175d54d26bf472edd9f489813324f66c9a6766df423fc05bc2`
 - Historical APK signing verified with APK Signature Scheme v2 using EAS-managed
   Android credentials `Build Credentials iNPMBDRiCC (default)`.
-- Minimum-ticket release-candidate APK `1.1.0` / code `3` completed as EAS build
-  `52056b37-8b78-44fc-b30b-0319a96c92cb`; its verified Desktop copy is
-  `/Users/victor/Desktop/LuckyMe-Seeker-MINIMUM-TICKETS-TEST-1.1.0-2026-07-11.apk`
-  with SHA-256
-  `b0da48983e84fd361fe27e06a6ac3d5193b7fb9d0f04621ca963dbc6321af42d`.
-- The code-3 APK uses the expected EAS certificate
+- Current store APK `1.1.7` / code `10` is
+  `LuckyMe-Seeker-1.1.7-code10.apk` with SHA-256
+  `5b41ced1dafe384eff1d7df790c1836b61efc9c6656a4ee05974e6b711028e54`.
+- The code-10 APK uses the expected EAS certificate
   `e249bc55...2067`, passes v2 signature and ZIP checks, embeds the production
   Program ID/API/mainnet configuration, and contains the LuckyMe adaptive/round
   launcher artwork.
 - The synchronized minimum-ticket program, backend, and site are deployed on
-  mainnet-beta. The live API currently returns `activeRound: null` for every
-  pool and keeper writes remain disabled pending separate approval.
+  mainnet-beta. Read-only verification on 2026-07-14 found Mini 7, Normal 6,
+  High 6, and Premium 7 open, waiting, and not yet timed (`startTs=0`,
+  `endTs=0`). The settlement keeper timer is enabled and active.
 - The VPS backend exposes Expo push notification registration and the push
   keeper dry-run passed against the production configuration.
 
@@ -84,27 +84,23 @@ Based on the official Solana Mobile publishing docs, prepare:
 
 ## Final Release Checklist
 
-- APK built with `eas build --platform android --profile dapp-store`: completed
-  and verified for `1.1.0` / code `3`; evidence is in
-  `docs/seeker-apk-1.1.0-verification-2026-07-11.md`.
+- APK built with the dApp Store release profile: completed and verified for
+  `1.1.7` / code `10`; evidence is in
+  `docs/seeker-apk-1.1.7-store-review-verification-2026-07-14.md`.
 - APK must remain signed with EAS-managed release credentials and the expected
   certificate recorded in the handoff.
-- `apksigner verify --print-certs` must pass for the `1.1.0` APK before use.
+- `apksigner verify --print-certs` passes for the `1.1.7` APK.
 - Backend production HTTPS URL configured in the EAS environment: done.
 - App opens without loopback, LAN, or non-mainnet references: validator passed.
 - `EXPO_PUBLIC_LUCKYME_TERMS_URL`, `EXPO_PUBLIC_LUCKYME_PRIVACY_URL`, and
   `EXPO_PUBLIC_LUCKYME_SUPPORT_URL` point at final HTTPS URLs.
 - Screenshots and icon/adaptive icon assets are ready or refreshed for the
   final portal submission.
-- Publisher Portal account, KYC/KYB, publisher wallet, SOL balance, and storage
-  provider must be ready before submission.
+- Publisher Portal submission is complete; monitor the portal and publisher
+  email for the review result.
 
 ## Remaining Credential-Owned Items
 
-- Publisher Portal account and KYC/KYB.
-- Publisher wallet with SOL.
-- Publisher Portal storage provider and final submission.
-- Post-approval real-device wallet entry test against a separately opened
-  mainnet round.
-- Install/launch/navigation/Mobile Wallet Adapter smoke test for the code-3 APK
-  on Seeker; no ADB device was connected during build verification.
+- Respond to any Solana dApp Store review feedback.
+- Preserve access to the publisher wallet and Publisher Portal account.
+- Use a higher version code for every later APK update.

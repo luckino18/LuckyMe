@@ -1,0 +1,33 @@
+[Unit]
+Description=LuckyMe protected admin control API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/luckyme
+Environment=LUCKYME_ADMIN_CONTROL_HOST=127.0.0.1
+Environment=LUCKYME_ADMIN_CONTROL_PORT=8791
+Environment=LUCKYME_ADMIN_STATUS_PATH=/var/www/luckyme/public/admin/status.json
+ExecStart=/usr/bin/node /opt/luckyme/scripts/admin-control-server.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,26 @@
+{
+  "name": "luckyme-admin",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "android": "expo run:android",
+    "build:private-apk": "node scripts/build-private-apk.mjs",
+    "prebuild:android": "expo prebuild --platform android",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "base-64": "^1.0.0",
+    "expo": "~57.0.4",
+    "expo-local-authentication": "~57.0.0",
+    "expo-secure-store": "~57.0.0",
+    "expo-splash-screen": "~57.0.2",
+    "react": "19.2.3",
+    "react-native": "0.86.0"
+  },
+  "devDependencies": {
+    "@types/base-64": "^1.0.2",
+    "@types/react": "19.2.17",
+    "typescript": "6.0.3"
+  }
+}

@@ -9,10 +9,13 @@ Pool math is transparent: fixed ticket price, total tickets, winner chance,
 prize, jackpot contribution, and treasury fee. Results and payouts are executed
 by the Solana program.
 
-> Deployment boundary (2026-07-12): the minimum-ticket and automatic-refund
-> program, backend, and web release are live on mainnet. The keeper remains
-> disabled and no new Round is open, so ticket purchases remain unavailable
-> until a separate operational approval.
+> Production status (verified read-only on 2026-07-14): the minimum-ticket and
+> automatic-refund program, backend, web release, settlement keeper, push
+> alerts, operations monitor, and protected admin control are live. Mini 7,
+> Normal 6, High 6, and Premium 7 are open and waiting for their first ticket;
+> all have `startTs=0` and `endTs=0`. The Seeker `1.1.7` / code `10` APK was
+> submitted through the Solana dApp Store Publisher Portal and is awaiting the
+> portal review result.
 
 ## Funded-round rules
 
@@ -210,10 +213,11 @@ For EAS cloud builds, set `EXPO_PUBLIC_LUCKYME_API_URL`,
 EAS project environment or as EAS secrets before the `dapp-store` build. The
 build must use HTTPS production URLs, not loopback or LAN addresses.
 
-The minimum-ticket release candidate is app version `1.1.0`, Android
-`versionCode` `3`, and keeps package `com.luckyme.seeker`. Its target progress,
-purchase review, automatic-refund explanation, and How to Play content mirror
-the browser app.
+The current store candidate is app version `1.1.7`, Android `versionCode` `10`,
+and keeps package `com.luckyme.seeker`. It includes the tested ticket picker,
+smooth countdown, notification icon and permission flow, production FCM
+configuration, current refund/rent explanations, and an explicit block on the
+unused overlay and legacy external-storage permissions.
 
 Build the Solana dApp Store APK with EAS:
 
@@ -295,6 +299,7 @@ Store listing material is in `docs/store-listing/`:
 - `full-description.md`
 - `whats-new-v1.0.0.txt`
 - `whats-new-v1.1.0.txt`
+- `whats-new-v1.1.7.txt`
 - `screenshot-checklist.md`
 - `icon-adaptive-icon-checklist.md`
 - `privacy-policy.md`

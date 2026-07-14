@@ -1,7 +1,22 @@
 # LuckyMe Handoff
 
-Current objective: preserve the deployed minimum-ticket/refund
-`MAINNET_RELEASE` while keeping keeper writes and new rounds separately gated.
+Current objective: preserve the deployed and automated minimum-ticket/refund
+`MAINNET_RELEASE` while the Seeker `1.1.7` / code `10` release is in Solana
+dApp Store review. The authoritative current snapshot is
+`docs/release-status-2026-07-14.md`; older dated sections below are retained as
+execution history.
+
+## Current override - 2026-07-14
+
+- Seeker release: `1.1.7` / code `10`, submitted for Solana dApp Store review.
+- Current rounds: Mini 7, Normal 6, High 6, Premium 7; all waiting at zero
+  tickets with `startTs=0` and `endTs=0`.
+- Settlement keeper, push alerts, operations monitor, API, and admin control
+  are enabled and active on the production VPS.
+- The mainnet write override is absent; normal automatic lifecycle execution is
+  provided by the guarded keeper service.
+- RPC optimization remains only on the separate local worktree/branch and is
+  not included in the store-review snapshot.
 
 ## Current Release Shape
 
