@@ -1,0 +1,4 @@
+Simplified Home with faster access to pools.
+Added the Seeker Referral League entry point.
+Added Social links for LuckyMe on X and Discord.
+Improved navigation and removed duplicated Home content.

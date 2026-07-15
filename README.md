@@ -14,8 +14,9 @@ by the Solana program.
 > alerts, operations monitor, and protected admin control are live. Mini 7,
 > Normal 6, High 6, and Premium 7 are open and waiting for their first ticket;
 > all have `startTs=0` and `endTs=0`. The Seeker `1.1.7` / code `10` APK was
-> submitted through the Solana dApp Store Publisher Portal and is awaiting the
-> portal review result.
+> submitted through the Solana dApp Store Publisher Portal. The signed Seeker
+> `1.1.8` / code `11` APK is the verified update candidate prepared on
+> 2026-07-15.
 
 ## Funded-round rules
 
@@ -216,11 +217,13 @@ For EAS cloud builds, set `EXPO_PUBLIC_LUCKYME_API_URL`,
 EAS project environment or as EAS secrets before the `dapp-store` build. The
 build must use HTTPS production URLs, not loopback or LAN addresses.
 
-The current store candidate is app version `1.1.7`, Android `versionCode` `10`,
-and keeps package `com.luckyme.seeker`. It includes the tested ticket picker,
-smooth countdown, notification icon and permission flow, production FCM
-configuration, current refund/rent explanations, and an explicit block on the
-unused overlay and legacy external-storage permissions.
+The current signed update candidate is app version `1.1.8`, Android
+`versionCode` `11`, and keeps package `com.luckyme.seeker`. It includes the
+tested ticket picker, smooth countdown, notification icon and permission flow,
+production FCM configuration, current refund/rent explanations, a focused Home
+screen, native Seeker referral access, and the new Social navigation screen. It
+also keeps the explicit block on unused overlay and legacy external-storage
+permissions.
 
 Build the Solana dApp Store APK with EAS:
 
@@ -303,6 +306,7 @@ Store listing material is in `docs/store-listing/`:
 - `whats-new-v1.0.0.txt`
 - `whats-new-v1.1.0.txt`
 - `whats-new-v1.1.7.txt`
+- `whats-new-v1.1.8.txt`
 - `screenshot-checklist.md`
 - `icon-adaptive-icon-checklist.md`
 - `privacy-policy.md`
