@@ -1,0 +1,20 @@
+Target: LuckyMe-Seeker-Referral-Test-1.1.7-referral-test.3.apk
+SHA-256: a2bf0046a825b3bbe04f1a6a4f5c3f2a0f9e9e98bb213a7f15ddd5b9ba507753
+
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=LuckyMe Seeker Referral Test, O=LuckyMe Local Test, C=IT
+Signer #1 certificate SHA-256 digest: fe4e008aefc055db80aba9ec1694163819c0fecf26754471396b6e605dd8f7b7
+Signer #1 certificate SHA-1 digest: 6b21caf08063a18f39b4b1ca6a85951754aaceda
+Signer #1 certificate MD5 digest: 35a83e7af2e45adc766c916379d26972
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 3072
+Signer #1 public key SHA-256 digest: 55427b981e595b96f31a923985f598b1d15d9ef9456be0879acd335d98de5e3e
+Signer #1 public key SHA-1 digest: caeeb9044e6c47e14b151c9caf98915cc8b01eaf
+Signer #1 public key MD5 digest: 1efec21815e417c5da4c0218d0e62b87

@@ -4,6 +4,8 @@ node_modules/
 dist/
 build/
 coverage/
+*.apk
+*.aab
 .anchor/
 test-ledger/
 .eas/
@@ -29,6 +31,10 @@ wallet*.json
 *.pem
 *.key
 *.secret
+*.keystore
+*.jks
+*.p12
+.local-secrets/
 Anchor.local.toml
 
 # Editor and OS files

@@ -1,0 +1,21 @@
+[Unit]
+Description=LuckyMe Discord confirmed-state alerts
+After=network-online.target luckyme-api.service luckyme-operations-monitor.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=luckyme
+Group=luckyme
+WorkingDirectory=/opt/luckyme
+EnvironmentFile=/etc/luckyme/luckyme-api.env
+EnvironmentFile=/etc/luckyme/discord-webhooks.env
+Environment=LUCKYME_API_URL=https://api.lucky-me.app
+Environment=LUCKYME_SETTLEMENT_ARCHIVE_PATH=/var/lib/luckyme/settlements.jsonl
+Environment=LUCKYME_ADMIN_STATUS_PATH=/var/www/luckyme/public/admin/status.json
+Environment=LUCKYME_DISCORD_STATE_PATH=/var/lib/luckyme/discord-alerts.json
+Environment=LUCKYME_DISCORD_SEND=true
+Environment=NPM_CONFIG_UPDATE_NOTIFIER=false
+ExecStart=/usr/bin/node /opt/luckyme/scripts/discord-alerts.mjs
+NoNewPrivileges=true
+PrivateTmp=true

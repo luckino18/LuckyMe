@@ -1,0 +1,12 @@
+LuckyMe Seeker Referral Test - local test signing identity
+
+Certificate DN: CN=LuckyMe Seeker Referral Test, O=LuckyMe Local Test, C=IT
+Certificate SHA-256: fe4e008aefc055db80aba9ec1694163819c0fecf26754471396b6e605dd8f7b7
+Certificate SHA-1: 6b21caf08063a18f39b4b1ca6a85951754aaceda
+Public key SHA-256: 55427b981e595b96f31a923985f598b1d15d9ef9456be0879acd335d98de5e3e
+Algorithm: RSA
+Key size: 3072 bits
+Validated schemes: APK Signature Scheme v2 and v3
+
+This certificate is deliberately different from the released LuckyMe 1.1.7/code10 certificate.
+The keystore and its passwords are not included in this folder.

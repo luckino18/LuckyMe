@@ -97,9 +97,9 @@ test("Seeker publishes the approved ticket targets and automatic-refund copy", (
 test("Seeker release metadata advances without changing the Android package", () => {
   const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
 
-  assert.equal(app.version, "1.1.7");
+  assert.equal(app.version, "1.1.8");
   assert.equal(app.android.package, "com.luckyme.seeker");
-  assert.equal(app.android.versionCode, 10);
+  assert.equal(app.android.versionCode, 11);
   assert.equal(app.icon, "./assets/icon.png");
   assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
   assert.deepEqual(app.android.blockedPermissions, [
@@ -107,6 +107,23 @@ test("Seeker release metadata advances without changing the Android package", ()
     "android.permission.READ_EXTERNAL_STORAGE",
     "android.permission.WRITE_EXTERNAL_STORAGE",
   ]);
+});
+
+test("Seeker production Home is focused and exposes Referral plus the approved navigation", () => {
+  const screen = readFileSync(LUCKYME_SCREEN, "utf8");
+  const stitch = readFileSync(STITCH_SCREENS, "utf8");
+  const home = stitch.slice(stitch.indexOf("function homeBody"), stitch.indexOf("function socialBody"));
+  const nav = stitch.slice(stitch.indexOf("function bottomNav"), stitch.indexOf("/* ------------------------------------------------------------------ */", stitch.indexOf("function bottomNav")));
+
+  assert.match(home, /LuckyMe Referral League/);
+  assert.match(home, /data-route="referral"/);
+  assert.doesNotMatch(home, /POOLS\.map|Valid draw targets|Reserve jackpot/);
+  assert.match(nav, /Home[\s\S]*Pools[\s\S]*Activity[\s\S]*How To[\s\S]*Social/);
+  assert.doesNotMatch(nav, /\["wallet"/);
+  assert.match(stitch, /@LuckyMeSolana/);
+  assert.match(stitch, /1526717371249721355/);
+  assert.match(screen, /\["home", "pools", "activity", "how-to-play", "social"\]/);
+  assert.match(screen, /message\?\.type === "referral"/);
 });
 
 test("Seeker APK includes opt-in notification and winner card surfaces", () => {

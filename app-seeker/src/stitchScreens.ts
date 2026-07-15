@@ -4,6 +4,7 @@ export type StitchScreenId =
   | "activity"
   | "wallet"
   | "how-to-play"
+  | "social"
   | "links"
   | "review"
   | "syncing"
@@ -1441,8 +1442,8 @@ function bottomNav(active: StitchScreenId) {
     ["home", ICONS.home, "Home"],
     ["pools", ICONS.pools, "Pools"],
     ["activity", ICONS.activity, "Activity"],
-    ["wallet", ICONS.wallet, "Wallet"],
     ["how-to-play", ICONS.help, "How To"],
+    ["social", ICONS.x, "Social"],
   ];
 
   // aria-hidden: the native wrapper renders the accessible tab controls
@@ -1585,15 +1586,6 @@ function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: Stitch
 /* ------------------------------------------------------------------ */
 
 function homeBody(options: StitchRenderOptions = {}) {
-  const knownPoolCount = options.livePools?.length ?? 0;
-  const activeRoundCount = options.livePools?.filter((pool) => Boolean(pool.activeRound)).length ?? 0;
-  const statusTitle = knownPoolCount === 0
-    ? "Syncing verified state"
-    : activeRoundCount === 0
-      ? "Maintenance required"
-      : `${activeRoundCount} active ${activeRoundCount === 1 ? "round" : "rounds"}`;
-  const statusTone = knownPoolCount > 0 && activeRoundCount > 0 ? "emerald" : "amber";
-  const statusLabel = knownPoolCount === 0 ? "Syncing" : activeRoundCount === 0 ? "Unavailable" : "Live";
   return String.raw`<main class="stack">
   <section class="hero-card">
     <img class="hero-art" src="${LOGO_HERO}" alt="LuckyMe" />
@@ -1601,62 +1593,51 @@ function homeBody(options: StitchRenderOptions = {}) {
       <p class="eyebrow">Solana mainnet pools</p>
       <h1>Pick a pool. Reach the ticket target.</h1>
       <p>The first confirmed ticket starts a 1-hour round. Valid draws happen only after the pool's total-ticket target is reached.</p>
-      <div class="chip-row">
-        <span class="chip chip-p">95% prize</span>
-        <span class="chip chip-e">3% jackpot</span>
-        <span class="chip chip-a">2% treasury</span>
-        <span class="chip chip-c">1 hour rounds</span>
-      </div>
       <div class="cta-row">
         <button class="primary-button" data-route="pools">View pools</button>
-        <button class="secondary-button" data-route="how-to-play">How to play</button>
       </div>
     </div>
+  </section>
+  <section class="panel glow-purple">
+    <div class="row">
+      <div class="row-left">
+        <span class="icon-chip chip-purplebox">${ICONS.diamond}</span>
+        <div>
+          <span class="label">Seeker exclusive</span>
+          <h2 style="margin-top: 3px;">LuckyMe Referral League</h2>
+          <p class="muted" style="margin-top: 4px;">Verify your Seeker ownership, receive your referral code and invite other verified Seeker owners.</p>
+        </div>
+      </div>
+      <span class="status-pill neutral">SGT verified</span>
+    </div>
+    <button class="primary-button" style="margin-top: 16px;" data-route="referral">Open referral</button>
+  </section>
+</main>`;
+}
+
+function socialBody() {
+  return String.raw`<main class="stack">
+  <section class="section-header">
+    <div>
+      <span class="label">Official community</span>
+      <h2>Follow LuckyMe</h2>
+      <p class="muted" style="margin-top: 5px;">Round updates, announcements and community support.</p>
+    </div>
+  </section>
+  <section class="panel glow-cyan">
+    <div class="row-left">
+      <span class="icon-chip chip-cyanbox">${ICONS.x}</span>
+      <div><span class="label">X</span><h3>@LuckyMeSolana</h3></div>
+    </div>
+    <button class="primary-button" style="margin-top: 16px;" data-route="external" data-url="https://x.com/LuckyMeSolana">Open X</button>
   </section>
   <section class="panel glow-purple">
     <div class="row-left">
-      <span class="icon-chip chip-purplebox">${ICONS.dice}</span>
-      <div>
-        <span class="label">Valid draw targets</span>
-        <h2 style="margin-top: 3px;">Mini 25 · Normal 13 · High 3 · Premium 3</h2>
-        <p class="muted" style="margin-top: 4px;">Targets count total tickets sold, not the number of players. Premium separately requires three distinct wallets.</p>
-      </div>
+      <span class="icon-chip chip-purplebox">${ICONS.help}</span>
+      <div><span class="label">Discord</span><h3>LuckyMe community</h3></div>
     </div>
+    <button class="secondary-button" style="margin-top: 16px;" data-route="external" data-url="https://discord.com/channels/1526717371249721355/1526717372554018867">Open Discord</button>
   </section>
-  ${refundPolicyPanel()}
-  <section class="panel glow-cyan">
-    <div class="row">
-      <div>
-        <span class="label">Every entry</span>
-        <h2>95% prize / 3% jackpot / 2% treasury</h2>
-        <p class="muted" style="margin-top: 4px;">Rounds are wallet-signed on Solana mainnet and settled with verifiable randomness.</p>
-      </div>
-    </div>
-  </section>
-  <section class="panel glow-purple">
-    <div class="row">
-      <div>
-        <span class="label">On-chain pool status</span>
-        <h2>${statusTitle}</h2>
-        <p class="muted" style="margin-top: 4px;">Live values appear only after confirmed pool state is available. Missing current rounds stay closed to purchases.</p>
-      </div>
-      <span class="status-pill ${statusTone}">${statusLabel}</span>
-    </div>
-  </section>
-  ${rulesPanel()}
-  <section class="pool-grid">
-    ${POOLS.map((pool) => poolCard(pool, "pools", options)).join("\n    ")}
-  </section>
-  <section class="panel glow-amber">
-    <div class="row">
-      <div>
-        <span class="label">Reserve jackpot</span>
-        <h2>3% of every entry</h2>
-        <p style="margin-top: 4px;">A reserve prize may settle after any completed round.</p>
-      </div>
-    </div>
-  </section>
-  ${trustBadges()}
 </main>`;
 }
 
@@ -2221,6 +2202,7 @@ const TITLES: Record<StitchScreenId, string> = {
   activity: "LuckyMe | Activity",
   wallet: "LuckyMe | Wallet",
   "how-to-play": "LuckyMe | How to Play",
+  social: "LuckyMe | Social",
   links: "LuckyMe | Links",
   review: "LuckyMe | Review",
   syncing: "LuckyMe | Wallet Request",
@@ -2236,6 +2218,7 @@ const BODIES: Record<StitchScreenId, (options?: StitchRenderOptions) => string> 
   activity: activityBody,
   wallet: walletBody,
   "how-to-play": howToPlayBody,
+  social: socialBody,
   links: linksBody,
   review: reviewBody,
   syncing: syncingBody,
@@ -2249,8 +2232,9 @@ const DEFAULT_TAB: Record<StitchScreenId, StitchScreenId> = {
   home: "home",
   pools: "pools",
   activity: "activity",
-  wallet: "wallet",
+  wallet: "home",
   "how-to-play": "how-to-play",
+  social: "social",
   links: "how-to-play",
   review: "pools",
   syncing: "pools",
@@ -2283,6 +2267,7 @@ export const STITCH_SCREENS: Record<StitchScreenId, string> = {
   activity: renderStitchScreen("activity"),
   wallet: renderStitchScreen("wallet"),
   "how-to-play": renderStitchScreen("how-to-play"),
+  social: renderStitchScreen("social"),
   links: renderStitchScreen("links"),
   review: renderStitchScreen("review"),
   syncing: renderStitchScreen("syncing"),

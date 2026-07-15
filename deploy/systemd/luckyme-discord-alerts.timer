@@ -1,0 +1,12 @@
+[Unit]
+Description=Run LuckyMe Discord alerts every minute
+
+[Timer]
+OnBootSec=45
+OnUnitActiveSec=60
+AccuracySec=10
+Persistent=true
+Unit=luckyme-discord-alerts.service
+
+[Install]
+WantedBy=timers.target

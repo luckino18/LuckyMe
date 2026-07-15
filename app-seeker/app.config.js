@@ -100,14 +100,82 @@ function isPlaceholderUrl(value) {
 
 module.exports = ({ config }) => {
   validateReleaseEnv();
+  const referralTestBuild = process.env.LUCKYME_REFERRAL_TEST_BUILD === "true";
+  const basePlugins = Array.isArray(expo.plugins) ? expo.plugins : [];
+  const referralPlugins = basePlugins.includes("expo-secure-store")
+    ? [...basePlugins]
+    : [...basePlugins, "expo-secure-store"];
+
+  if (referralTestBuild) {
+    referralPlugins.push("./plugins/with-seeker-referral-test-android");
+  }
+
   return {
     ...config,
     ...expo,
+    ...(referralTestBuild
+      ? {
+          name: "LuckyMe Seeker Referral Test",
+          slug: "luckyme-seeker-referral-test",
+          version: "1.1.7-referral-test.5",
+          scheme: "luckyme-seeker-referral-test",
+          plugins: referralPlugins,
+        }
+      : { plugins: referralPlugins }),
     android: {
       ...expo.android,
+      ...(referralTestBuild
+        ? {
+            package: "app.luckyme.seekerreferraltest",
+            versionCode: 5,
+            permissions: ["android.permission.POST_NOTIFICATIONS"],
+            blockedPermissions: [
+              "android.permission.SYSTEM_ALERT_WINDOW",
+              "android.permission.READ_EXTERNAL_STORAGE",
+              "android.permission.WRITE_EXTERNAL_STORAGE",
+            ],
+            intentFilters: [
+              {
+                action: "VIEW",
+                autoVerify: false,
+                category: ["BROWSABLE", "DEFAULT"],
+                data: [
+                  {
+                    scheme: "https",
+                    host: "www.lucky-me.app",
+                    pathPrefix: "/referral-test",
+                  },
+                ],
+              },
+            ],
+          }
+        : {
+            intentFilters: [
+              {
+                action: "VIEW",
+                autoVerify: false,
+                category: ["BROWSABLE", "DEFAULT"],
+                data: [
+                  {
+                    scheme: "https",
+                    host: "www.lucky-me.app",
+                    pathPrefix: "/referral",
+                  },
+                ],
+              },
+            ],
+          }),
       ...(process.env.GOOGLE_SERVICES_JSON
         ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
         : {}),
+    },
+    extra: {
+      ...expo.extra,
+      referralTestBuild,
+      referralTestMode: referralTestBuild && process.env.EXPO_PUBLIC_LUCKYME_REFERRAL_TEST_MODE === "true",
+      referralApiUrl: process.env.EXPO_PUBLIC_LUCKYME_REFERRAL_API_URL ?? "https://api.lucky-me.app",
+      referralWalletChain: process.env.EXPO_PUBLIC_LUCKYME_WALLET_CHAIN ?? "solana:mainnet",
+      referralWalletRpcUrl: process.env.EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL ?? "https://api.mainnet-beta.solana.com",
     },
   };
 };

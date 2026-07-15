@@ -1,28 +1,22 @@
 import { MobileWalletProvider } from "@wallet-ui/react-native-web3js";
+import Constants from "expo-constants";
 import type {
   AppIdentity,
   Chain,
 } from "@solana-mobile/mobile-wallet-adapter-protocol";
 
-import { LuckyMeScreen } from "./src/LuckyMeScreen";
+import { LuckyMeApp } from "./src/LuckyMeReferralTestApp";
+import { secureWalletAuthorizationCache } from "./src/secureWalletCache";
 
-declare const process:
-  | {
-      env?: {
-        EXPO_PUBLIC_LUCKYME_WALLET_CHAIN?: string;
-        EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL?: string;
-      };
-    }
-  | undefined;
-
-const walletChain = (process?.env?.EXPO_PUBLIC_LUCKYME_WALLET_CHAIN ??
-  "solana:mainnet") as Chain;
-const walletEndpoint =
-  process?.env?.EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL ??
-  "https://api.mainnet-beta.solana.com";
+const appExtra = Constants.expoConfig?.extra ?? {};
+const isReferralTestBuild = appExtra.referralTestBuild === true;
+const walletChain = (appExtra.referralWalletChain ?? "solana:mainnet") as Chain;
+const walletEndpoint = String(
+  appExtra.referralWalletRpcUrl ?? "https://api.mainnet-beta.solana.com",
+);
 const identity: AppIdentity = {
-  name: "LuckyMe",
-  uri: "https://lucky-me.app",
+  name: isReferralTestBuild ? "LuckyMe Seeker Referral Test" : "LuckyMe",
+  uri: isReferralTestBuild ? "https://www.lucky-me.app" : "https://lucky-me.app",
 };
 
 export default function App() {
@@ -31,8 +25,9 @@ export default function App() {
       chain={walletChain}
       endpoint={walletEndpoint}
       identity={identity}
+      cache={secureWalletAuthorizationCache}
     >
-      <LuckyMeScreen />
+      <LuckyMeApp disablePayments={isReferralTestBuild} />
     </MobileWalletProvider>
   );
 }

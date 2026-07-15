@@ -48,6 +48,7 @@ type NotificationOptInState =
 
 type StitchMessage =
   | { type: "navigate"; screen: StitchScreenId; pool?: string }
+  | { type: "referral" }
   | { type: "refresh" }
   | { type: "action"; action: "ticket-dec" | "ticket-inc" | "buy-entry"; pool?: string; ticketCount?: number }
   | { type: "link"; link: LegalLinkKey }
@@ -90,15 +91,17 @@ const SCREEN_BY_LABEL: Record<string, StitchScreenId> = {
   links: "links",
   pools: "pools",
   settings: "links",
+  social: "social",
   wallet: "wallet",
 };
 const UNAVAILABLE_ALLOWED_SCREENS = new Set<StitchScreenId>([
   "how-to-play",
   "links",
+  "social",
   "wallet",
   "winner",
 ]);
-const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "wallet", "how-to-play"];
+const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "how-to-play", "social"];
 const NAV_TABS = new Set<StitchScreenId>(NAV_ITEMS);
 
 function isLegalLinkKey(value: unknown): value is LegalLinkKey {
@@ -119,6 +122,10 @@ function parseStitchMessage(data: string): StitchMessage {
 
     if (message?.type === "refresh") {
       return { type: "refresh" };
+    }
+
+    if (message?.type === "referral") {
+      return { type: "referral" };
     }
 
     if (message?.type === "link" && isLegalLinkKey(message.link)) {
@@ -207,6 +214,11 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
           if (url) {
             post({ type: 'external', url: url });
           }
+          return null;
+        }
+
+        if (dataRoute === 'referral') {
+          post({ type: 'referral' });
           return null;
         }
 
@@ -576,6 +588,7 @@ function parseAppRoute(value: string): AppRoute {
       screenName === "activity" ||
       screenName === "wallet" ||
       screenName === "links" ||
+      screenName === "social" ||
       screenName === "settings"
     ) {
       return {
@@ -590,7 +603,13 @@ function parseAppRoute(value: string): AppRoute {
   return undefined;
 }
 
-export function LuckyMeScreen() {
+export function LuckyMeScreen({
+  disablePayments = false,
+  onOpenReferral,
+}: {
+  disablePayments?: boolean;
+  onOpenReferral?: () => void;
+} = {}) {
   const [onchainAvailable, setOnchainAvailable] = useState(false);
   const [screen, setScreen] = useState<StitchScreenId>(UNAVAILABLE_SCREEN);
   const [requestedTab, setRequestedTab] = useState<StitchScreenId>(INITIAL_SCREEN);
@@ -891,6 +910,16 @@ export function LuckyMeScreen() {
   const buyEntry = useCallback(async (pool = selectedPool, requestedCount = ticketCount) => {
     const poolId = pool || selectedPool;
     const count = clampTicketCount(poolId, requestedCount);
+    if (disablePayments) {
+      setSelectedPool(poolId);
+      setTicketCount(count);
+      setTransactionStatus({
+        state: "error",
+        message: "Ticket purchases are disabled in the Seeker Referral Test APK.",
+      });
+      setScreen("review");
+      return;
+    }
     const livePool = livePools.find((candidate) => candidate.id === poolId);
     setSelectedPool(poolId);
     setTicketCount(count);
@@ -1014,7 +1043,7 @@ export function LuckyMeScreen() {
       });
       setScreen("syncing");
     }
-  }, [livePools, refreshLivePools, selectedPool, ticketCount, wallet]);
+  }, [disablePayments, livePools, refreshLivePools, selectedPool, ticketCount, wallet]);
 
   const enableNotifications = useCallback(async () => {
     setNotificationBusy(true);
@@ -1103,10 +1132,16 @@ export function LuckyMeScreen() {
       return;
     }
 
+
+    if (message?.type === "referral") {
+      onOpenReferral?.();
+      return;
+    }
+
     if (message?.type === "navigate") {
       navigateTo(message.screen, message.pool);
     }
-  }, [buyEntry, navigateTo, openLegalLink, refreshFromBackend, selectedPool]);
+  }, [buyEntry, navigateTo, onOpenReferral, openLegalLink, refreshFromBackend, selectedPool]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1135,7 +1170,9 @@ export function LuckyMeScreen() {
         state={notificationOptInState}
         visible={notificationPromptVisible}
       />
-      {screen === "wallet" ? <WalletPreflightPanel wallet={wallet} /> : null}
+      {screen === "wallet" ? (
+        <WalletPreflightPanel onOpenReferral={onOpenReferral} wallet={wallet} />
+      ) : null}
       {screen !== WINNER_SCREEN ? (
         <View style={styles.nativeNavHitbox}>
           {NAV_ITEMS.map((item) => (
@@ -1158,6 +1195,7 @@ export function LuckyMeScreen() {
 }
 
 type WalletPreflightPanelProps = {
+  onOpenReferral?: () => void;
   wallet: ReturnType<typeof useMobileWallet>;
 };
 
@@ -1233,7 +1271,7 @@ function NotificationOptInModal({
   );
 }
 
-function WalletPreflightPanel({ wallet }: WalletPreflightPanelProps) {
+function WalletPreflightPanel({ onOpenReferral, wallet }: WalletPreflightPanelProps) {
   const [pending, setPending] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const address = walletAddressToString(wallet.account?.address);
@@ -1305,6 +1343,29 @@ function WalletPreflightPanel({ wallet }: WalletPreflightPanelProps) {
           {address ? "Disconnect wallet" : "Connect wallet"}
         </Text>
       </Pressable>
+
+      {onOpenReferral ? (
+        <View style={styles.referralEntry}>
+          <View style={styles.referralEntryCopy}>
+            <Text style={styles.referralEntryKicker}>SEEKER EXCLUSIVE</Text>
+            <Text style={styles.referralEntryTitle}>Seeker Referral</Text>
+            <Text style={styles.referralEntryText}>
+              Verify your Genesis Token and invite other verified Seeker owners.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Open Seeker Referral"
+            accessibilityRole="button"
+            onPress={onOpenReferral}
+            style={({ pressed }) => [
+              styles.referralEntryButton,
+              pressed ? styles.walletButtonPressed : null,
+            ]}
+          >
+            <Text style={styles.referralEntryButtonText}>Open</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1568,5 +1629,53 @@ const styles = StyleSheet.create({
   },
   walletButtonTextSecondary: {
     color: "#CBB2FF",
+  },
+  referralEntry: {
+    alignItems: "center",
+    backgroundColor: "rgba(20, 241, 217, 0.065)",
+    borderColor: "rgba(20, 241, 217, 0.24)",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 14,
+    padding: 13,
+  },
+  referralEntryCopy: {
+    flex: 1,
+  },
+  referralEntryKicker: {
+    color: "#14F1D9",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+  },
+  referralEntryTitle: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+  referralEntryText: {
+    color: "rgba(203, 213, 225, 0.74)",
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 3,
+  },
+  referralEntryButton: {
+    alignItems: "center",
+    backgroundColor: "#7857FF",
+    borderColor: "rgba(203, 178, 255, 0.45)",
+    borderRadius: 11,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 46,
+    minWidth: 70,
+    paddingHorizontal: 14,
+  },
+  referralEntryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
   },
 });

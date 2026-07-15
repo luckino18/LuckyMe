@@ -1,0 +1,32 @@
+[Unit]
+Description=LuckyMe Seeker referral test API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luckyme
+Group=luckyme
+WorkingDirectory=/opt/luckyme-seeker-referral-test
+EnvironmentFile=/etc/luckyme/luckyme-api.env
+Environment=NODE_ENV=production
+Environment=REFERRAL_REQUIRE_HTTPS=true
+Environment=REFERRAL_TRUST_PROXY=true
+Environment=REFERRAL_TEST_MODE=true
+Environment=SEEKER_REFERRAL_HOST=127.0.0.1
+Environment=SEEKER_REFERRAL_PORT=8790
+Environment=SEEKER_REFERRAL_DB_PATH=/var/lib/luckyme-seeker-referral-test/referral.sqlite
+ExecStart=/usr/bin/node backend/src/seeker-referral-server.mjs
+Restart=always
+RestartSec=5
+StateDirectory=luckyme-seeker-referral-test
+StateDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/luckyme-seeker-referral-test
+
+[Install]
+WantedBy=multi-user.target

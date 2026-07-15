@@ -11,6 +11,7 @@
         "EXPO_PUBLIC_LUCKYME_RELEASE_MODE": "MAINNET_RELEASE",
         "EXPO_PUBLIC_LUCKYME_STORE_BUILD": "true",
         "EXPO_PUBLIC_LUCKYME_API_URL": "https://api.lucky-me.app",
+        "EXPO_PUBLIC_LUCKYME_REFERRAL_API_URL": "https://api.lucky-me.app",
         "EXPO_PUBLIC_LUCKYME_WALLET_CHAIN": "solana:mainnet",
         "EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL": "https://api.mainnet-beta.solana.com",
         "EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER": "mainnet-beta",
