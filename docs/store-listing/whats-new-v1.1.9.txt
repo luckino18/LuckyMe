@@ -1,0 +1,5 @@
+Added the Seeker-exclusive Referral League with monthly prizes up to 10,000 SKR.
+Added optional referral-code entry and direct sharing to the LuckyMe Solana dApp Store listing.
+Added live progress for completed rounds, play days and active days.
+Added an optional review prompt after repeat participation.
+Improved Home, Social and referral usability.

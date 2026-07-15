@@ -1605,7 +1605,9 @@ function homeBody(options: StitchRenderOptions = {}) {
         <div>
           <span class="label">Seeker exclusive</span>
           <h2 style="margin-top: 3px;">LuckyMe Referral League</h2>
-          <p class="muted" style="margin-top: 4px;">Verify your Seeker ownership, receive your referral code and invite other verified Seeker owners.</p>
+          <p class="muted" style="margin-top: 4px;">Monthly prizes up to 10,000 SKR — exclusive to the LuckyMe app from the Solana dApp Store.</p>
+          <p class="soft" style="margin-top: 7px; font-size: 12.5px;">#1 3,000 · #2 2,000 · #3 1,250 · #4 750 · #5–#10 500 SKR each.</p>
+          <p class="soft" style="margin-top: 7px; font-size: 12.5px;">A referral qualifies after 3 completed rounds with a winner on 3 different days and at least 7 active app days. Refunded rounds never count.</p>
         </div>
       </div>
       <span class="status-pill neutral">SGT verified</span>
@@ -1636,7 +1638,7 @@ function socialBody() {
       <span class="icon-chip chip-purplebox">${ICONS.help}</span>
       <div><span class="label">Discord</span><h3>LuckyMe community</h3></div>
     </div>
-    <button class="secondary-button" style="margin-top: 16px;" data-route="external" data-url="https://discord.com/channels/1526717371249721355/1526717372554018867">Open Discord</button>
+    <button class="secondary-button" style="margin-top: 16px;" data-route="external" data-url="https://discord.gg/rZVjBJtMZ">Join Discord</button>
   </section>
 </main>`;
 }

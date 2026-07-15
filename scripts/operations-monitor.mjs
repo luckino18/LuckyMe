@@ -5,6 +5,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { loadEntryWallets } from "./admin-entry-snapshot.mjs";
 import { calculateTreasuryEstimateLamports } from "./admin-treasury-estimate.mjs";
 import { buildWinnerHistory } from "./admin-winner-history.mjs";
+import { buildReferralAdminSnapshot } from "./admin-referral-snapshot.mjs";
 import { readSettlementArchive } from "./settlement-archive.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -19,6 +20,7 @@ const minimumKeeperBalance = Number(
 const stuckGraceSeconds = Number(process.env.LUCKYME_STUCK_ROUND_GRACE_SECONDS ?? "1800");
 const adminStatusPath = process.env.LUCKYME_ADMIN_STATUS_PATH ?? "";
 const settlementArchivePath = process.env.LUCKYME_SETTLEMENT_ARCHIVE_PATH ?? "";
+const referralDbPath = process.env.SEEKER_REFERRAL_DB_PATH ?? "";
 
 const checks = {};
 const alerts = [];
@@ -60,6 +62,15 @@ try {
 } catch (error) {
   checks.api = { ok: false, error: error.message };
   alert("api_unreachable", "LuckyMe API is unreachable", { error: error.message });
+}
+
+try {
+  checks.referrals = buildReferralAdminSnapshot({
+    dbPath: referralDbPath,
+    settlementArchivePath,
+  });
+} catch (error) {
+  checks.referrals = { ok: false, error: error.message, bindings: [], counts: {} };
 }
 
 try {

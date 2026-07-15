@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +17,7 @@ import {
   isAuthenticSgtMint,
 } from "../backend/src/seeker-referral-service.mjs";
 import { createSeekerReferralHttpServer } from "../backend/src/seeker-referral-server.mjs";
+import { referralQualificationProgress } from "../backend/src/referral-eligibility.mjs";
 import { WalletOutputError, walletResultBytes } from "../app-seeker/src/wallet-result-bytes.ts";
 
 const require = createRequire(import.meta.url);
@@ -48,20 +49,76 @@ test("Seeker wallet output adapter", async (t) => {
   });
 });
 
+test("referral qualification requires three winning rounds on three days and seven active days", () => {
+  const wallet = Keypair.generate().publicKey.toBase58();
+  const entry = { player: wallet, ticketCount: "1" };
+  const settled = (roundId, endTs) => ({
+    pool: "mini",
+    roundId,
+    settled: true,
+    roundOutcome: "settled",
+    refundStatus: "none",
+    endTs,
+    winner: wallet,
+    entries: [entry],
+  });
+  const refunded = {
+    ...settled(4, Date.parse("2026-07-04T12:00:00Z") / 1_000),
+    roundOutcome: "cancelled_below_minimum",
+    refundStatus: "completed",
+    winners: [],
+  };
+  const progress = referralQualificationProgress({
+    wallet,
+    settlementArchive: [
+      settled(1, Date.parse("2026-07-01T12:00:00Z") / 1_000),
+      settled(2, Date.parse("2026-07-02T12:00:00Z") / 1_000),
+      settled(3, Date.parse("2026-07-03T12:00:00Z") / 1_000),
+      refunded,
+    ],
+    activityDates: [1, 2, 3, 4, 5, 6, 7].map((day) => `2026-07-0${day}T09:00:00Z`),
+  });
+  assert.deepEqual(progress, {
+    eligible: true,
+    winningRounds: 3,
+    playDays: 3,
+    activeDays: 7,
+    requirements: { winningRounds: 3, playDays: 3, activeDays: 7 },
+  });
+
+  const sameDay = referralQualificationProgress({
+    wallet,
+    settlementArchive: [
+      settled(1, Date.parse("2026-07-01T10:00:00Z") / 1_000),
+      settled(2, Date.parse("2026-07-01T12:00:00Z") / 1_000),
+      settled(3, Date.parse("2026-07-01T14:00:00Z") / 1_000),
+      refunded,
+    ],
+    activityDates: [1, 2, 3, 4, 5, 6, 7].map((day) => `2026-07-0${day}T09:00:00Z`),
+  });
+  assert.equal(sameDay.eligible, false);
+  assert.equal(sameDay.playDays, 1);
+  assert.equal(sameDay.winningRounds, 3);
+});
+
 function fixture({ testMode = true } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "luckyme-referral-"));
   let currentTime = Date.parse("2026-07-14T12:00:00.000Z");
   const sgtByWallet = new Map();
+  const settlementArchivePath = join(directory, "settlements.jsonl");
+  writeFileSync(settlementArchivePath, "");
   const service = createSeekerReferralService({
     dbPath: join(directory, "referral.sqlite"),
     testMode,
     clock: () => currentTime,
     logger: () => undefined,
     sgtVerifier: async (wallet) => sgtByWallet.get(wallet) ?? null,
+    settlementArchivePath,
   });
   return {
     service,
     sgtByWallet,
+    settlementArchivePath,
     advance(ms) { currentTime += ms; },
     close() {
       service.close();
@@ -350,6 +407,54 @@ test("LuckyMe Seeker referral security and idempotency suite", async (t) => {
     } finally { f.close(); }
   });
 
+  await t.test("17b. production qualification is automatic and archive-backed", async () => {
+    const f = fixture({ testMode: false });
+    try {
+      const referrer = await verifyWallet(f, Keypair.generate());
+      const referredWallet = Keypair.generate();
+      const referred = await verifyWallet(f, referredWallet, { pending: true });
+      f.service.bindReferral(referred.sessionToken, {
+        referralCode: referrer.profile.referralCode,
+        idempotencyKey: "production-binding-0001",
+      });
+      const entries = [{ player: referredWallet.publicKey.toBase58(), ticketCount: "1" }];
+      writeFileSync(f.settlementArchivePath, [1, 2, 3].map((roundId) => JSON.stringify({
+        genesisHash: "mainnet",
+        programId: Keypair.generate().publicKey.toBase58(),
+        poolAddress: Keypair.generate().publicKey.toBase58(),
+        address: Keypair.generate().publicKey.toBase58(),
+        pool: "mini",
+        roundId,
+        settled: true,
+        roundOutcome: "settled",
+        refundStatus: "none",
+        endTs: Date.parse(`2026-07-0${roundId}T12:00:00Z`) / 1_000,
+        winner: Keypair.generate().publicKey.toBase58(),
+        entries,
+      })).join("\n") + "\n");
+      const referredSgt = f.service.db.prepare(`
+        SELECT sgt_mint FROM referral_profiles WHERE referral_code = ?
+      `).get(referred.profile.referralCode).sgt_mint;
+      const insertActivity = f.service.db.prepare(`
+        INSERT INTO referral_activity_days (sgt_mint, activity_date, recorded_at)
+        VALUES (?, ?, ?)
+      `);
+      for (let day = 1; day <= 7; day += 1) {
+        const date = `2026-07-0${day}`;
+        insertActivity.run(referredSgt, date, `${date}T09:00:00.000Z`);
+      }
+      assert.deepEqual(f.service.refreshReferralQualifications(), { qualified: 1 });
+      assert.deepEqual(f.service.refreshReferralQualifications(), { qualified: 0 });
+      const binding = f.service.db.prepare("SELECT status FROM referral_bindings").get();
+      assert.equal(binding.status, "qualified");
+      const board = f.service.leaderboard(referrer.sessionToken);
+      const entry = board.entries.find((item) => item.referralCode === referrer.profile.referralCode);
+      assert.equal(entry.qualifiedReferrals, 1);
+      assert.equal(entry.totalPoints, 1);
+      assert.equal(board.season.testOnly, false);
+    } finally { f.close(); }
+  });
+
   await t.test("18. logout revokes the session", async () => {
     const f = fixture();
     try {
@@ -408,7 +513,7 @@ test("LuckyMe Seeker referral security and idempotency suite", async (t) => {
 
       const referralHealth = await fetch(`${base}/api/referral/health`);
       assert.equal(referralHealth.status, 200);
-      assert.equal((await referralHealth.json()).service, "luckyme-seeker-referral-test");
+      assert.equal((await referralHealth.json()).service, "luckyme-seeker-referral");
 
       const wrongType = await fetch(`${base}/api/seeker/nonce`, { method: "POST", body: "{}" });
       assert.equal(wrongType.status, 415);
@@ -425,6 +530,17 @@ test("LuckyMe Seeker referral security and idempotency suite", async (t) => {
       const missingAuth = await fetch(`${base}/api/seeker/profile`);
       assert.equal(missingAuth.status, 401);
       assert.equal((await missingAuth.json()).error, "invalid_session");
+
+      const activity = await fetch(`${base}/api/referrals/activity`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${user.sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+      });
+      assert.equal(activity.status, 200);
+      assert.equal((await activity.json()).qualification.activeDays, 1);
 
       const hiddenSimulation = await fetch(`${base}/api/test/referrals/simulate-qualification`, {
         method: "POST",
@@ -485,11 +601,21 @@ test("LuckyMe Seeker referral security and idempotency suite", async (t) => {
       assert.match(luckyMeSource, /SEEKER EXCLUSIVE/);
       assert.match(luckyMeSource, /Seeker Referral/);
       assert.match(luckyMeSource, /onOpenReferral/);
+      assert.match(luckyMeSource, /solanadappstore:\/\/details\?id=com\.luckyme\.seeker/);
+      assert.match(luckyMeSource, /history\.rounds\.length >= 2/);
+      assert.match(luckyMeSource, /Review LuckyMe/);
       assert.match(referralSource, /error\.status === 404.*BACKEND_UNAVAILABLE/);
       assert.match(referralSource, /walletResultBytes/);
       assert.match(referralSource, /WALLET CHECKED ON MAINNET/);
       assert.match(referralSource, /Clear and choose another wallet/);
       assert.match(referralSource, /PRIMARY Seed Vault wallet/);
+      assert.match(referralSource, /Up to 10,000 SKR/);
+      assert.match(referralSource, /Refunded or cancelled rounds never count/);
+      assert.match(referralSource, /INVITATION CODE · OPTIONAL/);
+      assert.match(referralSource, /No invitation code is required to use LuckyMe/);
+      assert.match(referralSource, /solanadappstore:\/\/details\?id=com\.luckyme\.seeker/);
+      assert.match(referralSource, /Download LuckyMe from the Solana dApp Store/);
+      assert.doesNotMatch(referralSource, /Join the LuckyMe Seeker Referral League: https:\/\/www\.lucky-me\.app\/referral/);
       assert.match(buildSource, /reactNativeArchitectures=arm64-v8a/);
     } finally {
       for (const name of names) {

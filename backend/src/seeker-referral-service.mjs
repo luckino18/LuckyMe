@@ -12,6 +12,8 @@ import {
   parseSignInMessage,
   verifySignIn,
 } from "@solana/wallet-standard-util";
+import { readSettlementArchive } from "../../scripts/settlement-archive.mjs";
+import { referralQualificationProgress } from "./referral-eligibility.mjs";
 
 export const SGT_MINT_AUTHORITY = "GT2zuHVaZQYZSyQMgJPLzvkmyztfyXg2NJunqFp4p3A4";
 export const SGT_METADATA_ADDRESS = "GT22s89nU4iWFkNXj1Bw6uYhJJWDRPpShHt4Bk8f99Te";
@@ -19,6 +21,7 @@ export const SGT_GROUP_ADDRESS = "GT22s89nU4iWFkNXj1Bw6uYhJJWDRPpShHt4Bk8f99Te";
 export const REFERRAL_SEASON_ID = "seeker-referral-test-2026";
 export const REFERRAL_SEASON_NAME = "Seeker Referral League — Test Season";
 export const REFERRAL_SEASON_CLOSES_AT = "2026-09-30T23:59:59.000Z";
+export const MONTHLY_REFERRAL_PRIZE_SKr = 10_000;
 
 const DEFAULT_DOMAIN = "www.lucky-me.app";
 const DEFAULT_URI = "https://www.lucky-me.app";
@@ -50,6 +53,24 @@ function sha256(value) {
 
 function nowIso(clock) {
   return new Date(clock()).toISOString();
+}
+
+function productionSeason(clock) {
+  const now = new Date(clock());
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const monthNumber = String(month + 1).padStart(2, "0");
+  const label = new Intl.DateTimeFormat("en", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(now);
+  return {
+    id: `seeker-referral-${year}-${monthNumber}`,
+    name: `Seeker Referral League — ${label}`,
+    closesAt: new Date(Date.UTC(year, month + 1, 1)).toISOString(),
+    testOnly: false,
+  };
 }
 
 function mask(value, left = 4, right = 4) {
@@ -116,6 +137,41 @@ function inTransaction(db, action) {
 
 function sqliteConflict(error) {
   return error?.code === "ERR_SQLITE_ERROR" && /UNIQUE constraint failed/i.test(error.message);
+}
+
+function migrateReferralBindingStatuses(db) {
+  const table = db.prepare(`
+    SELECT sql FROM sqlite_master
+    WHERE type = 'table' AND name = 'referral_bindings'
+  `).get();
+  if (!table?.sql || /['"]qualified['"]/.test(table.sql)) return;
+
+  inTransaction(db, () => {
+    db.exec(`
+      ALTER TABLE referral_bindings RENAME TO referral_bindings_legacy;
+      CREATE TABLE referral_bindings (
+        id INTEGER PRIMARY KEY,
+        referrer_sgt_mint TEXT NOT NULL REFERENCES seeker_identities(sgt_mint),
+        referred_sgt_mint TEXT NOT NULL UNIQUE REFERENCES seeker_identities(sgt_mint),
+        referral_code TEXT NOT NULL REFERENCES referral_profiles(referral_code),
+        status TEXT NOT NULL CHECK (status IN ('pending', 'qualified', 'qualified_test', 'invalidated')),
+        bound_at TEXT NOT NULL,
+        qualified_at TEXT,
+        invalidated_at TEXT,
+        invalidation_reason TEXT,
+        CHECK (referrer_sgt_mint <> referred_sgt_mint)
+      );
+      INSERT INTO referral_bindings
+        (id, referrer_sgt_mint, referred_sgt_mint, referral_code, status,
+         bound_at, qualified_at, invalidated_at, invalidation_reason)
+      SELECT id, referrer_sgt_mint, referred_sgt_mint, referral_code, status,
+             bound_at, qualified_at, invalidated_at, invalidation_reason
+      FROM referral_bindings_legacy;
+      DROP TABLE referral_bindings_legacy;
+      CREATE INDEX referral_bindings_referrer_idx
+        ON referral_bindings(referrer_sgt_mint, status);
+    `);
+  });
 }
 
 function randomReferralCode() {
@@ -273,6 +329,7 @@ export function createSeekerReferralService({
   logger = defaultLogger,
   sessionTtlMs = SESSION_TTL_MS,
   nonceTtlMs = NONCE_TTL_MS,
+  settlementArchivePath = process.env.LUCKYME_SETTLEMENT_ARCHIVE_PATH,
 } = {}) {
   if (domain !== DEFAULT_DOMAIN || uri !== DEFAULT_URI) {
     if (process.env.NODE_ENV === "production") {
@@ -281,15 +338,99 @@ export function createSeekerReferralService({
   }
   const db = new DatabaseSync(dbPath);
   db.exec(readFileSync(new URL("../migrations/001_seeker_referral.sql", import.meta.url), "utf8"));
+  migrateReferralBindingStatuses(db);
   const createdAt = nowIso(clock);
+  const season = testMode
+    ? {
+        id: REFERRAL_SEASON_ID,
+        name: REFERRAL_SEASON_NAME,
+        closesAt: REFERRAL_SEASON_CLOSES_AT,
+        testOnly: true,
+      }
+    : productionSeason(clock);
   db.prepare(`
     INSERT INTO referral_seasons (id, name, closes_at, test_only, created_at)
-    VALUES (?, ?, ?, 1, ?)
-    ON CONFLICT(id) DO UPDATE SET name = excluded.name, closes_at = excluded.closes_at
-  `).run(REFERRAL_SEASON_ID, REFERRAL_SEASON_NAME, REFERRAL_SEASON_CLOSES_AT, createdAt);
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      closes_at = excluded.closes_at,
+      test_only = excluded.test_only
+  `).run(season.id, season.name, season.closesAt, season.testOnly ? 1 : 0, createdAt);
 
   const verifySgt = sgtVerifier ?? createMainnetSgtVerifier({});
   const rateBuckets = new Map();
+
+  function qualificationFor(row) {
+    const activityDates = db.prepare(`
+      SELECT activity_date FROM referral_activity_days
+      WHERE sgt_mint = ? ORDER BY activity_date ASC
+    `).all(row.sgt_mint).map((item) => item.activity_date);
+    let settlementArchive = [];
+    try {
+      settlementArchive = readSettlementArchive(settlementArchivePath);
+    } catch {
+      settlementArchive = [];
+    }
+    const wallets = db.prepare(`
+      SELECT wallet FROM seeker_identity_wallets
+      WHERE sgt_mint = ? ORDER BY first_verified_at ASC
+    `).all(row.sgt_mint).map((item) => item.wallet);
+    return referralQualificationProgress({
+      wallet: row.current_wallet,
+      wallets,
+      settlementArchive,
+      activityDates,
+    });
+  }
+
+  function refreshReferralQualifications() {
+    if (testMode) return { qualified: 0 };
+    const pending = db.prepare(`
+      SELECT b.id, b.referrer_sgt_mint, b.referred_sgt_mint,
+             i.current_wallet, i.sgt_mint
+      FROM referral_bindings b
+      JOIN seeker_identities i ON i.sgt_mint = b.referred_sgt_mint
+      WHERE b.status = 'pending' AND i.status = 'verified'
+      ORDER BY b.bound_at ASC
+    `).all();
+    let qualified = 0;
+    for (const binding of pending) {
+      const progress = qualificationFor(binding);
+      if (!progress.eligible) continue;
+      const timestamp = nowIso(clock);
+      inTransaction(db, () => {
+        const update = db.prepare(`
+          UPDATE referral_bindings SET status = 'qualified', qualified_at = ?
+          WHERE id = ? AND status = 'pending'
+        `).run(timestamp, binding.id);
+        if (update.changes !== 1) return;
+        db.prepare(`
+          UPDATE referral_profiles SET points = points + 1, updated_at = ?
+          WHERE sgt_mint = ?
+        `).run(timestamp, binding.referrer_sgt_mint);
+        db.prepare(`
+          INSERT OR IGNORE INTO referral_events
+            (idempotency_key, event_type, referrer_sgt_mint, referred_sgt_mint, season_id, metadata, created_at)
+          VALUES (?, 'qualified_referral', ?, ?, ?, ?, ?)
+        `).run(
+          `qualified:${binding.id}`,
+          binding.referrer_sgt_mint,
+          binding.referred_sgt_mint,
+          season.id,
+          JSON.stringify({ progress }),
+          timestamp,
+        );
+        db.prepare(`
+          INSERT INTO referral_audit_log
+            (actor, action, target, new_value, reason, created_at)
+          VALUES ('qualification-engine', 'qualified_referral', ?, ?,
+                  'three settled rounds on three days and seven active days', ?)
+        `).run(mask(binding.referred_sgt_mint), JSON.stringify({ progress }), timestamp);
+        qualified += 1;
+      });
+    }
+    return { qualified };
+  }
 
   function rateLimit(scope, key, max, windowMs) {
     const cleanKey = `${scope}:${sha256(String(key)).slice(0, 24)}`;
@@ -411,6 +552,7 @@ export function createSeekerReferralService({
   }
 
   function profileForSgt(sgtMint) {
+    refreshReferralQualifications();
     const row = db.prepare(`
       SELECT i.sgt_mint, i.current_wallet, i.skr_domain, i.verified_at, i.last_verified_at,
              i.status, p.referral_code, p.points, p.status AS profile_status,
@@ -422,11 +564,12 @@ export function createSeekerReferralService({
     if (!row) fail(404, "profile_not_found", "Referral profile was not found");
     const counts = db.prepare(`
       SELECT
-        SUM(CASE WHEN status = 'qualified_test' THEN 1 ELSE 0 END) AS qualified,
+        SUM(CASE WHEN status IN ('qualified_test', 'qualified') THEN 1 ELSE 0 END) AS qualified,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
         SUM(CASE WHEN status = 'invalidated' THEN 1 ELSE 0 END) AS invalidated
       FROM referral_bindings WHERE referrer_sgt_mint = ?
     `).get(sgtMint);
+    const qualification = qualificationFor(row);
     return {
       state: "VERIFIED",
       walletMasked: mask(row.current_wallet),
@@ -436,10 +579,10 @@ export function createSeekerReferralService({
       referralCode: row.referral_code,
       profileStatus: row.profile_status,
       season: {
-        id: REFERRAL_SEASON_ID,
-        name: REFERRAL_SEASON_NAME,
-        closesAt: REFERRAL_SEASON_CLOSES_AT,
-        testOnly: true,
+        id: season.id,
+        name: season.name,
+        closesAt: season.closesAt,
+        testOnly: season.testOnly,
       },
       stats: {
         qualifiedReferrals: Number(counts.qualified ?? 0),
@@ -447,8 +590,11 @@ export function createSeekerReferralService({
         invalidatedReferrals: Number(counts.invalidated ?? 0),
         totalPoints: Number(row.points),
       },
-      prizePreview: "Fictitious test preview only",
-      disclaimer: "TEST DATA — NO SKR WILL BE DISTRIBUTED",
+      qualification,
+      prizePreview: testMode ? "Fictitious test preview only" : "Up to 10,000 SKR distributed monthly",
+      disclaimer: testMode
+        ? "TEST DATA — NO SKR WILL BE DISTRIBUTED"
+        : "Only verified SGT-to-SGT referrals that complete every published requirement are ranked.",
     };
   }
 
@@ -531,6 +677,14 @@ export function createSeekerReferralService({
         `).run(sgtMint, wallet.toBase58(), verifiedAt, verifiedAt, verifiedAt, verifiedAt);
       }
 
+      db.prepare(`
+        INSERT INTO seeker_identity_wallets
+          (sgt_mint, wallet, first_verified_at, last_verified_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(sgt_mint, wallet) DO UPDATE SET
+          last_verified_at = excluded.last_verified_at
+      `).run(sgtMint, wallet.toBase58(), verifiedAt, verifiedAt);
+
       let profile = db.prepare("SELECT * FROM referral_profiles WHERE sgt_mint = ?").get(sgtMint);
       if (!profile) {
         const code = makeReferralCode(db);
@@ -538,7 +692,7 @@ export function createSeekerReferralService({
           INSERT INTO referral_profiles
             (sgt_mint, referral_code, season_id, points, status, created_at, updated_at)
           VALUES (?, ?, ?, 0, ?, ?, ?)
-        `).run(sgtMint, code, REFERRAL_SEASON_ID, pending ? "pending_activation" : "active", verifiedAt, verifiedAt);
+        `).run(sgtMint, code, season.id, pending ? "pending_activation" : "active", verifiedAt, verifiedAt);
         profile = db.prepare("SELECT * FROM referral_profiles WHERE sgt_mint = ?").get(sgtMint);
       } else if (profile.status === "pending_activation" && !pending) {
         const binding = db.prepare("SELECT 1 FROM referral_bindings WHERE referred_sgt_mint = ?").get(sgtMint);
@@ -565,6 +719,17 @@ export function createSeekerReferralService({
 
   function getProfile(token) {
     const auth = session(token);
+    return profileForSgt(auth.sgt_mint);
+  }
+
+  function recordActivity(token) {
+    const auth = session(token);
+    const timestamp = nowIso(clock);
+    const activityDate = timestamp.slice(0, 10);
+    db.prepare(`
+      INSERT OR IGNORE INTO referral_activity_days (sgt_mint, activity_date, recorded_at)
+      VALUES (?, ?, ?)
+    `).run(auth.sgt_mint, activityDate, timestamp);
     return profileForSgt(auth.sgt_mint);
   }
 
@@ -643,7 +808,7 @@ export function createSeekerReferralService({
           INSERT INTO referral_events
             (idempotency_key, event_type, referrer_sgt_mint, referred_sgt_mint, season_id, metadata, created_at)
           VALUES (?, 'referral_bound', ?, ?, ?, '{}', ?)
-        `).run(key, referrer.sgt_mint, auth.sgt_mint, REFERRAL_SEASON_ID, timestamp);
+        `).run(key, referrer.sgt_mint, auth.sgt_mint, season.id, timestamp);
         db.prepare("UPDATE referral_profiles SET status = 'active', updated_at = ? WHERE sgt_mint = ?")
           .run(timestamp, auth.sgt_mint);
         db.prepare(`
@@ -694,29 +859,38 @@ export function createSeekerReferralService({
 
   function leaderboard(token) {
     session(token);
+    refreshReferralQualifications();
     return {
-      season: { id: REFERRAL_SEASON_ID, name: REFERRAL_SEASON_NAME, closesAt: REFERRAL_SEASON_CLOSES_AT },
-      disclaimer: "TEST DATA — NO SKR WILL BE DISTRIBUTED",
+      season: { id: season.id, name: season.name, closesAt: season.closesAt, testOnly: season.testOnly },
+      disclaimer: testMode
+        ? "TEST DATA — NO SKR WILL BE DISTRIBUTED"
+        : "Only qualified referrals are included in the monthly ranking.",
       entries: db.prepare(`
         SELECT p.referral_code,
-               p.points AS total_points,
-               SUM(CASE WHEN b.status = 'qualified_test' THEN 1 ELSE 0 END) AS qualified_referrals,
-               SUM(CASE WHEN b.status = 'pending' THEN 1 ELSE 0 END) AS pending_referrals,
-               SUM(CASE WHEN b.status = 'invalidated' THEN 1 ELSE 0 END) AS invalidated_referrals
+               (SELECT COUNT(*) FROM referral_events e
+                WHERE e.referrer_sgt_mint = p.sgt_mint
+                  AND e.season_id = ?
+                  AND e.event_type IN ('qualified_test_referral', 'qualified_referral')) AS total_points,
+               (SELECT COUNT(*) FROM referral_events e
+                WHERE e.referrer_sgt_mint = p.sgt_mint
+                  AND e.season_id = ?
+                  AND e.event_type IN ('qualified_test_referral', 'qualified_referral')) AS qualified_referrals,
+               (SELECT COUNT(*) FROM referral_bindings b
+                WHERE b.referrer_sgt_mint = p.sgt_mint AND b.status = 'pending') AS pending_referrals,
+               (SELECT COUNT(*) FROM referral_bindings b
+                WHERE b.referrer_sgt_mint = p.sgt_mint AND b.status = 'invalidated') AS invalidated_referrals
         FROM referral_profiles p
-        LEFT JOIN referral_bindings b ON b.referrer_sgt_mint = p.sgt_mint
-        WHERE p.season_id = ? AND p.status = 'active'
-        GROUP BY p.sgt_mint
-        ORDER BY p.points DESC, qualified_referrals DESC, p.created_at ASC
+        WHERE p.status = 'active'
+        ORDER BY total_points DESC, p.created_at ASC
         LIMIT 100
-      `).all(REFERRAL_SEASON_ID).map((row, index) => ({
+      `).all(season.id, season.id).map((row, index) => ({
         rank: index + 1,
         referralCode: row.referral_code,
         qualifiedReferrals: Number(row.qualified_referrals ?? 0),
         pendingReferrals: Number(row.pending_referrals ?? 0),
         invalidatedReferrals: Number(row.invalidated_referrals ?? 0),
         totalPoints: Number(row.total_points),
-        prizePreview: "Fictitious test preview only",
+        prizePreview: testMode ? "Fictitious test preview only" : "Monthly SKR ranking",
       })),
     };
   }
@@ -748,7 +922,7 @@ export function createSeekerReferralService({
         INSERT INTO referral_events
           (idempotency_key, event_type, referrer_sgt_mint, referred_sgt_mint, season_id, metadata, created_at)
         VALUES (?, 'qualified_test_referral', ?, ?, ?, '{"testOnly":true}', ?)
-      `).run(key, binding.referrer_sgt_mint, binding.referred_sgt_mint, REFERRAL_SEASON_ID, timestamp);
+      `).run(key, binding.referrer_sgt_mint, binding.referred_sgt_mint, season.id, timestamp);
       db.prepare(`
         INSERT INTO referral_audit_log
           (actor, action, target, new_value, reason, created_at)
@@ -779,6 +953,8 @@ export function createSeekerReferralService({
     leaderboard,
     logout,
     previewReferral,
+    recordActivity,
+    refreshReferralQualifications,
     referralMe,
     simulateQualification,
     testMode,

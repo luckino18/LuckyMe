@@ -11,6 +11,8 @@ const preview = readFileSync(
 );
 const monitor = readFileSync("scripts/operations-monitor.mjs", "utf8");
 const adminHtml = readFileSync("site/lucky-me.app/admin/index.html", "utf8");
+const adminJs = readFileSync("site/lucky-me.app/admin/admin.js", "utf8");
+const referralSnapshot = readFileSync("scripts/admin-referral-snapshot.mjs", "utf8");
 
 test("admin control API trusts only the protected local Nginx proxy", () => {
   assert.match(server, /x-luckyme-admin-proxy/);
@@ -97,4 +99,19 @@ test("protected Admin exposes read-only pool and round winner filters", () => {
   assert.match(adminHtml, /id="history-pool"/);
   assert.match(adminHtml, /id="history-round"/);
   assert.match(adminHtml, /Winner archive/);
+});
+
+test("protected Admin separates status, treasury, winners, and referral navigation", () => {
+  for (const tab of ["status", "treasury", "winners", "referrals"]) {
+    assert.match(adminHtml, new RegExp(`data-admin-tab="${tab}"`));
+    assert.match(adminHtml, new RegExp(`data-admin-panel="${tab}"`));
+  }
+  assert.match(adminHtml, /id="referral-status"/);
+  assert.match(adminHtml, /id="referral-search"/);
+  assert.match(adminJs, /renderReferrals/);
+  assert.match(adminJs, /Completed rounds/);
+  assert.match(referralSnapshot, /referrer_wallet/);
+  assert.match(referralSnapshot, /referred_wallet/);
+  assert.match(referralSnapshot, /referralQualificationProgress/);
+  assert.doesNotMatch(referralSnapshot, /sendTransaction|signTransaction/);
 });

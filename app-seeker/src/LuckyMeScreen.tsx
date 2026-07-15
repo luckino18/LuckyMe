@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   Linking,
   Modal,
@@ -16,6 +17,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
+import * as SecureStore from "expo-secure-store";
 import { WebView } from "react-native-webview";
 import type { WebViewMessageEvent } from "react-native-webview";
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
@@ -65,6 +67,63 @@ const LIVE_POOL_REFRESH_INTERVAL_MS = 15_000;
 const NOTIFICATION_PROMPT_KEY = "luckyme.notifications.prompt.v4";
 const PUSH_TOKEN_KEY = "luckyme.notifications.expoPushToken.v1";
 const ROUND_ALERTS_CHANNEL_ID = "luckyme-round-alerts";
+const REVIEW_HISTORY_KEY = "luckyme.review.roundHistory.v1";
+const DAPP_STORE_LISTING_URL = "solanadappstore://details?id=com.luckyme.seeker";
+const REFERRAL_SESSION_KEY = "luckyme.seekerReferral.session";
+const REFERRAL_API_URL = String(
+  Constants.expoConfig?.extra?.referralApiUrl ?? API_URL,
+).replace(/\/$/, "");
+
+async function recordVerifiedReferralActivity() {
+  const token = await SecureStore.getItemAsync(REFERRAL_SESSION_KEY).catch(() => null);
+  if (!token) return;
+  const response = await fetch(`${REFERRAL_API_URL}/api/referrals/activity`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  }).catch(() => null);
+  if (response?.status === 401) {
+    await SecureStore.deleteItemAsync(REFERRAL_SESSION_KEY).catch(() => undefined);
+  }
+}
+
+type ReviewHistory = {
+  prompted: boolean;
+  rounds: string[];
+};
+
+async function recordConfirmedRoundForReview(player: string, pool: string, roundId: number) {
+  const storageKey = `${REVIEW_HISTORY_KEY}:${player}`;
+  let history: ReviewHistory = { prompted: false, rounds: [] };
+  try {
+    const stored = await AsyncStorage.getItem(storageKey);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<ReviewHistory>;
+      history = {
+        prompted: parsed.prompted === true,
+        rounds: Array.isArray(parsed.rounds)
+          ? parsed.rounds.filter((value): value is string => typeof value === "string").slice(-20)
+          : [],
+      };
+    }
+  } catch {
+    // A damaged local preference must never interfere with a confirmed purchase.
+  }
+
+  const roundKey = `${pool}:${roundId}`;
+  if (!history.rounds.includes(roundKey)) history.rounds.push(roundKey);
+  const shouldPrompt = !history.prompted && history.rounds.length >= 2;
+  if (shouldPrompt) history.prompted = true;
+  await AsyncStorage.setItem(storageKey, JSON.stringify({
+    prompted: history.prompted,
+    rounds: history.rounds.slice(-20),
+  })).catch(() => undefined);
+  return shouldPrompt;
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -619,6 +678,7 @@ export function LuckyMeScreen({
   const [notificationPromptVisible, setNotificationPromptVisible] = useState(false);
   const [notificationBusy, setNotificationBusy] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
   const [livePools, setLivePools] = useState<LivePool[]>([]);
   const [selectedPool, setSelectedPool] = useState("mini");
   const [ticketCount, setTicketCount] = useState(1);
@@ -745,9 +805,11 @@ export function LuckyMeScreen({
   }, [refreshFromBackend]);
 
   useEffect(() => {
+    void recordVerifiedReferralActivity();
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         void refreshFromBackend({ allowScreenChange: false });
+        void recordVerifiedReferralActivity();
       }
     });
 
@@ -1034,6 +1096,9 @@ export function LuckyMeScreen({
           : "Transaction confirmed. Pool state is still catching up.",
         signature,
       });
+      if (await recordConfirmedRoundForReview(player, poolId, expectedRoundId)) {
+        setReviewPromptVisible(true);
+      }
       setRequestedTab("activity");
       setScreen("success");
     } catch (error) {
@@ -1170,6 +1235,18 @@ export function LuckyMeScreen({
         state={notificationOptInState}
         visible={notificationPromptVisible}
       />
+      <ReviewPromptModal
+        onClose={() => setReviewPromptVisible(false)}
+        onReview={async () => {
+          setReviewPromptVisible(false);
+          try {
+            await Linking.openURL(DAPP_STORE_LISTING_URL);
+          } catch {
+            Alert.alert("dApp Store unavailable", "Open the Solana dApp Store and search for LuckyMe to leave your review.");
+          }
+        }}
+        visible={reviewPromptVisible}
+      />
       {screen === "wallet" ? (
         <WalletPreflightPanel onOpenReferral={onOpenReferral} wallet={wallet} />
       ) : null}
@@ -1207,6 +1284,52 @@ type NotificationOptInModalProps = {
   state: NotificationOptInState;
   visible: boolean;
 };
+
+function ReviewPromptModal({
+  onClose,
+  onReview,
+  visible,
+}: {
+  onClose: () => void;
+  onReview: () => void;
+  visible: boolean;
+}) {
+  return (
+    <Modal animationType="fade" transparent visible={visible}>
+      <View style={styles.notificationBackdrop}>
+        <View style={styles.notificationPanel}>
+          <Text style={styles.notificationKicker}>ENJOYING LUCKYME?</Text>
+          <Text style={styles.notificationTitle}>Share your experience</Text>
+          <Text style={styles.notificationBody}>
+            You have joined more than one LuckyMe round. A quick review in the Solana dApp Store helps other Seeker owners discover the game.
+          </Text>
+          <View style={styles.notificationActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onReview}
+              style={({ pressed }) => [
+                styles.notificationPrimaryButton,
+                pressed ? styles.walletButtonPressed : null,
+              ]}
+            >
+              <Text style={styles.notificationPrimaryText}>Review LuckyMe</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onClose}
+              style={({ pressed }) => [
+                styles.notificationSecondaryButton,
+                pressed ? styles.walletButtonPressed : null,
+              ]}
+            >
+              <Text style={styles.notificationSecondaryText}>Not now</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 function NotificationOptInModal({
   busy,

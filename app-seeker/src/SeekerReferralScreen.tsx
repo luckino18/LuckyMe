@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
@@ -31,6 +32,7 @@ const PENDING_CODE_KEY = TEST_MODE_UI
   ? "luckyme.seekerReferralTest.pendingReferralCode"
   : "luckyme.seekerReferral.pendingReferralCode";
 const CODE_RE = /^LM-[A-HJ-NP-Z2-9]{6}$/;
+const DAPP_STORE_LISTING_URL = "solanadappstore://details?id=com.luckyme.seeker";
 
 type VerificationState =
   | "IDLE"
@@ -57,6 +59,12 @@ type ReferralProfile = {
     invalidatedReferrals: number;
     totalPoints: number;
   };
+  qualification?: {
+    eligible: boolean;
+    winningRounds: number;
+    playDays: number;
+    activeDays: number;
+  };
   prizePreview: string;
   disclaimer: string;
 };
@@ -69,6 +77,14 @@ type LeaderboardEntry = {
   invalidatedReferrals: number;
   totalPoints: number;
 };
+
+const MONTHLY_PRIZES = [
+  ["#1", "3,000 SKR"],
+  ["#2", "2,000 SKR"],
+  ["#3", "1,250 SKR"],
+  ["#4", "750 SKR"],
+  ["#5–#10", "500 SKR each"],
+] as const;
 
 class ApiError extends Error {
   status: number;
@@ -102,10 +118,6 @@ function parseReferralCode(value: string | null) {
     return null;
   }
   return null;
-}
-
-function referralUrl(code: string) {
-  return `https://www.lucky-me.app/${TEST_MODE_UI ? "referral-test" : "referral"}/${code}`;
 }
 
 async function request(path: string, options: RequestInit = {}, token?: string) {
@@ -223,6 +235,7 @@ export function SeekerReferralScreen({
   const [profile, setProfile] = useState<ReferralProfile | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState("");
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [howVisible, setHowVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
@@ -243,6 +256,20 @@ export function SeekerReferralScreen({
     });
     setLastMessage(`Referral ${code} is waiting for verification and confirmation.`);
   }, []);
+
+  const stageManualCode = useCallback(async () => {
+    const code = manualCode.trim().toUpperCase();
+    if (!CODE_RE.test(code)) {
+      Alert.alert("Invalid referral code", "Enter a code in the format LM-XXXXXX.");
+      return;
+    }
+    setPendingCode(code);
+    setManualCode("");
+    await SecureStore.setItemAsync(PENDING_CODE_KEY, code, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+    setLastMessage(`Referral ${code} is ready for verification and confirmation.`);
+  }, [manualCode]);
 
   useEffect(() => {
     let active = true;
@@ -290,7 +317,13 @@ export function SeekerReferralScreen({
   }, []);
 
   useEffect(() => {
-    if (sessionToken && verified) loadLeaderboard(sessionToken).catch(() => undefined);
+    if (sessionToken && verified) {
+      loadLeaderboard(sessionToken).catch(() => undefined);
+      request("/api/referrals/activity", {
+        method: "POST",
+        body: "{}",
+      }, sessionToken).then(setProfile).catch(() => undefined);
+    }
   }, [loadLeaderboard, sessionToken, verified]);
 
   const bindPendingCode = useCallback(async (token: string, code: string) => {
@@ -472,7 +505,18 @@ export function SeekerReferralScreen({
     }
   }, [loadLeaderboard, sessionToken]);
 
-  const shareLink = useMemo(() => profile ? referralUrl(profile.referralCode) : "", [profile]);
+  const shareLink = profile ? DAPP_STORE_LISTING_URL : "";
+  const shareReferral = useCallback(async () => {
+    if (!profile) return;
+    await Share.share({
+      message: [
+        "Join the LuckyMe Seeker Referral League.",
+        `Invite code: ${profile.referralCode}`,
+        `Download LuckyMe from the Solana dApp Store: ${DAPP_STORE_LISTING_URL}`,
+        "After installation, open Referral and enter the invite code before verifying your Seeker.",
+      ].join("\n"),
+    });
+  }, [profile]);
 
   const renderStateMessage = () => {
     const messages: Partial<Record<VerificationState, string>> = {
@@ -531,10 +575,56 @@ export function SeekerReferralScreen({
           )}
           <Text style={styles.eyebrow}>LUCKYME · SEEKER EXCLUSIVE</Text>
           <Text style={styles.title}>Seeker Referral League</Text>
-          <Text style={styles.subtitle}>Verify your Seeker ownership and invite other verified Seeker owners.</Text>
+          <Text style={styles.subtitle}>Invite verified Seeker owners and compete for monthly SKR rewards.</Text>
+        </View>
+
+        <View style={styles.rewardCard}>
+          <Text style={styles.rewardKicker}>MONTHLY PRIZE POOL</Text>
+          <Text style={styles.rewardAmount}>Up to 10,000 SKR</Text>
+          <Text style={styles.rewardIntro}>A referral becomes qualified only after the invited Seeker owner completes every requirement:</Text>
+          <Text style={styles.rewardRule}>• Plays 3 completed rounds that produced a winner</Text>
+          <Text style={styles.rewardRule}>• Plays those rounds on 3 different calendar days</Text>
+          <Text style={styles.rewardRule}>• Is active in LuckyMe on at least 7 different days</Text>
+          <Text style={styles.rewardRule}>• Keeps a verified SGT referral identity</Text>
+          <Text style={styles.refundRule}>Refunded or cancelled rounds never count.</Text>
+          <View style={styles.prizeGrid}>
+            {MONTHLY_PRIZES.map(([place, prize]) => (
+              <View style={styles.prizeRow} key={place}>
+                <Text style={styles.prizePlace}>{place}</Text>
+                <Text style={styles.prizeAmount}>{prize}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={styles.rewardFootnote}>Ranking uses qualified referrals. Ties are decided by who reached the score first. Rewards go to the wallet holding the winning SGT at distribution time.</Text>
         </View>
 
         <VerificationRail connected={connected} verified={verified} registered={registered} />
+
+        {!pendingCode && (!verified || profile?.profileStatus === "pending_activation") && (
+          <View style={styles.inviteCard}>
+            <Text style={styles.pendingLabel}>INVITATION CODE · OPTIONAL</Text>
+            <Text style={styles.inviteTitle}>Were you invited?</Text>
+            <Text style={styles.pendingText}>
+              Enter the code before Seeker verification. If you downloaded LuckyMe yourself, leave it empty and continue normally.
+            </Text>
+            <TextInput
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={9}
+              onChangeText={setManualCode}
+              placeholder="LM-XXXXXX"
+              placeholderTextColor="#687386"
+              style={styles.inviteInput}
+              value={manualCode}
+            />
+            <ActionButton label="Use invitation code" onPress={() => stageManualCode().catch(() => undefined)} secondary />
+            {verified && profile?.profileStatus === "pending_activation" ? (
+              <ActionButton label="Continue without referral" onPress={() => continueWithoutReferral().catch(() => undefined)} secondary />
+            ) : (
+              <Text style={styles.optionalNote}>No invitation code is required to use LuckyMe.</Text>
+            )}
+          </View>
+        )}
 
         {busyLabel && (
           <View style={styles.busyCard}>
@@ -593,13 +683,13 @@ export function SeekerReferralScreen({
               <View style={styles.codePanel}>
                 <Text style={styles.codeLabel}>YOUR REFERRAL CODE</Text>
                 <Text style={styles.code}>{profile.referralCode}</Text>
-                <Text style={styles.linkText}>{shareLink}</Text>
+                <Text style={styles.linkText}>Opens LuckyMe directly in the Solana dApp Store</Text>
               </View>
               {profile.profileStatus === "pending_activation" && (
                 <Text style={styles.activationNote}>Confirm the pending referral before this profile becomes active.</Text>
               )}
               <View style={styles.actions}>
-                <ActionButton label="Share referral" onPress={() => Share.share({ message: `Join the LuckyMe Seeker Referral League: ${shareLink}`, url: shareLink })} />
+                <ActionButton label="Share referral" onPress={() => shareReferral().catch(() => undefined)} />
                 <ActionButton label="Copy code" onPress={() => Clipboard.setStringAsync(profile.referralCode)} secondary />
                 <ActionButton label="Show QR" onPress={() => setQrVisible(true)} secondary />
                 {TEST_MODE_UI && (
@@ -645,7 +735,14 @@ export function SeekerReferralScreen({
               <View style={styles.seasonCard}>
                 <Text style={styles.sectionEyebrow}>REFERRAL LEAGUE</Text>
                 <Text style={styles.sectionTitle}>Your verified referral profile is ready</Text>
-                <Text style={styles.closeText}>Share your code with other Seeker owners. Season rankings and rewards appear here only when officially active.</Text>
+                {profile.qualification ? (
+                  <View style={styles.metrics}>
+                    <View style={styles.metric}><Text style={styles.metricValue}>{Math.min(profile.qualification.winningRounds, 3)}/3</Text><Text style={styles.metricLabel}>Winning rounds</Text></View>
+                    <View style={styles.metric}><Text style={styles.metricValue}>{Math.min(profile.qualification.playDays, 3)}/3</Text><Text style={styles.metricLabel}>Play days</Text></View>
+                    <View style={styles.metric}><Text style={styles.metricValue}>{Math.min(profile.qualification.activeDays, 7)}/7</Text><Text style={styles.metricLabel}>Active days</Text></View>
+                  </View>
+                ) : null}
+                <Text style={styles.closeText}>Share your code with other verified Seeker owners. Qualified referrals and your monthly position will appear here when the production season starts.</Text>
               </View>
             )}
           </>
@@ -673,6 +770,7 @@ export function SeekerReferralScreen({
             <Text style={styles.modalTitle}>Referral QR</Text>
             {shareLink ? <View style={styles.qrWrap}><QRCode value={shareLink} size={210} color="#050609" backgroundColor="#FFFFFF" /></View> : null}
             <Text style={styles.qrCode}>{profile?.referralCode}</Text>
+            <Text style={styles.qrHelp}>Scan to open LuckyMe in the Solana dApp Store, then enter the code shown above.</Text>
             <ActionButton label="Close" onPress={() => setQrVisible(false)} />
           </View>
         </View>
@@ -705,6 +803,10 @@ const styles = StyleSheet.create({
   pendingLabel: { color: "#F6B94A", fontSize: 11, letterSpacing: 1.5, fontWeight: "800" },
   pendingCode: { color: "#FFF4D6", fontSize: 24, fontWeight: "800" },
   pendingText: { color: "#B8A987", fontSize: 13, lineHeight: 19, marginBottom: 4 },
+  inviteCard: { padding: 18, borderRadius: 20, backgroundColor: "rgba(20,241,149,0.065)", borderWidth: 1, borderColor: "rgba(20,241,149,0.24)", gap: 10 },
+  inviteTitle: { color: "#F7F8FC", fontSize: 20, fontWeight: "800" },
+  inviteInput: { minHeight: 54, borderRadius: 15, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(4,7,12,0.72)", color: "#FFFFFF", paddingHorizontal: 16, fontSize: 20, fontWeight: "800", letterSpacing: 1.2 },
+  optionalNote: { color: "#8490A3", fontSize: 12, textAlign: "center" },
   message: { color: "#AAB4C6", fontSize: 13, lineHeight: 19, textAlign: "center" },
   actions: { gap: 10, marginTop: 4 },
   button: { minHeight: 52, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#7857FF", paddingHorizontal: 16, borderWidth: 1, borderColor: "#8D75FF" },
@@ -743,6 +845,17 @@ const styles = StyleSheet.create({
   metricLabel: { color: "#7F8A9E", fontSize: 11, marginTop: 3 },
   closeText: { color: "#A2ACBD", fontSize: 13 },
   prizeText: { color: "#CBD1DC", fontSize: 13 },
+  rewardCard: { padding: 20, borderRadius: 24, backgroundColor: "rgba(16,12,34,0.94)", borderWidth: 1, borderColor: "rgba(153,69,255,0.42)", gap: 9 },
+  rewardKicker: { color: "#14F1D9", fontSize: 11, fontWeight: "900", letterSpacing: 1.5 },
+  rewardAmount: { color: "#FFFFFF", fontSize: 29, fontWeight: "900" },
+  rewardIntro: { color: "#CBD1DC", fontSize: 14, lineHeight: 20, marginTop: 3 },
+  rewardRule: { color: "#E7EAF0", fontSize: 13.5, lineHeight: 19 },
+  refundRule: { color: "#FFB45C", fontSize: 13, fontWeight: "800", marginTop: 3 },
+  prizeGrid: { borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", marginTop: 7 },
+  prizeRow: { minHeight: 38, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.10)" },
+  prizePlace: { color: "#B9C0CD", fontSize: 13, fontWeight: "800" },
+  prizeAmount: { color: "#14F195", fontSize: 13, fontWeight: "900" },
+  rewardFootnote: { color: "#9DA6B5", fontSize: 12, lineHeight: 17, marginTop: 3 },
   disclaimer: { color: "#F6B94A", fontSize: 12, fontWeight: "900", letterSpacing: 0.5, marginTop: 4 },
   leaderboardCard: { padding: 20, borderRadius: 24, backgroundColor: "rgba(14,18,28,0.86)", borderWidth: 1, borderColor: "rgba(255,255,255,0.09)", gap: 12 },
   emptyText: { color: "#7F8A9E", paddingVertical: 8 },
@@ -760,4 +873,5 @@ const styles = StyleSheet.create({
   qrCard: { alignItems: "center" },
   qrWrap: { padding: 14, backgroundColor: "#FFFFFF", borderRadius: 18 },
   qrCode: { color: "#FFFFFF", fontSize: 20, fontWeight: "900", letterSpacing: 1.5 },
+  qrHelp: { color: "#9CA6B7", fontSize: 12, lineHeight: 17, textAlign: "center" },
 });

@@ -17,6 +17,17 @@ CREATE TABLE IF NOT EXISTS seeker_identities (
 CREATE INDEX IF NOT EXISTS seeker_identities_wallet_idx
   ON seeker_identities(current_wallet);
 
+CREATE TABLE IF NOT EXISTS seeker_identity_wallets (
+  sgt_mint TEXT NOT NULL REFERENCES seeker_identities(sgt_mint),
+  wallet TEXT NOT NULL,
+  first_verified_at TEXT NOT NULL,
+  last_verified_at TEXT NOT NULL,
+  PRIMARY KEY (sgt_mint, wallet)
+);
+
+CREATE INDEX IF NOT EXISTS seeker_identity_wallets_wallet_idx
+  ON seeker_identity_wallets(wallet);
+
 CREATE TABLE IF NOT EXISTS siws_nonces (
   nonce_hash TEXT PRIMARY KEY,
   domain TEXT NOT NULL,
@@ -55,7 +66,7 @@ CREATE TABLE IF NOT EXISTS referral_bindings (
   referrer_sgt_mint TEXT NOT NULL REFERENCES seeker_identities(sgt_mint),
   referred_sgt_mint TEXT NOT NULL UNIQUE REFERENCES seeker_identities(sgt_mint),
   referral_code TEXT NOT NULL REFERENCES referral_profiles(referral_code),
-  status TEXT NOT NULL CHECK (status IN ('pending', 'qualified_test', 'invalidated')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'qualified', 'qualified_test', 'invalidated')),
   bound_at TEXT NOT NULL,
   qualified_at TEXT,
   invalidated_at TEXT,
@@ -103,3 +114,13 @@ CREATE TABLE IF NOT EXISTS referral_sessions (
 
 CREATE INDEX IF NOT EXISTS referral_sessions_expiry_idx
   ON referral_sessions(expires_at, revoked_at);
+
+CREATE TABLE IF NOT EXISTS referral_activity_days (
+  sgt_mint TEXT NOT NULL REFERENCES seeker_identities(sgt_mint),
+  activity_date TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  PRIMARY KEY (sgt_mint, activity_date)
+);
+
+CREATE INDEX IF NOT EXISTS referral_activity_days_date_idx
+  ON referral_activity_days(activity_date);

@@ -14,11 +14,9 @@ function requireEnv(name) {
 function validateReleaseEnv() {
   const releaseMode = process.env.EXPO_PUBLIC_LUCKYME_RELEASE_MODE;
   const storeBuild = process.env.EXPO_PUBLIC_LUCKYME_STORE_BUILD;
-  const easProfile = process.env.EAS_BUILD_PROFILE;
   const shouldValidate =
     releaseMode === "MAINNET_RELEASE" ||
-    storeBuild === "true" ||
-    easProfile === "dapp-store";
+    storeBuild === "true";
 
   if (!shouldValidate) {
     return;
@@ -31,7 +29,9 @@ function validateReleaseEnv() {
   const termsUrl = requireEnv("EXPO_PUBLIC_LUCKYME_TERMS_URL");
   const privacyUrl = requireEnv("EXPO_PUBLIC_LUCKYME_PRIVACY_URL");
   const supportUrl = requireEnv("EXPO_PUBLIC_LUCKYME_SUPPORT_URL");
-  requireEnv("GOOGLE_SERVICES_JSON");
+  // EAS file secrets are materialized only in the remote build environment.
+  // The local profile evaluation must therefore be able to resolve the app
+  // config before GOOGLE_SERVICES_JSON becomes available.
   const programId = process.env.EXPO_PUBLIC_LUCKYME_PROGRAM_ID ?? MAINNET_PROGRAM_ID;
 
   if (!MAINNET_RPC_RE.test(apiUrl)) {

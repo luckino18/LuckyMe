@@ -96,7 +96,7 @@ export function createSeekerReferralHttpServer({
       if (req.method === "GET" && (url.pathname === "/health" || url.pathname === "/api/referral/health")) {
         return json(res, 200, {
           ok: true,
-          service: "luckyme-seeker-referral-test",
+          service: service.testMode ? "luckyme-seeker-referral-test" : "luckyme-seeker-referral",
           testMode: service.testMode,
         });
       }
@@ -110,6 +110,10 @@ export function createSeekerReferralHttpServer({
       }
       if (req.method === "GET" && url.pathname === "/api/seeker/profile") {
         return json(res, 200, service.getProfile(bearer(req)));
+      }
+      if (req.method === "POST" && url.pathname === "/api/referrals/activity") {
+        await readJson(req);
+        return json(res, 200, service.recordActivity(bearer(req)));
       }
       const previewMatch = url.pathname.match(/^\/api\/referrals\/preview\/(LM-[A-Za-z0-9-]+)$/);
       if (req.method === "GET" && previewMatch) {

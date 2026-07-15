@@ -15,7 +15,7 @@ by the Solana program.
 > Normal 6, High 6, and Premium 7 are open and waiting for their first ticket;
 > all have `startTs=0` and `endTs=0`. The Seeker `1.1.7` / code `10` APK was
 > submitted through the Solana dApp Store Publisher Portal. The signed Seeker
-> `1.1.8` / code `11` APK is the verified update candidate prepared on
+> `1.1.9` / code `12` APK is the verified update candidate prepared on
 > 2026-07-15.
 
 ## Funded-round rules
@@ -194,6 +194,24 @@ Solflare, and Backpack. WalletConnect/Reown is configured through
 project must keep `https://lucky-me.app` and `https://www.lucky-me.app`
 allowlisted.
 
+## Seeker Referral League And Admin
+
+The referral flow is available only in the Android Seeker app and verifies both
+wallet ownership and an authentic Seeker Genesis Token. An invite code is
+optional and immutable after it is accepted. Shared invites open the LuckyMe
+listing in the Solana dApp Store; the recipient enters the separate `LM-XXXXXX`
+code in the app before verification.
+
+Production qualification is calculated automatically from the append-only
+settlement archive and distinct app-activity days. A referred owner qualifies
+after three completed rounds with a winner on three different days plus seven
+active LuckyMe days. Cancelled or refunded rounds do not count.
+
+The protected, read-only `/admin/` page has separate Server Status, Treasury
+Estimate, Winners and Referrals tabs. The referral tab shows inviter/invitee
+identity, immutable binding status and qualification progress without adding
+any game or settlement write path.
+
 ## Solana Mobile APK Build
 
 ```bash
@@ -217,13 +235,14 @@ For EAS cloud builds, set `EXPO_PUBLIC_LUCKYME_API_URL`,
 EAS project environment or as EAS secrets before the `dapp-store` build. The
 build must use HTTPS production URLs, not loopback or LAN addresses.
 
-The current signed update candidate is app version `1.1.8`, Android
-`versionCode` `11`, and keeps package `com.luckyme.seeker`. It includes the
+The current signed update candidate is app version `1.1.9`, Android
+`versionCode` `12`, and keeps package `com.luckyme.seeker`. It includes the
 tested ticket picker, smooth countdown, notification icon and permission flow,
 production FCM configuration, current refund/rent explanations, a focused Home
-screen, native Seeker referral access, and the new Social navigation screen. It
-also keeps the explicit block on unused overlay and legacy external-storage
-permissions.
+screen, the Seeker Referral League rules and prize table, the optional one-time
+review request, and the Social navigation screen with a permanent Discord
+`#welcome` invite. It also keeps the explicit block on unused overlay and
+legacy external-storage permissions.
 
 Build the Solana dApp Store APK with EAS:
 
@@ -307,6 +326,7 @@ Store listing material is in `docs/store-listing/`:
 - `whats-new-v1.1.0.txt`
 - `whats-new-v1.1.7.txt`
 - `whats-new-v1.1.8.txt`
+- `whats-new-v1.1.9.txt`
 - `screenshot-checklist.md`
 - `icon-adaptive-icon-checklist.md`
 - `privacy-policy.md`

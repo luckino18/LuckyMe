@@ -8,6 +8,24 @@ const LUCKYME_SCREEN = "app-seeker/src/LuckyMeScreen.tsx";
 const STITCH_SCREENS = "app-seeker/src/stitchScreens.ts";
 const APP_JSON = "app-seeker/app.json";
 
+test("Seeker app config resolves the EAS profile before profile env injection", () => {
+  const result = spawnSync(
+    "npx",
+    ["expo", "config", "--json"],
+    {
+      cwd: "app-seeker",
+      env: {
+        PATH: process.env.PATH,
+        EAS_BUILD_PROFILE: "dapp-store",
+      },
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.equal(JSON.parse(result.stdout).android.package, "com.luckyme.seeker");
+});
+
 test("Seeker production env validation rejects missing env", () => {
   const result = runValidation({});
 
@@ -97,9 +115,10 @@ test("Seeker publishes the approved ticket targets and automatic-refund copy", (
 test("Seeker release metadata advances without changing the Android package", () => {
   const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
 
-  assert.equal(app.version, "1.1.8");
+  assert.equal(app.version, "1.1.9");
   assert.equal(app.android.package, "com.luckyme.seeker");
-  assert.equal(app.android.versionCode, 11);
+  assert.equal(app.android.versionCode, 12);
+  assert.ok(app.plugins.includes("./plugins/with-solana-dapp-store-query"));
   assert.equal(app.icon, "./assets/icon.png");
   assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
   assert.deepEqual(app.android.blockedPermissions, [
@@ -116,12 +135,17 @@ test("Seeker production Home is focused and exposes Referral plus the approved n
   const nav = stitch.slice(stitch.indexOf("function bottomNav"), stitch.indexOf("/* ------------------------------------------------------------------ */", stitch.indexOf("function bottomNav")));
 
   assert.match(home, /LuckyMe Referral League/);
+  assert.match(home, /Monthly prizes up to 10,000 SKR/);
+  assert.match(home, /3 completed rounds with a winner on 3 different days/);
+  assert.match(home, /#1 3,000.*#2 2,000.*#3 1,250.*#4 750.*#5–#10 500 SKR each/);
+  assert.match(home, /exclusive to the LuckyMe app from the Solana dApp Store/);
   assert.match(home, /data-route="referral"/);
   assert.doesNotMatch(home, /POOLS\.map|Valid draw targets|Reserve jackpot/);
   assert.match(nav, /Home[\s\S]*Pools[\s\S]*Activity[\s\S]*How To[\s\S]*Social/);
   assert.doesNotMatch(nav, /\["wallet"/);
   assert.match(stitch, /@LuckyMeSolana/);
-  assert.match(stitch, /1526717371249721355/);
+  assert.match(stitch, /https:\/\/discord\.gg\/rZVjBJtMZ/);
+  assert.match(stitch, /Join Discord/);
   assert.match(screen, /\["home", "pools", "activity", "how-to-play", "social"\]/);
   assert.match(screen, /message\?\.type === "referral"/);
 });
