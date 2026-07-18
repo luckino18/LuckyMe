@@ -7,6 +7,8 @@ const REQUIRED = [
   "EXPO_PUBLIC_LUCKYME_TERMS_URL",
   "EXPO_PUBLIC_LUCKYME_PRIVACY_URL",
   "EXPO_PUBLIC_LUCKYME_SUPPORT_URL",
+  "EXPO_PUBLIC_LUCKYME_APP_ANALYTICS_ENABLED",
+  "EXPO_PUBLIC_LUCKYME_SEEKER_PASS_PROMOTION_ENABLED",
 ];
 
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -22,6 +24,14 @@ const termsUrl = process.env.EXPO_PUBLIC_LUCKYME_TERMS_URL;
 const privacyUrl = process.env.EXPO_PUBLIC_LUCKYME_PRIVACY_URL;
 const supportUrl = process.env.EXPO_PUBLIC_LUCKYME_SUPPORT_URL;
 const programId = process.env.EXPO_PUBLIC_LUCKYME_PROGRAM_ID ?? MAINNET_PROGRAM_ID;
+
+if (process.env.EXPO_PUBLIC_LUCKYME_APP_ANALYTICS_ENABLED !== "true") {
+  fail("EXPO_PUBLIC_LUCKYME_APP_ANALYTICS_ENABLED must be true for the dApp Store release");
+}
+
+if (process.env.EXPO_PUBLIC_LUCKYME_SEEKER_PASS_PROMOTION_ENABLED !== "true") {
+  fail("EXPO_PUBLIC_LUCKYME_SEEKER_PASS_PROMOTION_ENABLED must be true for the dApp Store release");
+}
 
 if (process.env.EXPO_PUBLIC_LUCKYME_UI_PREVIEW === "true") {
   fail("EXPO_PUBLIC_LUCKYME_UI_PREVIEW cannot be true for production builds");

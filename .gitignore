@@ -4,6 +4,8 @@ node_modules/
 dist/
 build/
 coverage/
+artifacts/
+tmp/
 *.apk
 *.aab
 .anchor/
@@ -18,10 +20,14 @@ ios/
 !.env.example
 .DS_Store
 *.log
+*.pyc
+__pycache__/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 .expo/
+site/lucky-me.app/build-status.html
+site/lucky-me.app/build-status.json
 
 # Wallets, deploy buffers, and other private material
 *-keypair.json

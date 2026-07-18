@@ -2,11 +2,14 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  ImageBackground,
   Linking,
   Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   Share,
   StyleSheet,
   Text,
@@ -33,6 +36,7 @@ const PENDING_CODE_KEY = TEST_MODE_UI
   : "luckyme.seekerReferral.pendingReferralCode";
 const CODE_RE = /^LM-[A-HJ-NP-Z2-9]{6}$/;
 const DAPP_STORE_LISTING_URL = "solanadappstore://details?id=com.luckyme.seeker";
+const REFERRAL_ROUND_RULE = "Refunded or cancelled rounds never count";
 
 type VerificationState =
   | "IDLE"
@@ -343,8 +347,7 @@ export function SeekerReferralScreen({
       setLastMessage(`Referral ${code} was confirmed and permanently bound.`);
       await loadLeaderboard(token);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Referral binding failed";
-      Alert.alert("Referral not bound", message);
+      Alert.alert("Referral not bound", "This referral could not be confirmed. Please check the code and try again.");
       if (error instanceof ApiError && error.code === "referral_code_not_found") {
         await SecureStore.deleteItemAsync(PENDING_CODE_KEY);
         setPendingCode(null);
@@ -367,8 +370,8 @@ export function SeekerReferralScreen({
       const refreshed = await request("/api/seeker/profile", {}, sessionToken);
       setProfile(refreshed);
       setLastMessage("Profile activated without a referral. A referral cannot be added later.");
-    } catch (error) {
-      Alert.alert("Profile not activated", error instanceof Error ? error.message : "Activation failed");
+    } catch {
+      Alert.alert("Profile not activated", "Please try again in a moment.");
     } finally {
       setBusyLabel(null);
     }
@@ -386,7 +389,7 @@ export function SeekerReferralScreen({
         ],
       );
     } catch (error) {
-      Alert.alert("Invalid referral link", error instanceof Error ? error.message : "Referral code is unavailable");
+      Alert.alert("Invalid referral link", "This referral code is unavailable.");
       if (error instanceof ApiError && error.code === "referral_code_not_found") {
         await SecureStore.deleteItemAsync(PENDING_CODE_KEY);
         setPendingCode(null);
@@ -436,7 +439,7 @@ export function SeekerReferralScreen({
       }
     } catch (error) {
       setState(stateFromError(error));
-      setLastMessage(error instanceof Error ? error.message : "Verification failed");
+      setLastMessage(null);
     } finally {
       setBusyLabel(null);
     }
@@ -498,8 +501,8 @@ export function SeekerReferralScreen({
       setProfile(refreshed);
       await loadLeaderboard(sessionToken);
       setLastMessage("Qualified test referral recorded. No payment or blockchain transaction occurred.");
-    } catch (error) {
-      Alert.alert("Simulation unavailable", error instanceof Error ? error.message : "Simulation failed");
+    } catch {
+      Alert.alert("Simulation unavailable", "Please try again in a moment.");
     } finally {
       setBusyLabel(null);
     }
@@ -563,42 +566,38 @@ export function SeekerReferralScreen({
   };
 
   return (
+    <ImageBackground source={require("../assets/home/luckyme-home-background-v2.png")} style={styles.background} imageStyle={styles.backgroundImage}>
+    <StatusBar hidden translucent backgroundColor="transparent" barStyle="light-content" />
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.page}>
-        <View style={styles.ambientPurple} />
-        <View style={styles.ambientCyan} />
-        <View style={styles.header}>
-          {onClose && (
-            <Pressable accessibilityRole="button" onPress={onClose} style={styles.backButton}>
-              <Text style={styles.backButtonText}>‹ Back to LuckyMe</Text>
-            </Pressable>
-          )}
-          <Text style={styles.eyebrow}>LUCKYME · SEEKER EXCLUSIVE</Text>
-          <Text style={styles.title}>Seeker Referral League</Text>
-          <Text style={styles.subtitle}>Invite verified Seeker owners and compete for monthly SKR rewards.</Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+        {onClose && <Pressable accessibilityRole="button" onPress={onClose} style={styles.backButton}><Text style={styles.backButtonText}>‹ Back to LuckyMe</Text></Pressable>}
 
-        <View style={styles.rewardCard}>
-          <Text style={styles.rewardKicker}>MONTHLY PRIZE POOL</Text>
-          <Text style={styles.rewardAmount}>Up to 10,000 SKR</Text>
-          <Text style={styles.rewardIntro}>A referral becomes qualified only after the invited Seeker owner completes every requirement:</Text>
-          <Text style={styles.rewardRule}>• Plays 3 completed rounds that produced a winner</Text>
-          <Text style={styles.rewardRule}>• Plays those rounds on 3 different calendar days</Text>
-          <Text style={styles.rewardRule}>• Is active in LuckyMe on at least 7 different days</Text>
-          <Text style={styles.rewardRule}>• Keeps a verified SGT referral identity</Text>
-          <Text style={styles.refundRule}>Refunded or cancelled rounds never count.</Text>
-          <View style={styles.prizeGrid}>
-            {MONTHLY_PRIZES.map(([place, prize]) => (
-              <View style={styles.prizeRow} key={place}>
-                <Text style={styles.prizePlace}>{place}</Text>
-                <Text style={styles.prizeAmount}>{prize}</Text>
-              </View>
-            ))}
+        <View style={styles.referralHero}>
+          <Image source={require("../assets/home/referral-handshake-v1.png")} style={styles.referralHeroArt} />
+          <View style={styles.referralHeroShade} />
+          <View style={styles.referralHeroCopy}>
+            <Text style={styles.eyebrow}>SEEKER APK EXCLUSIVE</Text>
+            <Text style={styles.title}>Referral{`\n`}League</Text>
+            <Text style={styles.rewardAmount}>Up to 10,000 SKR monthly</Text>
+            <Text style={styles.subtitle}>Official SGT holders build verified activity and invite other Seeker owners.</Text>
           </View>
-          <Text style={styles.rewardFootnote}>Ranking uses qualified referrals. Ties are decided by who reached the score first. Rewards go to the wallet holding the winning SGT at distribution time.</Text>
         </View>
 
-        <VerificationRail connected={connected} verified={verified} registered={registered} />
+        <View style={styles.referralFacts}>
+          <View style={styles.referralFact}><Text style={styles.referralFactValue}>3</Text><Text style={styles.referralFactLabel}>WINNING ROUNDS</Text></View>
+          <View style={styles.referralFact}><Text style={styles.referralFactValue}>3</Text><Text style={styles.referralFactLabel}>DIFFERENT DAYS</Text></View>
+          <View style={styles.referralFact}><Text style={styles.referralFactValue}>7</Text><Text style={styles.referralFactLabel}>ACTIVE DAYS</Text></View>
+        </View>
+
+        <View style={styles.identityCard}>
+          <View><Text style={styles.identityLabel}>SEEKER IDENTITY</Text><Text style={styles.identityValue}>{verified ? "Official SGT verified" : "Official SGT verification required"}</Text></View>
+          <Text style={[styles.identityBadge, verified && styles.identityBadgeVerified]}>{verified ? "VERIFIED" : "NOT VERIFIED"}</Text>
+        </View>
+
+        {!verified && state !== "VERIFYING" ? <ActionButton label="VERIFY" onPress={verifySeeker} /> : null}
+        <Text style={styles.authNote}>Authentication only. No transaction and no fee. Cancelled or refunded rounds never count.</Text>
+
+        {(busyLabel || verified) ? <VerificationRail connected={connected} verified={verified} registered={registered} /> : null}
 
         {!pendingCode && (!verified || profile?.profileStatus === "pending_activation") && (
           <View style={styles.inviteCard}>
@@ -663,7 +662,6 @@ export function SeekerReferralScreen({
 
         {!verified && state !== "VERIFYING" && (
           <View style={styles.actions}>
-            <ActionButton label="Verify my Seeker" onPress={verifySeeker} />
             <ActionButton label="How verification works" onPress={() => setHowVisible(true)} secondary />
             <ActionButton label="Disconnect" onPress={disconnect} secondary />
           </View>
@@ -776,20 +774,37 @@ export function SeekerReferralScreen({
         </View>
       </Modal>
     </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#050609" },
-  page: { paddingHorizontal: 20, paddingTop: 36, paddingBottom: 56, gap: 16, overflow: "hidden" },
+  background: { flex: 1, backgroundColor: "#031B14" },
+  backgroundImage: { opacity: 0.78, resizeMode: "cover" },
+  safe: { flex: 1, backgroundColor: "rgba(1,22,16,0.20)" },
+  page: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 42, gap: 10, overflow: "hidden" },
   ambientPurple: { position: "absolute", width: 280, height: 280, borderRadius: 140, backgroundColor: "rgba(124,58,237,0.18)", top: -120, right: -120 },
   ambientCyan: { position: "absolute", width: 240, height: 240, borderRadius: 120, backgroundColor: "rgba(20,241,217,0.08)", top: 270, left: -150 },
   header: { gap: 8, marginBottom: 4 },
   backButton: { alignSelf: "flex-start", paddingVertical: 7, paddingRight: 14, marginBottom: 2 },
-  backButtonText: { color: "#14F1D9", fontSize: 14, fontWeight: "800" },
-  eyebrow: { color: "#14F1D9", fontSize: 11, fontWeight: "800", letterSpacing: 1.8 },
-  title: { color: "#F7F8FC", fontSize: 34, lineHeight: 39, fontWeight: "800", letterSpacing: -1.2 },
-  subtitle: { color: "#9CA6B7", fontSize: 16, lineHeight: 23, maxWidth: 340 },
+  backButtonText: { color: "#D6FF84", fontSize: 13, fontWeight: "900" },
+  referralHero: { borderColor: "rgba(155,255,104,0.38)", borderRadius: 20, borderWidth: 1, height: 202, justifyContent: "flex-end", overflow: "hidden", padding: 18 },
+  referralHeroArt: { height: 190, position: "absolute", right: -24, top: -24, width: 190 },
+  referralHeroShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(2,31,24,0.56)" },
+  referralHeroCopy: { gap: 4, maxWidth: "72%" },
+  eyebrow: { color: "#83F1E0", fontSize: 9, fontWeight: "900", letterSpacing: 1.4 },
+  title: { color: "#F7F8FC", fontSize: 31, lineHeight: 31, fontWeight: "900", letterSpacing: -1 },
+  subtitle: { color: "rgba(255,255,255,0.76)", fontSize: 12, lineHeight: 17, maxWidth: 260 },
+  referralFacts: { backgroundColor: "rgba(2,37,28,0.82)", borderColor: "rgba(155,255,104,0.30)", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 7, padding: 13 },
+  referralFact: { alignItems: "center", backgroundColor: "rgba(1,27,22,0.80)", borderColor: "rgba(168,255,112,0.20)", borderRadius: 13, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 67 },
+  referralFactValue: { color: "#FFF5A5", fontSize: 19, fontWeight: "900" },
+  referralFactLabel: { color: "rgba(255,255,255,0.60)", fontSize: 7, fontWeight: "900", marginTop: 3, textAlign: "center" },
+  identityCard: { alignItems: "center", backgroundColor: "rgba(2,37,28,0.84)", borderColor: "rgba(155,255,104,0.26)", borderRadius: 18, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", padding: 13 },
+  identityLabel: { color: "rgba(255,255,255,0.55)", fontSize: 8, fontWeight: "900", letterSpacing: 1 },
+  identityValue: { color: "#FFFFFF", fontSize: 12, fontWeight: "900", marginTop: 2 },
+  identityBadge: { backgroundColor: "rgba(95,72,8,0.32)", borderColor: "rgba(255,224,101,0.30)", borderRadius: 20, borderWidth: 1, color: "#FFE477", fontSize: 8, fontWeight: "900", overflow: "hidden", paddingHorizontal: 9, paddingVertical: 6 },
+  identityBadgeVerified: { backgroundColor: "rgba(20,241,149,0.12)", borderColor: "rgba(20,241,149,0.32)", color: "#8EFFB8" },
+  authNote: { color: "rgba(255,255,255,0.64)", fontSize: 10, lineHeight: 15, textAlign: "center" },
   rail: { borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", backgroundColor: "rgba(14,18,28,0.82)", borderRadius: 22, padding: 18, gap: 14 },
   railRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   railDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "#5D687A", backgroundColor: "#181E29" },
@@ -809,12 +824,12 @@ const styles = StyleSheet.create({
   optionalNote: { color: "#8490A3", fontSize: 12, textAlign: "center" },
   message: { color: "#AAB4C6", fontSize: 13, lineHeight: 19, textAlign: "center" },
   actions: { gap: 10, marginTop: 4 },
-  button: { minHeight: 52, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#7857FF", paddingHorizontal: 16, borderWidth: 1, borderColor: "#8D75FF" },
-  buttonSecondary: { backgroundColor: "rgba(255,255,255,0.035)", borderColor: "rgba(255,255,255,0.12)" },
+  button: { minHeight: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#70F2A8", paddingHorizontal: 16, borderWidth: 1, borderColor: "#A8FF79" },
+  buttonSecondary: { backgroundColor: "rgba(2,37,28,0.82)", borderColor: "rgba(190,255,142,0.22)" },
   buttonDisabled: { opacity: 0.45 },
   buttonPressed: { transform: [{ scale: 0.985 }], opacity: 0.9 },
-  buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
-  buttonTextSecondary: { color: "#CFD6E3" },
+  buttonText: { color: "#05291D", fontSize: 15, fontWeight: "900" },
+  buttonTextSecondary: { color: "rgba(255,255,255,0.78)" },
   stateCard: { padding: 18, borderRadius: 20, borderWidth: 1, gap: 8 },
   stateCardAmber: { backgroundColor: "rgba(245,158,11,0.10)", borderColor: "rgba(245,158,11,0.30)" },
   stateCardRed: { backgroundColor: "rgba(248,113,113,0.09)", borderColor: "rgba(248,113,113,0.28)" },
@@ -847,7 +862,7 @@ const styles = StyleSheet.create({
   prizeText: { color: "#CBD1DC", fontSize: 13 },
   rewardCard: { padding: 20, borderRadius: 24, backgroundColor: "rgba(16,12,34,0.94)", borderWidth: 1, borderColor: "rgba(153,69,255,0.42)", gap: 9 },
   rewardKicker: { color: "#14F1D9", fontSize: 11, fontWeight: "900", letterSpacing: 1.5 },
-  rewardAmount: { color: "#FFFFFF", fontSize: 29, fontWeight: "900" },
+  rewardAmount: { color: "#FFE66F", fontSize: 13, fontWeight: "900", letterSpacing: 0.4 },
   rewardIntro: { color: "#CBD1DC", fontSize: 14, lineHeight: 20, marginTop: 3 },
   rewardRule: { color: "#E7EAF0", fontSize: 13.5, lineHeight: 19 },
   refundRule: { color: "#FFB45C", fontSize: 13, fontWeight: "800", marginTop: 3 },

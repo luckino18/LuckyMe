@@ -886,6 +886,403 @@ body.wallet-modal-open { overflow: hidden; }
   .ticket-quick-select { align-items: flex-start; flex-direction: column; }
 }
 
+/* ------------------------------------------------------------------
+   LuckyMe final green theme — local candidate, 2026-07-18
+   Visual-only layer. Pool, wallet and settlement behavior is unchanged.
+------------------------------------------------------------------- */
+
+.luckyme-final-site,
+.luckyme-final-app {
+  --bg0: #03120f;
+  --bg1: #06231a;
+  --panel: rgba(5, 48, 31, 0.62);
+  --panel-deep: rgba(3, 27, 21, 0.93);
+  --line: rgba(169, 255, 113, 0.20);
+  --line-strong: rgba(188, 255, 115, 0.38);
+  --line-purple: rgba(177, 108, 255, 0.40);
+  --line-cyan: rgba(91, 236, 218, 0.38);
+  --line-emerald: rgba(150, 255, 82, 0.52);
+  --text: #fbfff6;
+  --muted: #b7c9bd;
+  --soft: #88a494;
+  --amber: #ffd35a;
+  --violet: #d4bbff;
+  --cta-grad: linear-gradient(135deg, #b9f753 0%, #34d67c 48%, #35c8bd 100%);
+  --hover-line: rgba(190, 255, 100, 0.72);
+  --solana-glow: 0 18px 42px rgba(70, 228, 114, 0.20), 0 0 28px rgba(180, 244, 75, 0.13);
+  background:
+    radial-gradient(circle at 20% 8%, rgba(152, 255, 87, 0.18), transparent 30rem),
+    radial-gradient(circle at 90% 36%, rgba(41, 208, 158, 0.14), transparent 28rem),
+    linear-gradient(rgba(1, 25, 19, 0.40), rgba(1, 16, 14, 0.84)),
+    url("/assets/brand/luckyme-mark-small.webp") 97% 12% / 128px auto no-repeat,
+    linear-gradient(160deg, #0a3823 0%, #06231a 42%, #030d12 100%);
+}
+
+.luckyme-final-site::before,
+.luckyme-final-app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.62;
+  background:
+    radial-gradient(circle at 8% 74%, rgba(94, 188, 58, 0.20) 0 5%, transparent 13%),
+    radial-gradient(circle at 93% 82%, rgba(58, 196, 105, 0.16) 0 6%, transparent 15%),
+    radial-gradient(circle at 54% 42%, rgba(244, 213, 82, 0.07) 0 1px, transparent 3px);
+  background-size: auto, auto, 38px 38px;
+}
+
+.luckyme-final-site h1,
+.luckyme-final-site h2,
+.luckyme-final-site h3,
+.luckyme-final-app h1,
+.luckyme-final-app h2,
+.luckyme-final-app h3 { text-shadow: 0 3px 18px rgba(0, 0, 0, 0.50); }
+
+.luckyme-final-site .eyebrow,
+.luckyme-final-app .eyebrow,
+.luckyme-final-app .label { color: #a8f5cf; }
+
+.luckyme-final-site .site-nav,
+.luckyme-final-app .app-topbar {
+  background: linear-gradient(180deg, rgba(3, 37, 25, 0.96), rgba(3, 26, 22, 0.84));
+  border-color: rgba(177, 255, 105, 0.22);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(22px) saturate(1.15);
+}
+
+.luckyme-final-site .brand span,
+.luckyme-final-app .app-brand strong {
+  color: #ffe48b;
+  text-shadow: 0 0 16px rgba(255, 215, 86, 0.18);
+}
+
+.luckyme-final-site .landing-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: min(760px, calc(100vh - 76px));
+  border-bottom: 1px solid rgba(187, 255, 106, 0.18);
+}
+
+.luckyme-final-site .landing-hero::after,
+.luckyme-final-app .hero-panel::after {
+  content: "✦";
+  position: absolute;
+  right: 7%;
+  top: 12%;
+  color: #ffe275;
+  font-size: 30px;
+  filter: drop-shadow(0 0 12px rgba(255, 226, 117, 0.7));
+}
+
+.luckyme-final-site .landing-copy { max-width: 690px; }
+.luckyme-final-site .landing-copy h1 { font-size: clamp(42px, 6vw, 72px); }
+.luckyme-final-site .landing-art img {
+  filter: drop-shadow(0 24px 44px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 28px rgba(117, 246, 84, 0.18));
+}
+
+.luckyme-final-site .button,
+.luckyme-final-app .primary-button {
+  color: #042018;
+  border: 1px solid rgba(234, 255, 190, 0.64);
+  box-shadow: 0 12px 32px rgba(61, 216, 117, 0.26), inset 0 1px rgba(255,255,255,.48);
+}
+
+.luckyme-final-site .button.secondary,
+.luckyme-final-app .secondary-button,
+.luckyme-final-app .icon-button {
+  background: rgba(3, 39, 29, 0.72);
+  border-color: rgba(166, 255, 103, 0.30);
+}
+
+.luckyme-final-site .chip,
+.luckyme-final-app .chip {
+  color: #dfffb5;
+  background: rgba(56, 154, 78, 0.16);
+  border-color: rgba(171, 255, 104, 0.32);
+}
+
+.luckyme-final-site .section-band,
+.luckyme-final-site .muted-band { background: rgba(3, 28, 21, 0.46); border-color: rgba(156, 237, 91, 0.12); }
+
+.luckyme-final-site .mini-card,
+.luckyme-final-site .feature,
+.luckyme-final-site .step-card,
+.luckyme-final-app .panel,
+.luckyme-final-app .pool-card,
+.luckyme-final-app .list-row,
+.luckyme-final-app .wallet-card,
+.luckyme-final-app .step-card,
+.luckyme-final-app .review-panel {
+  background: linear-gradient(145deg, rgba(18, 83, 43, 0.68), rgba(3, 37, 30, 0.76));
+  border-color: rgba(177, 255, 105, 0.28);
+  box-shadow: inset 0 1px rgba(255,255,255,.045), 0 18px 40px rgba(0,0,0,.20);
+}
+
+.luckyme-final-site .mini-card:hover,
+.luckyme-final-app .pool-card:hover {
+  border-color: rgba(205, 255, 110, 0.70);
+  box-shadow: 0 16px 42px rgba(71, 226, 103, 0.18), inset 0 0 34px rgba(117, 238, 72, 0.08);
+}
+
+.luckyme-final-app .app-shell { background: transparent; }
+.luckyme-final-app .hero-panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(15, 91, 45, 0.76), rgba(3, 34, 28, 0.80));
+  border-color: rgba(184, 255, 104, 0.42);
+  box-shadow: var(--solana-glow);
+}
+.luckyme-final-app .hero-art {
+  filter: drop-shadow(0 16px 32px rgba(0,0,0,.38)) drop-shadow(0 0 22px rgba(139, 241, 72, .18));
+}
+
+.luckyme-final-app .wallet-pill,
+.luckyme-final-app .status-pill {
+  background: rgba(4, 44, 31, 0.78);
+  border-color: rgba(178, 255, 110, 0.28);
+}
+
+.luckyme-final-app .bottom-nav {
+  background: linear-gradient(180deg, rgba(3, 41, 29, 0.97), rgba(2, 23, 26, 0.98));
+  border-color: rgba(175, 255, 101, 0.22);
+  box-shadow: 0 -15px 36px rgba(0, 0, 0, 0.34);
+}
+.luckyme-final-app .nav-item.active {
+  color: #f9df7c;
+  background: linear-gradient(135deg, rgba(85, 196, 78, 0.23), rgba(49, 195, 165, 0.12));
+  border-color: rgba(205, 255, 109, 0.42);
+}
+
+.luckyme-final-app .wallet-modal {
+  background: linear-gradient(155deg, rgba(8, 65, 38, 0.98), rgba(2, 23, 25, 0.99));
+  border-color: rgba(185, 255, 109, 0.38);
+}
+
+@media (min-width: 900px) {
+  .luckyme-final-app .bottom-nav {
+    background: linear-gradient(180deg, rgba(3, 42, 29, 0.98), rgba(2, 21, 24, 0.99));
+  }
+}
+
+@media (max-width: 560px) {
+  .luckyme-final-site .landing-hero { min-height: auto; }
+  .luckyme-final-site .landing-copy h1 { font-size: 40px; }
+  .luckyme-final-app .hero-panel::after { display: none; }
+}
+
+/* ------------------------------------------------------------------
+   Exact APK visual system — website candidate v2
+------------------------------------------------------------------- */
+
+.luckyme-apk-site,
+.luckyme-final-app {
+  min-height: 100dvh;
+  background:
+    linear-gradient(180deg, rgba(1, 25, 18, 0.28), rgba(1, 13, 18, 0.66)),
+    url("/assets/app-theme/home/luckyme-home-background-v2.png") center / cover fixed no-repeat;
+}
+
+.apk-site-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  min-height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px clamp(18px, 5vw, 54px);
+  background: rgba(2, 35, 24, 0.82);
+  border-bottom: 1px solid rgba(184, 255, 112, 0.20);
+  backdrop-filter: blur(18px);
+}
+.apk-site-logo { display: block; width: min(225px, 44vw); }
+.apk-site-logo img { display: block; width: 100%; height: auto; }
+.apk-site-top-actions { display: flex; align-items: center; gap: 9px; }
+.apk-mainnet,
+.apk-wallet-link {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 15px;
+  border: 1px solid rgba(190, 255, 111, 0.25);
+  border-radius: 999px;
+  color: #f6fff2;
+  background: rgba(2, 49, 34, 0.66);
+  font-size: 13px;
+  font-weight: 800;
+}
+.apk-wallet-link { border-color: rgba(176, 106, 255, 0.48); color: #d8bdff; }
+.apk-wallet-link:hover { text-decoration: none; }
+.apk-mainnet i { width: 8px; height: 8px; border-radius: 50%; background: #86ff74; box-shadow: 0 0 12px #6fff78; }
+
+.apk-site-home {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: clamp(30px, 6vw, 66px) clamp(16px, 4vw, 34px) 132px;
+  display: grid;
+  gap: 24px;
+}
+.apk-site-intro { max-width: 690px; display: grid; gap: 12px; }
+.apk-site-intro h1 { font-size: clamp(38px, 7vw, 62px); line-height: .98; }
+.apk-site-intro p:last-child { max-width: 620px; color: #d5dfd7; font-size: clamp(15px, 2.2vw, 18px); }
+.apk-site-grid,
+.web-apk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+.apk-site-card,
+.web-apk-card {
+  position: relative;
+  min-width: 0;
+  min-height: 250px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 10px 12px 22px;
+  border: 2px solid rgba(167, 255, 83, 0.76);
+  border-radius: 24px;
+  color: #fff;
+  background: linear-gradient(160deg, rgba(67, 168, 47, 0.46), rgba(1, 51, 31, 0.76));
+  box-shadow: inset 0 0 0 5px rgba(228,255,158,.12), 0 9px 26px rgba(0,0,0,.30), 0 0 18px rgba(108,255,64,.13);
+  text-align: center;
+  text-decoration: none;
+}
+.apk-site-card::after,
+.web-apk-card::after { content: ""; position: absolute; inset: 7px; border: 1px solid rgba(240,255,170,.28); border-radius: 18px; pointer-events: none; }
+.apk-site-card:hover,
+.web-apk-card:hover { transform: translateY(-2px); border-color: #d4ff73; text-decoration: none; }
+.apk-site-card img,
+.web-apk-card img {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: min(76%, 210px);
+  height: min(76%, 210px);
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 9px 12px rgba(0,0,0,.36));
+}
+.apk-site-card strong,
+.web-apk-card strong { position: relative; z-index: 1; font-size: clamp(21px, 3vw, 28px); line-height: 1; text-shadow: 0 3px 7px #00130a; }
+.apk-site-card small,
+.web-apk-card small { position: relative; z-index: 1; color: rgba(239, 249, 238, 0.76); font-size: 12px; }
+.apk-site-boundary { max-width: 700px; margin: 0 auto; text-align: center; color: rgba(220, 233, 221, .64); font-size: 12px; }
+
+.apk-site-bottom {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  z-index: 30;
+  width: min(720px, calc(100% - 22px));
+  min-height: 78px;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid rgba(176, 255, 103, 0.27);
+  border-radius: 22px;
+  background: rgba(1, 32, 26, 0.94);
+  box-shadow: 0 16px 40px rgba(0,0,0,.52);
+  backdrop-filter: blur(20px);
+}
+.apk-site-bottom a { min-width: 0; display: grid; place-items: center; gap: 1px; padding: 4px 2px; border: 1px solid transparent; border-radius: 15px; color: #b5c4bb; }
+.apk-site-bottom a:hover { text-decoration: none; }
+.apk-site-bottom a.active { color: #ffdf67; border-color: rgba(185, 255, 102, 0.44); background: rgba(44, 119, 49, 0.28); }
+.apk-site-bottom img { width: 42px; height: 42px; object-fit: cover; object-position: 50% 35%; border-radius: 10px; mix-blend-mode: screen; }
+.apk-site-bottom span { overflow: hidden; max-width: 100%; font-size: 11px; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
+
+/* /play uses the same exact background and card system. */
+.luckyme-final-app .app-topbar { background: rgba(2, 35, 24, 0.84); }
+.luckyme-final-app .apk-wordmark img { width: min(215px, 42vw); max-height: 58px; object-fit: contain; }
+.luckyme-final-app .app-brand.apk-wordmark { min-width: 160px; }
+.web-apk-home { gap: 18px; }
+.web-apk-intro { display: grid; gap: 10px; padding: 6px 4px 0; }
+.web-apk-intro h1 { font-size: clamp(34px, 6vw, 52px); line-height: .98; }
+.web-apk-intro > p:last-child { max-width: 600px; color: #d4ded5; }
+.web-apk-card { min-height: 235px; font: inherit; cursor: pointer; }
+.web-apk-status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(179,255,105,.24);
+  border-radius: 16px;
+  background: rgba(2, 44, 30, .70);
+}
+.web-apk-status > span:first-child { min-width: 0; display: grid; gap: 1px; }
+.web-apk-status small { color: #9eb3a4; font-size: 9px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.web-apk-status strong { color: #fff; font-size: 17px; }
+.web-apk-status em { overflow: hidden; color: #a9b9ad; font-size: 11px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+
+.luckyme-final-app .bottom-nav .nav-item img {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  object-position: 50% 34%;
+  border-radius: 9px;
+  mix-blend-mode: screen;
+}
+.luckyme-final-app .bottom-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* The live pool list uses each pool's approved APK artwork as its watermark. */
+.luckyme-final-app .pool-card {
+  min-height: 360px;
+  justify-content: flex-end;
+  background-position: center 20%;
+  background-size: auto 58%;
+  background-repeat: no-repeat;
+  background-color: rgba(2, 43, 28, .84);
+}
+.luckyme-final-app .pool-card:nth-child(4n+1) { background-image: linear-gradient(180deg, transparent 22%, rgba(2,34,25,.88) 62%), url("/assets/app-theme/pools/mini-watermark-v1.png"); }
+.luckyme-final-app .pool-card:nth-child(4n+2) { background-image: linear-gradient(180deg, transparent 22%, rgba(2,34,25,.88) 62%), url("/assets/app-theme/pools/normal-watermark-v1.png"); }
+.luckyme-final-app .pool-card:nth-child(4n+3) { background-image: linear-gradient(180deg, transparent 22%, rgba(2,34,25,.88) 62%), url("/assets/app-theme/pools/high-watermark-v1.png"); }
+.luckyme-final-app .pool-card:nth-child(4n) { background-image: linear-gradient(180deg, transparent 22%, rgba(2,34,25,.88) 62%), url("/assets/app-theme/pools/premium-watermark-v1.png"); }
+
+@media (min-width: 900px) {
+  .luckyme-final-app .app-shell { max-width: 1050px; }
+  .luckyme-final-app .web-apk-grid { max-width: 820px; }
+  .luckyme-final-app .bottom-nav { grid-template-columns: 1fr; grid-template-rows: 92px repeat(5, 54px); }
+  .luckyme-final-app .bottom-nav::before { background-image: url("/assets/app-theme/home/luckyme-wordmark-v2.png"); background-size: 205px auto; background-position: 8px center; }
+  .luckyme-final-app .bottom-nav .nav-item img { width: 39px; height: 39px; }
+}
+
+@media (max-width: 560px) {
+  .apk-site-topbar { min-height: 66px; padding: 10px 14px; }
+  .apk-mainnet { display: none; }
+  .apk-wallet-link { min-height: 36px; padding: 0 13px; }
+  .apk-site-home { padding-top: 26px; gap: 18px; }
+  .apk-site-intro h1 { font-size: 38px; }
+  .apk-site-grid, .web-apk-grid { gap: 9px; }
+  .apk-site-card, .web-apk-card { min-height: 205px; padding: 8px 7px 17px; border-radius: 20px; }
+  .apk-site-card img, .web-apk-card img { width: 86%; height: 74%; top: 43%; }
+  .apk-site-card strong, .web-apk-card strong { font-size: 19px; }
+  .apk-site-card small, .web-apk-card small { display: none; }
+  .apk-site-bottom { min-height: 70px; bottom: 7px; }
+  .apk-site-bottom img { width: 36px; height: 36px; }
+  .apk-site-bottom span { font-size: 9px; }
+  .luckyme-final-app .apk-wordmark img { width: 156px; }
+  .luckyme-final-app .app-topbar { min-width: 0; gap: 6px; }
+  .luckyme-final-app .app-brand.apk-wordmark { min-width: 0; flex: 1 1 auto; }
+  .luckyme-final-app .top-actions { min-width: 0; flex: 0 1 auto; gap: 5px; }
+  .luckyme-final-app .top-actions .status-pill { max-width: 92px; padding: 5px 8px; font-size: 8px; letter-spacing: .03em; overflow: hidden; }
+  .luckyme-final-app .wallet-pill { min-height: 34px; max-width: 78px; padding: 0 10px; font-size: 11px; }
+  .web-apk-intro h1 { font-size: 34px; }
+  .web-apk-card { min-height: 198px; }
+  .web-apk-status em { max-width: 190px; }
+}
+
 /* bottom nav */
 
 .bottom-nav {

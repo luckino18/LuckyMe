@@ -6,6 +6,44 @@ let winnerRounds = [];
 let referralBindings = [];
 let referralSnapshot = { counts: {}, profiles: 0, verifiedIdentities: 0 };
 
+function renderAcquisition() {
+  const analytics = referralSnapshot.appAnalytics ?? {};
+  $("acquisition-summary").innerHTML = [
+    ["Unique activations", analytics.uniqueActivations ?? 0],
+    ["Active today", analytics.activeToday ?? 0],
+    ["Total launches", analytics.launches ?? 0],
+    ["Measured versions", analytics.versions?.length ?? 0],
+  ].map(([label, value]) => `<article class="referral-stat"><span>${safe(label)}</span><strong>${safe(value)}</strong></article>`).join("");
+  $("acquisition-versions").innerHTML = (analytics.versions ?? []).map((item) => `<article class="referral-card"><div class="referral-card-head"><div><span class="eyebrow">Version code ${safe(item.versionCode)}</span><h3>LuckyMe ${safe(item.appVersion)}</h3></div><span class="referral-status qualified">dApp Store</span></div><div class="referral-progress"><div><strong>${safe(item.uniqueActivations)}</strong><span>Unique activations</span></div><div><strong>${safe(item.launches)}</strong><span>Total launches</span></div></div></article>`).join("") || `<p class="entry-empty history-empty">No measured activations yet.</p>`;
+}
+
+function promotionStatusClass(status) {
+  if (status === "paid") return "qualified";
+  if (status === "drawn_unfunded") return "ready";
+  if (["commitment_frozen", "randomness_pending"].includes(status)) return "pending";
+  return status === "open" ? "qualified" : "invalid";
+}
+
+function renderPromotions() {
+  const promotions = Array.isArray(referralSnapshot.promotions) ? referralSnapshot.promotions : [];
+  $("promotion-list").innerHTML = promotions.length ? promotions.map((promotion) => {
+    const prizes = (promotion.prizes ?? []).map((prize) => `<div><span>#${safe(prize.rank)}</span><strong>${safe(Number(prize.prizeSol).toFixed(3))} SOL</strong></div>`).join("");
+    const winners = (promotion.winners ?? []).map((winner) => `<div class="history-winner"><span>#${safe(winner.rank)}</span><code class="wallet-address">${safe(winner.wallet)}</code><strong>${safe(Number(winner.prizeSol).toFixed(3))} SOL</strong></div>`).join("");
+    const drawEvidence = promotion.entryCommitment
+      ? `<div class="promotion-evidence"><div><span>Entry commitment</span><code>${safe(promotion.entryCommitment)}</code></div><div><span>Target / resolved slot</span><code>${safe(promotion.targetSlot)} / ${safe(promotion.resolvedSlot)}</code></div><div><span>Randomness hash</span><code>${safe(promotion.randomnessHash)}</code></div></div>`
+      : "";
+    return `<article class="promotion-card">
+      <div class="referral-card-head"><div><span class="eyebrow">${safe(promotion.campaignId)}</span><h3>${safe(promotion.name)}</h3></div><span class="referral-status ${promotionStatusClass(promotion.status)}">${safe(promotion.status)}</span></div>
+      <div class="referral-summary promotion-summary"><article class="referral-stat"><span>Validated NFTs</span><strong>${safe(promotion.entryCount)} / ${safe(promotion.entryThreshold)}</strong></article><article class="referral-stat"><span>Winners</span><strong>${safe(promotion.winnerCount)}</strong></article><article class="referral-stat"><span>Total prizes</span><strong>${safe(Number(promotion.prizeSol).toFixed(2))} SOL</strong></article><article class="referral-stat"><span>Funding</span><strong>${promotion.funded ? "Funded" : "Not loaded"}</strong></article></div>
+      <div class="promotion-progress"><span style="width:${Math.max(0, Math.min(100, Number(promotion.progressPercent ?? 0)))}%"></span></div>
+      <p class="panel-copy">${safe(promotion.entriesRemaining)} verified entries remaining · payout ${promotion.payoutEnabled ? "enabled" : "locked"}</p>
+      <div class="promotion-prizes">${prizes}</div>
+      ${drawEvidence}
+      ${winners ? `<div class="history-winners promotion-winners"><span class="eyebrow">Draw winners</span>${winners}</div>` : ""}
+    </article>`;
+  }).join("") : `<p class="entry-empty history-empty">No promotions are registered.</p>`;
+}
+
 function statusClass(status) {
   if (["qualified", "qualified_test"].includes(status)) return "qualified";
   if (status === "ready_to_qualify") return "ready";
@@ -105,6 +143,8 @@ function render(report) {
   referralSnapshot = report.checks?.referrals ?? { counts: {}, profiles: 0, verifiedIdentities: 0 };
   referralBindings = Array.isArray(referralSnapshot.bindings) ? referralSnapshot.bindings : [];
   renderReferrals();
+  renderAcquisition();
+  renderPromotions();
   $("services").innerHTML = ["settlement","notifications"].map((name) => { const check=report.checks?.[name]??{}; return `<article class="service"><h3>${safe(name)}</h3><div class="kv"><span>Timer</span><strong>${safe(check.timer?.ActiveState)}</strong></div><div class="kv"><span>Enabled</span><strong>${safe(check.timer?.UnitFileState)}</strong></div><div class="kv"><span>Last run</span><strong>${safe(stateLabel(check.service))}</strong></div><div class="kv"><span>Exit</span><strong>${safe(check.service?.ExecMainStatus ?? "0")}</strong></div></article>`; }).join("");
 }
 
@@ -114,7 +154,7 @@ $("referral-status").addEventListener("change", renderReferrals);
 $("referral-search").addEventListener("input", renderReferrals);
 
 function selectTab(name) {
-  const selected = ["status", "treasury", "winners", "referrals"].includes(name) ? name : "status";
+  const selected = ["status", "treasury", "winners", "referrals", "downloads", "promotions"].includes(name) ? name : "status";
   document.querySelectorAll("[data-admin-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.adminTab === selected);
   });

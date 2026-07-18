@@ -11,6 +11,8 @@
     "app:typecheck": "npm --prefix app-seeker run typecheck",
     "app:validate:production": "npm --prefix app-seeker run validate:production",
     "app:build:dapp-store": "npm --prefix app-seeker run build:dapp-store",
+    "app:build:seeker-pass-test": "npm --prefix app-seeker run build:seeker-pass-test",
+    "app:build:ui-test": "npm --prefix app-seeker run build:ui-test",
     "app:apk:verify": "npm --prefix app-seeker run apk:verify",
     "audit:mainnet-release": "node scripts/audit-mainnet-release.mjs",
     "backend:start": "node backend/src/server.mjs",
@@ -39,9 +41,15 @@
     "test:anchor": "NO_DNA=1 anchor test --provider.cluster localnet --validator legacy -- --features test-short-timers",
     "build:web:walletconnect": "node scripts/build-walletconnect-browser.mjs",
     "capture:web-fix-screenshots": "node scripts/capture-web-fix-screenshots.mjs",
-    "test": "node --test sim/*.test.mjs tests/admin-control.test.mjs tests/backend-config.test.mjs tests/backend-minimums-ui.test.mjs tests/backend-rpc-cache.test.mjs tests/app-production-env.test.mjs tests/deploy-safety.test.mjs tests/discord-notifications.test.mjs tests/docs-scripts.test.mjs tests/legacy-empty-rent-recovery.test.mjs tests/lifecycle-rent-wallet.test.mjs tests/wallet-standard.test.mjs tests/walletconnect-flow.test.mjs tests/pool-card-layout.test.mjs tests/push-notifications.test.mjs tests/seeker-referral.test.mjs",
+    "test": "node --test sim/*.test.mjs tests/admin-control.test.mjs tests/app-analytics.test.mjs tests/backend-config.test.mjs tests/backend-minimums-ui.test.mjs tests/backend-rpc-cache.test.mjs tests/app-production-env.test.mjs tests/deploy-safety.test.mjs tests/discord-notifications.test.mjs tests/docs-scripts.test.mjs tests/legacy-empty-rent-recovery.test.mjs tests/lifecycle-rent-wallet.test.mjs tests/wallet-standard.test.mjs tests/walletconnect-flow.test.mjs tests/pool-card-layout.test.mjs tests/push-notifications.test.mjs tests/seeker-pass-verification.test.mjs tests/seeker-referral.test.mjs tests/webview-theme-assets.test.mjs",
+    "test:app-analytics": "node --test tests/app-analytics.test.mjs",
+    "test:seeker-pass": "node --test tests/seeker-pass-verification.test.mjs",
     "test:seeker-referral": "node --test tests/seeker-referral.test.mjs",
     "backend:seeker-referral": "node backend/src/seeker-referral-server.mjs",
+    "campaign:sgt:snapshot": "node scripts/seeker-cnft-campaign/snapshot-sgt-holders.mjs",
+    "campaign:cnft:prepare": "node scripts/seeker-cnft-campaign/prepare-cnft-campaign.mjs",
+    "campaign:skr:verify": "node scripts/seeker-cnft-campaign/verify-skr-identities.mjs",
+    "test:seeker-cnft-campaign": "node --test tests/seeker-cnft-campaign.test.mjs tests/seeker-cnft-prepare.test.mjs",
     "sim:preview": "node sim/preview.mjs"
   },
   "devDependencies": {
@@ -55,6 +63,12 @@
     "qrcode": "1.5.4"
   },
   "dependencies": {
+    "@metaplex-foundation/mpl-account-compression": "0.0.1",
+    "@metaplex-foundation/mpl-bubblegum": "5.0.2",
+    "@metaplex-foundation/mpl-core": "1.10.0",
+    "@metaplex-foundation/umi": "1.5.1",
+    "@metaplex-foundation/umi-bundle-defaults": "1.5.1",
+    "@onsol/tldparser": "1.2.1",
     "@orao-network/solana-vrf": "0.8.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/wallet-standard-util": "^1.1.3",

@@ -203,12 +203,13 @@ test("Seeker How To stays within the phone viewport", () => {
 
   assert.match(seekerScreens, /<main class="stack how-to-page">/);
   assert.match(seekerScreens, /\.how-to-page \{[\s\S]*?max-width: 100%;[\s\S]*?overflow-x: clip;/);
-  assert.match(
-    seekerScreens,
-    /@media \(max-width: 520px\) \{[\s\S]*?\.how-to-page \.pool-rules-table[\s\S]*?min-width: 0;/,
-  );
-  assert.match(seekerScreens, /<td data-label="Target tickets"/);
-  assert.match(seekerScreens, /content: attr\(data-label\)/);
+  assert.match(seekerScreens, /<div class="how-wiki-page">/);
+  assert.match(seekerScreens, /class="how-wiki-tabs"/);
+  assert.match(seekerScreens, /data-how-tab="pools"/);
+  assert.match(seekerScreens, /data-how-tab="referral"/);
+  assert.match(seekerScreens, /data-how-tab="nft"/);
+  assert.match(seekerScreens, /\.how-wiki-page \{[\s\S]*?overflow: hidden;/);
+  assert.match(seekerScreens, /\.how-pool-grid \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
 
 test("reviewed ticket progress is bound through backend and on-chain instruction", () => {

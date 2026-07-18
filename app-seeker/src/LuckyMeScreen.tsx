@@ -3,6 +3,9 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  BackHandler,
+  Image,
+  ImageBackground,
   Linking,
   Modal,
   PermissionsAndroid,
@@ -37,6 +40,7 @@ import type {
   TransactionStatus,
   WinnerShareData,
 } from "./stitchScreens";
+import { WEBVIEW_THEME_ASSETS } from "./generatedWebViewThemeAssets";
 
 type LegalLinkKey = "terms" | "privacy" | "support";
 type NotificationOptInState =
@@ -49,10 +53,12 @@ type NotificationOptInState =
   | "error";
 
 type StitchMessage =
+  | { type: "render-ready" }
   | { type: "navigate"; screen: StitchScreenId; pool?: string }
   | { type: "referral" }
+  | { type: "seeker-pass" }
   | { type: "refresh" }
-  | { type: "action"; action: "ticket-dec" | "ticket-inc" | "buy-entry"; pool?: string; ticketCount?: number }
+  | { type: "action"; action: "ticket-dec" | "ticket-inc" | "buy-entry" | "connect-wallet" | "disconnect-wallet"; pool?: string; ticketCount?: number }
   | { type: "link"; link: LegalLinkKey }
   | { type: "external"; url: string }
   | undefined;
@@ -148,6 +154,7 @@ const SCREEN_BY_LABEL: Record<string, StitchScreenId> = {
   "how to": "how-to-play",
   "how to play": "how-to-play",
   links: "links",
+  "latest winners": "latest-winners",
   pools: "pools",
   settings: "links",
   social: "social",
@@ -179,12 +186,20 @@ function parseStitchMessage(data: string): StitchMessage {
       url?: string;
     };
 
+    if (message?.type === "render-ready") {
+      return { type: "render-ready" };
+    }
+
     if (message?.type === "refresh") {
       return { type: "refresh" };
     }
 
     if (message?.type === "referral") {
       return { type: "referral" };
+    }
+
+    if (message?.type === "seeker-pass") {
+      return { type: "seeker-pass" };
     }
 
     if (message?.type === "link" && isLegalLinkKey(message.link)) {
@@ -199,7 +214,9 @@ function parseStitchMessage(data: string): StitchMessage {
       message?.type === "action" &&
       (message.action === "ticket-dec" ||
         message.action === "ticket-inc" ||
-        message.action === "buy-entry")
+        message.action === "buy-entry" ||
+        message.action === "connect-wallet" ||
+        message.action === "disconnect-wallet")
     ) {
       return {
         type: "action",
@@ -230,7 +247,22 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
       const currentScreen = ${currentScreen};
       const canNavigateOnchainScreens = ${canNavigateOnchainScreens};
 
+      document.documentElement.style.webkitUserSelect = 'none';
+      document.documentElement.style.userSelect = 'none';
+      document.body.style.webkitUserSelect = 'none';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('contextmenu', function (event) { event.preventDefault(); }, true);
+      document.addEventListener('selectstart', function (event) {
+        if (!event.target || !event.target.closest || !event.target.closest('input, textarea')) {
+          event.preventDefault();
+        }
+      }, true);
+
       function post(payload) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ source: 'luckyme-screen-frame', payload: payload }, '*');
+          return;
+        }
         window.ReactNativeWebView.postMessage(JSON.stringify(payload));
       }
 
@@ -278,6 +310,11 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
 
         if (dataRoute === 'referral') {
           post({ type: 'referral' });
+          return null;
+        }
+
+        if (dataRoute === 'seeker-pass') {
+          post({ type: 'seeker-pass' });
           return null;
         }
 
@@ -422,9 +459,155 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
         }, true);
       });
 
+      let renderReadySent = false;
+      function announceRenderReady() {
+        if (renderReadySent) return;
+        renderReadySent = true;
+        requestAnimationFrame(function () {
+          post({ type: 'render-ready' });
+        });
+      }
+      announceRenderReady();
+
       true;
     })();
   `;
+}
+
+function embedNavigationRuntime(html: string, runtime: string) {
+  return html.replace("</body>", `<script>${runtime}</script></body>`);
+}
+
+function scriptJson(value: unknown) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
+function renderPersistentWebViewShell(initialPage: string) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body, #luckyme-screen-stack { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #00251B; }
+    body { touch-action: manipulation; }
+    .luckyme-screen-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #00251B;
+      transform: translate3d(100%, 0, 0);
+      transition: transform 120ms cubic-bezier(.2,.75,.2,1);
+      backface-visibility: hidden;
+      will-change: transform;
+    }
+    .luckyme-screen-frame.current { transform: translate3d(0, 0, 0); z-index: 1; }
+    .luckyme-screen-frame.incoming { z-index: 2; pointer-events: none; }
+    .luckyme-screen-frame.leaving { transform: translate3d(-100%, 0, 0); pointer-events: none; }
+    .luckyme-screen-frame.arriving { transform: translate3d(0, 0, 0); }
+  </style>
+</head>
+<body>
+  <div id="luckyme-screen-stack"></div>
+  <script>
+    (function () {
+      const stack = document.getElementById('luckyme-screen-stack');
+      let currentFrame = null;
+      let pendingFrame = null;
+      let transitioning = false;
+      let queuedPage = null;
+
+      function createFrame(id, html, isCurrent) {
+        const frame = document.createElement('iframe');
+        frame.className = 'luckyme-screen-frame' + (isCurrent ? ' current' : ' incoming');
+        frame.dataset.frameId = String(id);
+        frame.setAttribute('title', 'LuckyMe screen');
+        frame.srcdoc = html;
+        stack.appendChild(frame);
+        return frame;
+      }
+
+      function frameForSource(source) {
+        const frames = stack.querySelectorAll('.luckyme-screen-frame');
+        for (let index = 0; index < frames.length; index += 1) {
+          if (frames[index].contentWindow === source) return frames[index];
+        }
+        return null;
+      }
+
+      function finishTransition(nextFrame, previousFrame) {
+        if (!transitioning || nextFrame !== pendingFrame) return;
+        transitioning = false;
+        previousFrame.srcdoc = '<!doctype html><html><body></body></html>';
+        previousFrame.remove();
+        nextFrame.className = 'luckyme-screen-frame current';
+        nextFrame.style.pointerEvents = 'auto';
+        currentFrame = nextFrame;
+        pendingFrame = null;
+        if (queuedPage) {
+          const queued = queuedPage;
+          queuedPage = null;
+          window.__luckymeNavigate(queued.id, queued.html);
+        }
+      }
+
+      function revealFrame(frame) {
+        if (!pendingFrame || frame !== pendingFrame || transitioning) return;
+        transitioning = true;
+        const previousFrame = currentFrame;
+        let finished = false;
+        const finish = function () {
+          if (finished) return;
+          finished = true;
+          finishTransition(frame, previousFrame);
+        };
+        frame.addEventListener('transitionend', finish, { once: true });
+        requestAnimationFrame(function () {
+          previousFrame.classList.add('leaving');
+          frame.classList.add('arriving');
+          setTimeout(finish, 180);
+        });
+      }
+
+      window.__luckymeNavigate = function (id, html) {
+        if (transitioning) {
+          queuedPage = { id: id, html: html };
+          return;
+        }
+        if (pendingFrame) {
+          pendingFrame.srcdoc = '<!doctype html><html><body></body></html>';
+          pendingFrame.remove();
+        }
+        pendingFrame = createFrame(id, html, false);
+      };
+
+      window.addEventListener('message', function (event) {
+        const frame = frameForSource(event.source);
+        if (!frame) return;
+        const envelope = event.data;
+        if (!envelope || envelope.source !== 'luckyme-screen-frame' || !envelope.payload) return;
+        if (envelope.payload.type === 'render-ready') {
+          revealFrame(frame);
+          return;
+        }
+        window.ReactNativeWebView.postMessage(JSON.stringify(envelope.payload));
+      });
+
+      currentFrame = createFrame(0, ${scriptJson(initialPage)}, true);
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+function persistentWebViewNavigationScript(id: number, page: string) {
+  return `window.__luckymeNavigate(${id}, ${scriptJson(page)}); true;`;
 }
 
 type BackendConfig = {
@@ -519,10 +702,6 @@ function clampTicketCount(pool: string, value: number) {
   const limit = pool === "premium" ? 1 : 1_000;
   const next = Number.isFinite(value) ? Math.trunc(value) : 1;
   return Math.max(1, Math.min(limit, next));
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Wallet request failed";
 }
 
 function poolHasUserEntry(pools: LivePool[], poolId: string) {
@@ -645,6 +824,7 @@ function parseAppRoute(value: string): AppRoute {
     if (
       screenName === "home" ||
       screenName === "activity" ||
+      screenName === "latest-winners" ||
       screenName === "wallet" ||
       screenName === "links" ||
       screenName === "social" ||
@@ -665,9 +845,11 @@ function parseAppRoute(value: string): AppRoute {
 export function LuckyMeScreen({
   disablePayments = false,
   onOpenReferral,
+  onOpenSeekerPassDraw,
 }: {
   disablePayments?: boolean;
   onOpenReferral?: () => void;
+  onOpenSeekerPassDraw?: () => void;
 } = {}) {
   const [onchainAvailable, setOnchainAvailable] = useState(false);
   const [screen, setScreen] = useState<StitchScreenId>(UNAVAILABLE_SCREEN);
@@ -686,10 +868,13 @@ export function LuckyMeScreen({
     state: "idle",
   });
   const mountedRef = useRef(false);
+  const screenRef = useRef<StitchScreenId>(UNAVAILABLE_SCREEN);
+  const screenHistoryRef = useRef<StitchScreenId[]>([]);
   const wallet = useMobileWallet();
   const walletAddress = walletAddressToString(wallet.account?.address);
   const liveStateReady = livePools.length > 0 || UI_PREVIEW_ENABLED;
   const mainnetReady = onchainAvailable && liveStateReady;
+  const themeAssets = WEBVIEW_THEME_ASSETS;
 
   const html = useMemo(
     () =>
@@ -702,6 +887,7 @@ export function LuckyMeScreen({
         transaction: transactionStatus,
         walletAddress,
         winner: winnerShare,
+        ...themeAssets,
       }),
     [
       livePools,
@@ -713,6 +899,7 @@ export function LuckyMeScreen({
       transactionStatus,
       walletAddress,
       winnerShare,
+      themeAssets,
     ],
   );
 
@@ -723,6 +910,31 @@ export function LuckyMeScreen({
     () => injectedNavigation(screen, mainnetReady),
     [mainnetReady, screen],
   );
+  const pageDocument = useMemo(
+    () => embedNavigationRuntime(html, injectedJavaScript),
+    [html, injectedJavaScript],
+  );
+  const webViewRef = useRef<WebView>(null);
+  const initialPageRef = useRef<string | null>(null);
+  const shellHtmlRef = useRef<string | null>(null);
+  const lastPageRef = useRef<string | null>(null);
+  const pageSequenceRef = useRef(1);
+  const [shellReady, setShellReady] = useState(false);
+
+  if (initialPageRef.current === null) {
+    initialPageRef.current = pageDocument;
+    lastPageRef.current = pageDocument;
+    shellHtmlRef.current = renderPersistentWebViewShell(pageDocument);
+  }
+
+  useEffect(() => {
+    if (!shellReady || pageDocument === lastPageRef.current) return;
+    lastPageRef.current = pageDocument;
+    const sequence = pageSequenceRef.current++;
+    webViewRef.current?.injectJavaScript(
+      persistentWebViewNavigationScript(sequence, pageDocument),
+    );
+  }, [pageDocument, shellReady]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -731,6 +943,10 @@ export function LuckyMeScreen({
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
 
   const refreshFromBackend = useCallback(async (options: RefreshOptions = {}) => {
     const allowScreenChange = options.allowScreenChange ?? true;
@@ -889,8 +1105,12 @@ export function LuckyMeScreen({
       setRequestedTab(nextScreen);
     }
 
-    if (nextScreen === "home" || nextScreen === "pools" || nextScreen === "activity") {
+    if (nextScreen === "home" || nextScreen === "pools" || nextScreen === "activity" || nextScreen === "latest-winners") {
       void refreshFromBackend({ allowScreenChange: true, targetScreen: nextScreen });
+    }
+
+    if (nextScreen !== screenRef.current) {
+      screenHistoryRef.current = [...screenHistoryRef.current.slice(-11), screenRef.current];
     }
 
     if (mainnetReady || UNAVAILABLE_ALLOWED_SCREENS.has(nextScreen)) {
@@ -899,6 +1119,23 @@ export function LuckyMeScreen({
       setScreen(UNAVAILABLE_SCREEN);
     }
   }, [mainnetReady, refreshFromBackend]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      const previous = screenHistoryRef.current.pop();
+      if (previous && previous !== UNAVAILABLE_SCREEN) {
+        setRequestedTab(stitchDefaultTab(previous));
+        setScreen(previous);
+        return true;
+      }
+      if (screenRef.current !== INITIAL_SCREEN) {
+        setRequestedTab(INITIAL_SCREEN);
+        setScreen(INITIAL_SCREEN);
+      }
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
 
   const handleAppUrl = useCallback((url: string) => {
     const route = parseAppRoute(url);
@@ -1055,9 +1292,6 @@ export function LuckyMeScreen({
       if (!payload.transactionBase64) {
         throw new Error("Backend did not return a ticket transaction");
       }
-      if (payload.simulation?.ok === false) {
-        throw new Error(`Backend simulation failed: ${JSON.stringify(payload.simulation.err)}`);
-      }
       if (
         Number(payload.summary?.roundId) !== expectedRoundId ||
         String(payload.summary?.totalTicketsBefore ?? "") !== expectedTotalTickets
@@ -1101,12 +1335,12 @@ export function LuckyMeScreen({
       }
       setRequestedTab("activity");
       setScreen("success");
-    } catch (error) {
+    } catch {
+      console.warn("[LuckyMe] Wallet flow ended before a confirmed transaction.");
       setTransactionStatus({
-        state: "error",
-        message: errorMessage(error),
+        state: "idle",
       });
-      setScreen("syncing");
+      setScreen("review");
     }
   }, [disablePayments, livePools, refreshLivePools, selectedPool, ticketCount, wallet]);
 
@@ -1173,6 +1407,20 @@ export function LuckyMeScreen({
     }
 
     if (message?.type === "action") {
+      if (message.action === "connect-wallet") {
+        wallet.connect().catch(() => {
+          console.warn("[LuckyMe] Wallet connection ended without an account.");
+        });
+        return;
+      }
+
+      if (message.action === "disconnect-wallet") {
+        wallet.disconnect().catch(() => {
+          console.warn("[LuckyMe] Wallet disconnect did not complete.");
+        });
+        return;
+      }
+
       if (message.pool) {
         setSelectedPool(message.pool);
       }
@@ -1203,30 +1451,39 @@ export function LuckyMeScreen({
       return;
     }
 
+    if (message?.type === "seeker-pass") {
+      onOpenSeekerPassDraw?.();
+      return;
+    }
+
     if (message?.type === "navigate") {
       navigateTo(message.screen, message.pool);
     }
-  }, [buyEntry, navigateTo, onOpenReferral, openLegalLink, refreshFromBackend, selectedPool]);
+  }, [buyEntry, navigateTo, onOpenReferral, onOpenSeekerPassDraw, openLegalLink, refreshFromBackend, selectedPool, wallet]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" hidden translucent />
-      <WebView
-        key={screen}
-        allowsBackForwardNavigationGestures
-        bounces={false}
-        domStorageEnabled
-        injectedJavaScript={injectedJavaScript}
-        javaScriptEnabled
-        onMessage={handleMessage}
-        originWhitelist={["*"]}
-        setSupportMultipleWindows={false}
-        source={{
-          baseUrl: "https://lucky-me.app/",
-          html,
-        }}
-        style={styles.webView}
-      />
+      <View style={styles.webViewStack}>
+        <WebView
+          androidLayerType="none"
+          allowsBackForwardNavigationGestures
+          bounces={false}
+          domStorageEnabled
+          javaScriptEnabled
+          onLoadEnd={() => setShellReady(true)}
+          onMessage={handleMessage}
+          originWhitelist={["*"]}
+          overScrollMode="never"
+          ref={webViewRef}
+          setSupportMultipleWindows={false}
+          source={{
+            baseUrl: "https://lucky-me.app/",
+            html: shellHtmlRef.current ?? "",
+          }}
+          style={styles.webView}
+        />
+      </View>
       <NotificationOptInModal
         busy={notificationBusy}
         error={notificationError}
@@ -1247,9 +1504,6 @@ export function LuckyMeScreen({
         }}
         visible={reviewPromptVisible}
       />
-      {screen === "wallet" ? (
-        <WalletPreflightPanel onOpenReferral={onOpenReferral} wallet={wallet} />
-      ) : null}
       {screen !== WINNER_SCREEN ? (
         <View style={styles.nativeNavHitbox}>
           {NAV_ITEMS.map((item) => (
@@ -1273,6 +1527,7 @@ export function LuckyMeScreen({
 
 type WalletPreflightPanelProps = {
   onOpenReferral?: () => void;
+  onOpenSeekerPassDraw?: () => void;
   wallet: ReturnType<typeof useMobileWallet>;
 };
 
@@ -1295,9 +1550,11 @@ function ReviewPromptModal({
   visible: boolean;
 }) {
   return (
-    <Modal animationType="fade" transparent visible={visible}>
+    <Modal animationType="fade" navigationBarTranslucent statusBarTranslucent transparent visible={visible}>
+      <StatusBar hidden translucent backgroundColor="transparent" barStyle="light-content" />
       <View style={styles.notificationBackdrop}>
-        <View style={styles.notificationPanel}>
+        <ImageBackground source={require("../assets/home/luckyme-home-background-v2.png")} imageStyle={styles.notificationPanelImage} style={styles.notificationPanel}>
+          <Image source={require("../assets/home/luckyme-wordmark-v2.png")} resizeMode="contain" style={styles.notificationLogo} />
           <Text style={styles.notificationKicker}>ENJOYING LUCKYME?</Text>
           <Text style={styles.notificationTitle}>Share your experience</Text>
           <Text style={styles.notificationBody}>
@@ -1325,7 +1582,7 @@ function ReviewPromptModal({
               <Text style={styles.notificationSecondaryText}>Not now</Text>
             </Pressable>
           </View>
-        </View>
+        </ImageBackground>
       </View>
     </Modal>
   );
@@ -1340,10 +1597,12 @@ function NotificationOptInModal({
   visible,
 }: NotificationOptInModalProps) {
   return (
-    <Modal animationType="fade" transparent visible={visible}>
+    <Modal animationType="fade" navigationBarTranslucent statusBarTranslucent transparent visible={visible}>
+      <StatusBar hidden translucent backgroundColor="transparent" barStyle="light-content" />
       <View style={styles.notificationBackdrop}>
-        <View style={styles.notificationPanel}>
-          <Text style={styles.notificationKicker}>LuckyMe alerts</Text>
+        <ImageBackground source={require("../assets/home/luckyme-home-background-v2.png")} imageStyle={styles.notificationPanelImage} style={styles.notificationPanel}>
+          <Image source={require("../assets/home/luckyme-wordmark-v2.png")} resizeMode="contain" style={styles.notificationLogo} />
+          <Text style={styles.notificationKicker}>LUCKYME ALERTS</Text>
           <Text style={styles.notificationTitle}>Round notifications</Text>
           <Text style={styles.notificationBody}>
             LuckyMe can notify you only when a pool countdown starts and when the
@@ -1388,13 +1647,13 @@ function NotificationOptInModal({
               <Text style={styles.notificationSecondaryText}>Not now</Text>
             </Pressable>
           </View>
-        </View>
+        </ImageBackground>
       </View>
     </Modal>
   );
 }
 
-function WalletPreflightPanel({ onOpenReferral, wallet }: WalletPreflightPanelProps) {
+function WalletPreflightPanel({ onOpenReferral, onOpenSeekerPassDraw, wallet }: WalletPreflightPanelProps) {
   const [pending, setPending] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const address = walletAddressToString(wallet.account?.address);
@@ -1489,6 +1748,23 @@ function WalletPreflightPanel({ onOpenReferral, wallet }: WalletPreflightPanelPr
           </Pressable>
         </View>
       ) : null}
+      {onOpenSeekerPassDraw ? (
+        <View style={[styles.referralEntry, styles.seekerPassEntry]}>
+          <View style={styles.referralEntryCopy}>
+            <Text style={[styles.referralEntryKicker, styles.seekerPassKicker]}>NFT HOLDER EXCLUSIVE</Text>
+            <Text style={styles.referralEntryTitle}>3 SOL · 20 Seeker Pass Winners</Text>
+            <Text style={styles.referralEntryText}>Free entry with a verified LuckyMe Seeker Pass. Automatic draw at 1,000 unique entries.</Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Open LuckyMe Seeker Pass Draw"
+            accessibilityRole="button"
+            onPress={onOpenSeekerPassDraw}
+            style={({ pressed }) => [styles.referralEntryButton, styles.seekerPassButton, pressed ? styles.walletButtonPressed : null]}
+          >
+            <Text style={styles.referralEntryButtonText}>Enter</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1527,11 +1803,16 @@ function walletAddressToString(address: unknown) {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: "#05070C",
+    backgroundColor: "#00251B",
     flex: 1,
   },
+  webViewStack: {
+    backgroundColor: "#00251B",
+    flex: 1,
+    overflow: "hidden",
+  },
   webView: {
-    backgroundColor: "#05070C",
+    backgroundColor: "#00251B",
     flex: 1,
   },
   notificationBackdrop: {
@@ -1542,17 +1823,28 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   notificationPanel: {
-    backgroundColor: "rgba(13, 18, 28, 0.98)",
-    borderColor: "rgba(153, 69, 255, 0.34)",
-    borderRadius: 18,
+    backgroundColor: "rgba(2, 38, 27, 0.98)",
+    borderColor: "rgba(164, 255, 100, 0.48)",
+    borderRadius: 22,
     borderWidth: 1,
     maxWidth: 430,
+    overflow: "hidden",
     padding: 20,
     shadowColor: "#000",
     shadowOffset: { height: 22, width: 0 },
     shadowOpacity: 0.42,
     shadowRadius: 28,
     width: "100%",
+  },
+  notificationPanelImage: {
+    opacity: 0.20,
+    resizeMode: "cover",
+  },
+  notificationLogo: {
+    alignSelf: "center",
+    height: 52,
+    marginBottom: 10,
+    width: 220,
   },
   notificationKicker: {
     color: "rgba(20, 241, 149, 0.92)",
@@ -1603,7 +1895,7 @@ const styles = StyleSheet.create({
   },
   notificationPrimaryButton: {
     alignItems: "center",
-    backgroundColor: "#9945FF",
+    backgroundColor: "#8EFF69",
     borderRadius: 12,
     flexDirection: "row",
     gap: 8,
@@ -1611,7 +1903,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   notificationPrimaryText: {
-    color: "#FFFFFF",
+    color: "#05291D",
     fontSize: 15,
     fontWeight: "900",
   },
@@ -1800,5 +2092,16 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "900",
+  },
+  seekerPassEntry: {
+    backgroundColor: "rgba(255, 216, 77, 0.06)",
+    borderColor: "rgba(255, 216, 77, 0.28)",
+  },
+  seekerPassKicker: {
+    color: "#FFD84D",
+  },
+  seekerPassButton: {
+    backgroundColor: "#B67A00",
+    borderColor: "rgba(255, 216, 77, 0.48)",
   },
 });

@@ -7,6 +7,10 @@ const SCRIPT = "app-seeker/scripts/validate-production-env.mjs";
 const LUCKYME_SCREEN = "app-seeker/src/LuckyMeScreen.tsx";
 const STITCH_SCREENS = "app-seeker/src/stitchScreens.ts";
 const APP_JSON = "app-seeker/app.json";
+const APP_CONFIG = "app-seeker/app.config.js";
+const APP_ROOT = "app-seeker/src/LuckyMeReferralTestApp.tsx";
+const SEEKER_PASS_SCREEN = "app-seeker/src/SeekerPassDrawScreen.tsx";
+const ACTIVATION_ANALYTICS = "app-seeker/src/appActivationAnalytics.ts";
 
 test("Seeker app config resolves the EAS profile before profile env injection", () => {
   const result = spawnSync(
@@ -42,6 +46,8 @@ test("Seeker production env validation rejects localhost backend", () => {
     EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://lucky-me.app/terms",
     EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://lucky-me.app/privacy",
     EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://lucky-me.app/support",
+    EXPO_PUBLIC_LUCKYME_APP_ANALYTICS_ENABLED: "true",
+    EXPO_PUBLIC_LUCKYME_SEEKER_PASS_PROMOTION_ENABLED: "true",
   });
 
   assert.notEqual(result.status, 0);
@@ -58,6 +64,8 @@ test("Seeker production env validation rejects placeholder policy links", () => 
     EXPO_PUBLIC_LUCKYME_TERMS_URL: `https://${exampleHost}/terms`,
     EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://lucky-me.app/privacy",
     EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://lucky-me.app/support",
+    EXPO_PUBLIC_LUCKYME_APP_ANALYTICS_ENABLED: "true",
+    EXPO_PUBLIC_LUCKYME_SEEKER_PASS_PROMOTION_ENABLED: "true",
   });
 
   assert.notEqual(result.status, 0);
@@ -115,9 +123,9 @@ test("Seeker publishes the approved ticket targets and automatic-refund copy", (
 test("Seeker release metadata advances without changing the Android package", () => {
   const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
 
-  assert.equal(app.version, "1.1.9");
+  assert.equal(app.version, "1.2.1");
   assert.equal(app.android.package, "com.luckyme.seeker");
-  assert.equal(app.android.versionCode, 12);
+  assert.equal(app.android.versionCode, 14);
   assert.ok(app.plugins.includes("./plugins/with-solana-dapp-store-query"));
   assert.equal(app.icon, "./assets/icon.png");
   assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
@@ -128,18 +136,47 @@ test("Seeker release metadata advances without changing the Android package", ()
   ]);
 });
 
-test("Seeker production Home is focused and exposes Referral plus the approved navigation", () => {
+test("official Seeker build enables the NFT promotion and private activation estimate", () => {
+  const config = readFileSync(APP_CONFIG, "utf8");
+  const appRoot = readFileSync(APP_ROOT, "utf8");
+  const stitch = readFileSync(STITCH_SCREENS, "utf8");
+  const promotion = readFileSync(SEEKER_PASS_SCREEN, "utf8");
+  const analytics = readFileSync(ACTIVATION_ANALYTICS, "utf8");
+
+  assert.match(config, /seekerPassPromotionEnabled/);
+  assert.match(appRoot, /recordDappStoreActivation/);
+  assert.match(appRoot, /SeekerPassDrawScreen/);
+  assert.match(stitch, /data-route="seeker-pass"/);
+  assert.match(stitch, /<h2>NFT Holders<\/h2>/);
+  assert.match(readFileSync(LUCKYME_SCREEN, "utf8"), /return \{ type: "seeker-pass" \}/);
+  assert.match(readFileSync(LUCKYME_SCREEN, "utf8"), /message\?\.type === "seeker-pass"/);
+  assert.match(promotion, /3 SOL/);
+  assert.match(promotion, /20 winning NFT entries/);
+  assert.match(promotion, /1,000 unique verified NFT entries/);
+  assert.match(promotion, /one wallet authentication signature/i);
+  assert.match(promotion, /Payouts activate after prize funding is confirmed/);
+  assert.match(analytics, /SecureStore\.WHEN_UNLOCKED_THIS_DEVICE_ONLY/);
+  assert.match(analytics, /\/api\/app\/activation/);
+});
+
+test("Seeker production Home exposes exactly the four approved product entrances", () => {
   const screen = readFileSync(LUCKYME_SCREEN, "utf8");
   const stitch = readFileSync(STITCH_SCREENS, "utf8");
-  const home = stitch.slice(stitch.indexOf("function homeBody"), stitch.indexOf("function socialBody"));
+  const home = stitch.slice(stitch.indexOf("function homeBody"), stitch.indexOf("function winnerPrizeSol"));
+  const winners = stitch.slice(stitch.indexOf("function latestWinnersBody"), stitch.indexOf("function socialBody"));
   const nav = stitch.slice(stitch.indexOf("function bottomNav"), stitch.indexOf("/* ------------------------------------------------------------------ */", stitch.indexOf("function bottomNav")));
 
-  assert.match(home, /LuckyMe Referral League/);
-  assert.match(home, /Monthly prizes up to 10,000 SKR/);
-  assert.match(home, /3 completed rounds with a winner on 3 different days/);
-  assert.match(home, /#1 3,000.*#2 2,000.*#3 1,250.*#4 750.*#5–#10 500 SKR each/);
-  assert.match(home, /exclusive to the LuckyMe app from the Solana dApp Store/);
+  assert.equal((home.match(/class="home-action /g) ?? []).length, 4);
+  assert.match(home, /<h2>Pools<\/h2>/);
+  assert.match(home, /<h2>Referral League<\/h2>/);
+  assert.match(home, /<h2>NFT Holders<\/h2>/);
+  assert.match(home, /<h2>Latest Winners<\/h2>/);
+  assert.match(home, /data-route="pools"/);
   assert.match(home, /data-route="referral"/);
+  assert.match(home, /data-route="seeker-pass"/);
+  assert.match(home, /data-route="latest-winners"/);
+  assert.match(winners, /round\.winners/);
+  assert.match(stitch, /winner\.prizeLamports/);
   assert.doesNotMatch(home, /POOLS\.map|Valid draw targets|Reserve jackpot/);
   assert.match(nav, /Home[\s\S]*Pools[\s\S]*Activity[\s\S]*How To[\s\S]*Social/);
   assert.doesNotMatch(nav, /\["wallet"/);
@@ -235,6 +272,8 @@ function mainnetReleaseEnv(overrides = {}) {
     EXPO_PUBLIC_LUCKYME_TERMS_URL: "https://lucky-me.app/terms",
     EXPO_PUBLIC_LUCKYME_PRIVACY_URL: "https://lucky-me.app/privacy",
     EXPO_PUBLIC_LUCKYME_SUPPORT_URL: "https://lucky-me.app/support",
+    EXPO_PUBLIC_LUCKYME_APP_ANALYTICS_ENABLED: "true",
+    EXPO_PUBLIC_LUCKYME_SEEKER_PASS_PROMOTION_ENABLED: "true",
     ...overrides,
   };
 }

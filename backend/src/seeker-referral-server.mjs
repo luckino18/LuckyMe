@@ -98,11 +98,25 @@ export function createSeekerReferralHttpServer({
           ok: true,
           service: service.testMode ? "luckyme-seeker-referral-test" : "luckyme-seeker-referral",
           testMode: service.testMode,
+          seekerPassPromotionEnabled: service.seekerPassPromotionEnabled,
         });
       }
       if (req.method === "POST" && url.pathname === "/api/seeker/nonce") {
         await readJson(req);
         return json(res, 200, service.issueNonce({ ip }));
+      }
+      if (req.method === "POST" && url.pathname === "/api/app/activation" && service.appAnalyticsEnabled) {
+        return json(res, 200, service.recordAppActivation(await readJson(req), { ip }));
+      }
+      if (req.method === "GET" && url.pathname === "/api/seeker-pass/status") {
+        return json(res, 200, service.seekerPassPromotionStatus());
+      }
+      if (req.method === "POST" && url.pathname === "/api/seeker-pass/nonce") {
+        await readJson(req);
+        return json(res, 200, service.issueSeekerPassNonce({ ip }));
+      }
+      if (req.method === "POST" && url.pathname === "/api/seeker-pass/verify") {
+        return json(res, 200, await service.verifySeekerPassSiws({ ...await readJson(req), ip }));
       }
       if (req.method === "POST" && url.pathname === "/api/seeker/verify-siws") {
         const body = await readJson(req);
@@ -150,6 +164,16 @@ export function createSeekerReferralHttpServer({
   });
   server.requestTimeout = REQUEST_TIMEOUT_MS;
   server.headersTimeout = REQUEST_TIMEOUT_MS + 2_000;
+  if (service.seekerPassPromotionEnabled) {
+    const promotionTimer = setInterval(() => {
+      service.advanceSeekerPassPromotion().catch((error) => {
+        console.error("[seeker-referral] promotion_advance_failed", { code: error?.code ?? "unknown" });
+      });
+    }, 15_000);
+    promotionTimer.unref();
+    server.once("close", () => clearInterval(promotionTimer));
+    void service.advanceSeekerPassPromotion().catch(() => undefined);
+  }
   return server;
 }
 

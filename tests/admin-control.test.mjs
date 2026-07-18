@@ -101,17 +101,22 @@ test("protected Admin exposes read-only pool and round winner filters", () => {
   assert.match(adminHtml, /Winner archive/);
 });
 
-test("protected Admin separates status, treasury, winners, and referral navigation", () => {
-  for (const tab of ["status", "treasury", "winners", "referrals"]) {
+test("protected Admin separates operations, downloads, and promotions", () => {
+  for (const tab of ["status", "treasury", "winners", "referrals", "downloads", "promotions"]) {
     assert.match(adminHtml, new RegExp(`data-admin-tab="${tab}"`));
     assert.match(adminHtml, new RegExp(`data-admin-panel="${tab}"`));
   }
   assert.match(adminHtml, /id="referral-status"/);
   assert.match(adminHtml, /id="referral-search"/);
   assert.match(adminJs, /renderReferrals/);
+  assert.match(adminJs, /renderPromotions/);
+  assert.match(adminHtml, /unique LuckyMe app activations/i);
+  assert.match(adminHtml, /Every LuckyMe promotion appears here/);
   assert.match(adminJs, /Completed rounds/);
   assert.match(referralSnapshot, /referrer_wallet/);
   assert.match(referralSnapshot, /referred_wallet/);
   assert.match(referralSnapshot, /referralQualificationProgress/);
+  assert.match(referralSnapshot, /readPromotions/);
+  assert.match(referralSnapshot, /promotion_winners/);
   assert.doesNotMatch(referralSnapshot, /sendTransaction|signTransaction/);
 });

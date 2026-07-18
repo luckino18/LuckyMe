@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 17.0.0"
+    "version": ">= 17.0.0",
+    "appVersionSource": "local"
   },
   "build": {
     "dapp-store": {
@@ -16,6 +17,8 @@
         "EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL": "https://api.mainnet-beta.solana.com",
         "EXPO_PUBLIC_LUCKYME_SOLANA_CLUSTER": "mainnet-beta",
         "EXPO_PUBLIC_LUCKYME_PROGRAM_ID": "4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3",
+        "EXPO_PUBLIC_LUCKYME_APP_ANALYTICS_ENABLED": "true",
+        "EXPO_PUBLIC_LUCKYME_SEEKER_PASS_PROMOTION_ENABLED": "true",
         "EXPO_PUBLIC_LUCKYME_TERMS_URL": "https://lucky-me.app/terms",
         "EXPO_PUBLIC_LUCKYME_PRIVACY_URL": "https://lucky-me.app/privacy",
         "EXPO_PUBLIC_LUCKYME_SUPPORT_URL": "https://lucky-me.app/support"

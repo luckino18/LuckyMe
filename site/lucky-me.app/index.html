@@ -4,10 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>LuckyMe — Solana mainnet luck pools</title>
-    <meta
-      name="description"
-      content="LuckyMe one-hour Solana pools with clear total-ticket targets and automatic refunds when a target is missed."
-    />
+    <meta name="description" content="LuckyMe one-hour Solana pools with transparent targets, verifiable draws and automatic refunds." />
     <link rel="icon" type="image/png" href="/assets/brand/favicon.png" />
     <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
     <meta property="og:title" content="LuckyMe — Solana mainnet luck pools" />
@@ -15,176 +12,58 @@
     <meta property="og:image" content="https://lucky-me.app/assets/brand/og-image.png" />
     <meta property="og:url" content="https://lucky-me.app/" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/styles.css?v=20260712-pool-walletconnect-fix2" />
+    <link rel="stylesheet" href="/styles.css?v=20260718-apk-match-v2" />
   </head>
-  <body>
-    <header class="site-nav">
-      <a class="brand" href="/" aria-label="LuckyMe home">
-        <img src="/assets/brand/luckyme-mark-small.webp" alt="" aria-hidden="true" />
-        <span>LuckyMe</span>
+  <body class="luckyme-apk-site">
+    <header class="apk-site-topbar">
+      <a class="apk-site-logo" href="/" aria-label="LuckyMe home">
+        <img src="/assets/app-theme/home/luckyme-wordmark-v2.png" alt="LuckyMe" />
       </a>
-      <nav class="navlinks" aria-label="Main navigation">
-        <a class="nav-how" href="/how-to-play/">How to Play</a>
-        <a href="/terms/">Terms</a>
-        <a href="/privacy/">Privacy</a>
-        <a href="/support/">Support</a>
-        <a class="button" href="/play/">Play</a>
-      </nav>
+      <div class="apk-site-top-actions">
+        <span class="apk-mainnet"><i></i>Mainnet</span>
+        <a class="apk-wallet-link" href="/play/?wallet=1">Wallet</a>
+      </div>
     </header>
 
-    <main>
-      <section class="landing-hero">
-        <div class="landing-copy">
-          <p class="eyebrow">Solana mainnet pools</p>
-          <h1>Rounds you can verify.</h1>
-          <p class="lead">
-            Choose a pool and help it reach its total-ticket target. If the
-            target is missed before the hour ends, ticket purchases are
-            returned automatically.
-          </p>
-          <div class="chip-row" aria-label="Round rules">
-            <span class="chip">95% main prize</span>
-            <span class="chip">1 hour rounds</span>
-            <span class="chip">Automatic refunds</span>
-          </div>
-          <div class="actions">
-            <a class="button" href="/play/">Play</a>
-            <a class="button secondary" href="/how-to-play/">How to Play</a>
-          </div>
-        </div>
-        <div class="landing-art">
-          <img
-            src="/assets/brand/luckyme-mark.webp"
-            alt="LuckyMe — Solana coin, clover and rocket mark"
-            width="460"
-            height="421"
-          />
-        </div>
+    <main class="apk-site-home">
+      <section class="apk-site-intro">
+        <p class="eyebrow">LuckyMe on Solana</p>
+        <h1>What are you feeling<br />lucky about?</h1>
+        <p>Pick your way to LuckyMe. Every result stays transparent and verifiable on Solana.</p>
       </section>
 
-      <section class="section-band" id="pools">
-        <div class="section-inner two-col">
-          <div>
-            <p class="eyebrow">Game structure</p>
-            <h2>Same pools, browser access.</h2>
-            <p>
-              The web app uses the LuckyMe production model: Mini, Normal,
-              High, and Premium pools, one-hour rounds, a 95% main prize, 2%
-              treasury, and 3% jackpot reserve. Rules are fixed at build time —
-              live values appear only after verified on-chain state.
-            </p>
-          </div>
-          <div class="pool-strip" aria-label="LuckyMe pool tiers">
-            <article class="mini-card">
-              <span>Mini</span>
-              <strong>0.005 SOL</strong>
-              <small>25 total tickets</small>
-            </article>
-            <article class="mini-card">
-              <span>Normal</span>
-              <strong>0.01 SOL</strong>
-              <small>13 total tickets</small>
-            </article>
-            <article class="mini-card">
-              <span>High</span>
-              <strong>0.05 SOL</strong>
-              <small>3 total tickets</small>
-            </article>
-            <article class="mini-card premium">
-              <span>Premium</span>
-              <strong>0.1 SOL</strong>
-              <small>3 tickets · 3 wallets</small>
-            </article>
-          </div>
-        </div>
+      <section class="apk-site-grid" aria-label="LuckyMe website sections">
+        <a class="apk-site-card" href="/play/?screen=pools">
+          <img src="/assets/app-theme/home/pools-rocket-v1.png" alt="" />
+          <strong>Pools</strong>
+          <small>Choose a live Solana round</small>
+        </a>
+        <a class="apk-site-card" href="/how-to-play/">
+          <img src="/assets/app-theme/navigation/how-to-v1.png" alt="" />
+          <strong>How To Play</strong>
+          <small>Targets, draws and refunds</small>
+        </a>
+        <a class="apk-site-card" href="/play/?screen=activity">
+          <img src="/assets/app-theme/home/winner-trophy-v1.png" alt="" />
+          <strong>Latest Winners</strong>
+          <small>Recent rounds and prizes</small>
+        </a>
+        <a class="apk-site-card" href="/play/?screen=social">
+          <img src="/assets/app-theme/navigation/social-v1.png" alt="" />
+          <strong>Social</strong>
+          <small>Official LuckyMe channels</small>
+        </a>
       </section>
 
-      <section class="section-band muted-band">
-        <div class="section-inner steps-grid">
-          <article class="step-card">
-            <span class="step-num">1</span>
-            <h3>Choose a pool</h3>
-            <p>
-              Compare each ticket price and total-ticket target before you
-              enter.
-            </p>
-          </article>
-          <article class="step-card">
-            <span class="step-num">2</span>
-            <h3>Buy tickets</h3>
-            <p>
-              The first confirmed ticket starts the one-hour clock. Each
-              ticket has an equal chance.
-            </p>
-          </article>
-          <article class="step-card">
-            <span class="step-num">3</span>
-            <h3>Draw or automatic refund</h3>
-            <p>
-              A round that reaches its target draws a winner. If it misses,
-              ticket purchases are returned automatically.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section class="section-band">
-        <div class="section-inner two-col">
-          <div>
-            <p class="eyebrow">Ticket targets</p>
-            <h2>Total tickets, not total players.</h2>
-            <p>
-              Mini needs 25 tickets sold in total, not 25 different players.
-              One wallet may buy multiple tickets in Mini, Normal, and High.
-              Premium allows one ticket per wallet and requires three distinct
-              wallets.
-            </p>
-          </div>
-          <div class="refund-explainer">
-            <strong>If a round misses its target</strong>
-            <p>100% of the ticket purchase amount is automatically returned to the wallet that bought the tickets.</p>
-            <p>No claim button is required. Solana network fees are not refundable.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="section-band">
-        <div class="section-inner feature-grid">
-          <article class="feature">
-            <h2>Self-custody</h2>
-            <p>
-              Every player action is approved in your own wallet. App custody
-              is none, on Solana mainnet.
-            </p>
-          </article>
-          <article class="feature">
-            <h2>Verifiable draws</h2>
-            <p>
-              Settlement randomness comes from ORAO VRF and rounds settle
-              on-chain.
-            </p>
-          </article>
-          <article class="feature">
-            <h2>Nothing simulated</h2>
-            <p>
-              Pool values move from Pending to live only after the production
-              program and backend state are confirmed. No fake balances, ever.
-            </p>
-          </article>
-        </div>
-      </section>
+      <p class="apk-site-boundary">The website contains the four public LuckyMe pools. Seeker-only campaigns remain inside the official APK.</p>
     </main>
 
-    <footer class="footer">
-      <span>LuckyMe · Solana mainnet</span>
-      <span>
-        <a href="/play/">Play</a>
-        <a href="/how-to-play/">How to Play</a>
-        <a href="/terms/">Terms</a>
-        <a href="/privacy/">Privacy</a>
-        <a href="/support/">Support</a>
-        <a href="https://x.com/LuckyMeSolana" target="_blank" rel="noopener noreferrer">X</a>
-      </span>
-    </footer>
+    <nav class="apk-site-bottom" aria-label="Website navigation">
+      <a class="active" href="/"><img src="/assets/app-theme/navigation/home-v1.png" alt="" /><span>Home</span></a>
+      <a href="/play/?screen=pools"><img src="/assets/app-theme/navigation/pools-v1.png" alt="" /><span>Pools</span></a>
+      <a href="/play/?screen=activity"><img src="/assets/app-theme/navigation/activity-v1.png" alt="" /><span>Activity</span></a>
+      <a href="/how-to-play/"><img src="/assets/app-theme/navigation/how-to-v1.png" alt="" /><span>How To</span></a>
+      <a href="/play/?screen=social"><img src="/assets/app-theme/navigation/social-v1.png" alt="" /><span>Social</span></a>
+    </nav>
   </body>
 </html>

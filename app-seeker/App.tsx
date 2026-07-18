@@ -10,13 +10,21 @@ import { secureWalletAuthorizationCache } from "./src/secureWalletCache";
 
 const appExtra = Constants.expoConfig?.extra ?? {};
 const isReferralTestBuild = appExtra.referralTestBuild === true;
+const isSeekerPassTestBuild = appExtra.seekerPassTestBuild === true;
+const isUiTestBuild = appExtra.uiTestBuild === true;
 const walletChain = (appExtra.referralWalletChain ?? "solana:mainnet") as Chain;
 const walletEndpoint = String(
   appExtra.referralWalletRpcUrl ?? "https://api.mainnet-beta.solana.com",
 );
 const identity: AppIdentity = {
-  name: isReferralTestBuild ? "LuckyMe Seeker Referral Test" : "LuckyMe",
-  uri: isReferralTestBuild ? "https://www.lucky-me.app" : "https://lucky-me.app",
+  name: isReferralTestBuild
+    ? "LuckyMe Seeker Referral Test"
+    : isSeekerPassTestBuild
+      ? "LuckyMe Seeker Pass Test"
+      : isUiTestBuild
+        ? "LuckyMe UI Test"
+      : "LuckyMe",
+  uri: isReferralTestBuild || isSeekerPassTestBuild || isUiTestBuild ? "https://www.lucky-me.app" : "https://lucky-me.app",
 };
 
 export default function App() {
@@ -27,7 +35,10 @@ export default function App() {
       identity={identity}
       cache={secureWalletAuthorizationCache}
     >
-      <LuckyMeApp disablePayments={isReferralTestBuild} />
+      <LuckyMeApp
+        disablePayments={isReferralTestBuild || isSeekerPassTestBuild}
+        initialSeekerPassDrawVisible={isSeekerPassTestBuild}
+      />
     </MobileWalletProvider>
   );
 }

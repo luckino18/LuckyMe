@@ -1,6 +1,7 @@
 export type StitchScreenId =
   | "home"
   | "pools"
+  | "latest-winners"
   | "activity"
   | "wallet"
   | "how-to-play"
@@ -30,6 +31,28 @@ export type StitchRenderOptions = {
   walletAddress?: string;
   /** Native transaction progress/error shown in the WebView. */
   transaction?: TransactionStatus;
+  /** Optional image candidates used by the Home redesign preview. */
+  homeIcons?: Partial<Record<"pools" | "referral" | "nft" | "winners", string>>;
+  /** Optional artwork used by the themed Home bottom navigation. */
+  navigationIcons?: Partial<Record<"home" | "pools" | "activity" | "howTo" | "social", string>>;
+  /** Optional artwork used by the Social hub cards. */
+  socialIcons?: Partial<Record<"x" | "discord" | "website" | "support", string>>;
+  /** Preview-only Social layout selector. The app defaults to the latest layout. */
+  socialVariant?: "v2" | "v3" | "v4";
+  /** Optional pool artwork displayed as a subtle watermark inside each pool selector. */
+  poolIcons?: Partial<Record<"mini" | "normal" | "high" | "premium", string>>;
+  /** Optional visual assets used only by the redesigned Home screen. */
+  homeBackground?: string;
+  homeLogo?: string;
+  /** Live holder-campaign status used by the NFT preview. */
+  seekerPassCampaign?: {
+    entryCount?: number;
+    entryThreshold?: number;
+    winnerCount?: number;
+    prizeSol?: number;
+    funded?: boolean;
+    payoutEnabled?: boolean;
+  };
 };
 
 export type WinnerShareData = {
@@ -76,6 +99,15 @@ export type LiveRound = {
     | "settled"
     | string;
   userEntry?: LiveUserEntry | null;
+  winners?: Array<{
+    rank?: number;
+    wallet?: string;
+    winner?: string;
+    prizeLamports?: string | number;
+    prizeSol?: string | number;
+  }>;
+  archivedAt?: string | null;
+  settlementSignature?: string | null;
   randomnessProof?: {
     status?: string;
     providerStatus?: string;
@@ -96,6 +128,8 @@ export type LivePool = {
   roundOutcome?: string;
   activeRound?: LiveRound | null;
   recentRounds?: LiveRound[];
+  mainPrizeBps?: string | number;
+  prizeSplitBps?: Array<string | number>;
   onchain?: {
     available?: boolean;
   };
@@ -466,6 +500,13 @@ const ICONS = {
   chain: `<svg ${SVG}><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.8 12.8 5a3.6 3.6 0 0 1 5.1 5.1L16.1 12"/><path d="M13 17.2 11.2 19a3.6 3.6 0 0 1-5.1-5.1L7.9 12"/></svg>`,
   dice: `<svg ${SVG}><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9h.01M15 9h.01M12 12h.01M9 15h.01M15 15h.01"/></svg>`,
   diamond: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2.6" transform="rotate(45 12 12)"/></svg>`,
+  referral: `<svg ${SVG}><circle cx="8" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3.5 19c.6-3.3 2.2-5 4.5-5s3.9 1.7 4.5 5"/><path d="M13.8 18.5c.4-2.5 1.5-3.8 3.3-3.8 1.7 0 2.9 1.3 3.4 3.8"/><path d="M11 8h3"/></svg>`,
+  trophy: `<svg ${SVG}><path d="M8 4h8v5.5a4 4 0 0 1-8 0Z"/><path d="M8 6H5v1.5A3.5 3.5 0 0 0 8.5 11M16 6h3v1.5a3.5 3.5 0 0 1-3.5 3.5"/><path d="M12 13.5V18M8.5 20h7"/></svg>`,
+  homePools: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20.894 15.553a1 1 0 0 1-.447 1.341l-8 4a1 1 0 0 1-.894 0l-8-4a1 1 0 0 1 .894-1.788L12 18.88l7.554-3.775a1 1 0 0 1 1.34.448m0-4a1 1 0 0 1-.447 1.341l-8 4a1 1 0 0 1-.894 0l-8-4a1 1 0 0 1 .894-1.788L12 14.881l7.554-3.775a1 1 0 0 1 1.34.447M12.007 3q.056 0 .111.007l.111.02.086.024.012.006.012.002.029.014.05.019.016.009.012.005 8 4a1 1 0 0 1 0 1.788l-8 4a1 1 0 0 1-.894 0l-8-4a1 1 0 0 1 0-1.788l8-4 .011-.005.018-.01.078-.032.011-.002.013-.006.086-.024.11-.02.056-.005z"/></svg>`,
+  homeReferral: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 3a2.5 2.5 0 1 1-.912 4.828l-4.556 4.555a5.475 5.475 0 0 1 .936 3.714l2.624.787a2.5 2.5 0 1 1-.575 1.916l-2.623-.788a5.5 5.5 0 0 1-10.39-2.29L3 15.5l.004-.221a5.5 5.5 0 0 1 2.984-4.673L5.2 7.982a2.498 2.498 0 0 1-2.194-2.304L3 5.5l.005-.164a2.5 2.5 0 1 1 4.111 2.071l.787 2.625a5.475 5.475 0 0 1 3.714.936l4.555-4.556a2.487 2.487 0 0 1-.167-.748L16 5.5l.005-.164A2.5 2.5 0 0 1 18.5 3z"/></svg>`,
+  homeNft: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M14 4v2a1 1 0 0 0 2 0V4h3a3 3 0 0 1 3 3v3a1 1 0 0 1-.883.993L21 11a1 1 0 0 0-.117 1.993L21 13a1 1 0 0 1 1 1v3a3 3 0 0 1-3 3h-3v-2a1 1 0 0 0-.883-.993L15 17a1 1 0 0 0-1 1v2H5a3 3 0 0 1-3-3v-3a1 1 0 0 1 .883-.993L3 13a1 1 0 0 0 .117-1.993L3 11a1 1 0 0 1-1-1V7a2.995 2.995 0 0 1 2.727-2.985L4.949 4zM15 10a1 1 0 0 0-1 1v2a1 1 0 0 0 2 0v-2a1 1 0 0 0-1-1"/></svg>`,
+  homeWinners: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3a1 1 0 0 1 .993.883L18 4v2.17a3 3 0 1 1 0 5.659V12a6.002 6.002 0 0 1-5 5.917V20h3a1 1 0 0 1 .117 1.993L16 22H8a1 1 0 0 1-.117-1.993L8 20h3v-2.083A6.002 6.002 0 0 1 6.004 12.225L6 12v-.171A3 3 0 0 1 2.004 9.176L2.001 9l.005-.176A3 3 0 0 1 6.001 6.17L6 4a1 1 0 0 1 1-1zm-12 5a1 1 0 1 0 0 2 1 1 0 0 0 0-2m14 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></svg>`,
+  chevron: `<svg ${SVG}><path d="m9 5 7 7-7 7"/></svg>`,
   whatsapp: `<svg ${SVG}><path d="M4.5 19.5 5.8 15.9A7.2 7.2 0 1 1 8 18Z"/><path d="M9.2 8.7c.2-.4.4-.4.7-.4h.5c.2 0 .4 0 .5.4l.5 1.1c.1.3.1.5-.1.7l-.4.5c.5 1 1.3 1.8 2.4 2.4l.5-.4c.2-.2.4-.2.7-.1l1.2.6c.3.1.4.3.4.6v.5c0 .3-.1.5-.4.7-.5.3-1.2.5-1.8.4-3-.4-5.4-2.8-5.8-5.8-.1-.7.1-1.3.5-1.8Z"/></svg>`,
   x: `<svg ${SVG}><path d="M5 5l14 14"/><path d="M19 5 5 19"/></svg>`,
   telegram: `<svg ${SVG}><path d="m21 4-4 16-5.2-4.1L8.6 19l.7-5.2L3 11.2Z"/><path d="M9.3 13.8 21 4"/></svg>`,
@@ -482,6 +523,8 @@ function page(
   body: string,
   onchainAvailable: boolean,
   chrome = true,
+  homeTheme = false,
+  options: StitchRenderOptions = {},
 ) {
   return String.raw`<!doctype html>
 <html lang="en">
@@ -515,7 +558,17 @@ function page(
       --cta-grad: linear-gradient(135deg, #9945FF 0%, #7C3AED 45%, #00D1FF 130%);
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    input, textarea {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+    img { -webkit-user-drag: none; }
 
     html, body {
       margin: 0;
@@ -533,6 +586,19 @@ function page(
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
     }
+
+    .home-themed { background: #031b14; }
+    .home-page-background, .home-page-shade {
+      position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none;
+    }
+    .home-page-background { z-index: 0; object-fit: cover; object-position: center; }
+    .home-page-shade {
+      z-index: 1;
+      background:
+        linear-gradient(180deg, rgba(1,20,15,.36), rgba(1,20,15,.12) 38%, rgba(1,16,13,.46)),
+        radial-gradient(circle at 50% 28%, rgba(67,255,111,.07), transparent 44%);
+    }
+    .home-themed .app { position: relative; z-index: 2; }
 
     button, a { -webkit-tap-highlight-color: transparent; color: inherit; font: inherit; }
     button { cursor: pointer; }
@@ -569,8 +635,17 @@ function page(
       backdrop-filter: blur(18px);
     }
 
+    .home-themed .topbar {
+      min-height: 70px;
+      margin-bottom: 7px;
+      background: linear-gradient(180deg, rgba(2,28,20,.90), rgba(2,29,21,.68));
+      border-bottom-color: rgba(132,255,111,.24);
+      box-shadow: 0 8px 26px rgba(0,0,0,.20);
+    }
+
     .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .brand img { width: 42px; height: auto; flex: 0 0 auto; filter: drop-shadow(0 0 10px rgba(20, 241, 149, 0.25)); }
+    .brand img.home-wordmark { width: clamp(132px, 38vw, 175px); max-height: 52px; object-fit: contain; object-position: left center; filter: drop-shadow(0 3px 7px rgba(0,0,0,.55)); }
     .brand-text { display: grid; gap: 1px; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; line-height: 1; }
     .brand-text small { color: var(--soft); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 
@@ -689,6 +764,86 @@ function page(
 
     .cta-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+    .home-intro { display: grid; gap: 7px; padding: 8px 4px 5px; text-shadow: 0 2px 10px rgba(0,0,0,.72); }
+    .home-intro .eyebrow { color: #8ff7df; }
+    .home-intro h1 { max-width: 350px; font-size: 31px; letter-spacing: -0.035em; }
+    .home-intro > p:last-child { max-width: 370px; color: rgba(255,255,255,.88); font-size: 13.5px; line-height: 1.45; }
+    .home-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+    .home-action {
+      position: relative;
+      min-width: 0;
+      aspect-ratio: .93 / 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 2px;
+      padding: 5px 6px 11px;
+      overflow: hidden;
+      border: 2px solid rgba(150,255,94,.84);
+      border-radius: 22px;
+      background:
+        radial-gradient(circle at 50% 25%, rgba(133,255,69,.13), transparent 48%),
+        linear-gradient(180deg, rgba(35,112,47,.42), rgba(4,49,31,.68));
+      color: var(--text);
+      text-align: center;
+      box-shadow: inset 0 0 0 3px rgba(216,255,93,.10), inset 0 -36px 42px rgba(1,29,20,.24), 0 0 18px rgba(100,255,72,.30), 0 10px 24px rgba(0,0,0,.24);
+      backdrop-filter: blur(4px);
+    }
+    .home-action::after { content: ""; position: absolute; inset: 5px; border: 1px solid rgba(240,255,147,.30); border-radius: 16px; pointer-events: none; }
+    .home-action:active { transform: scale(.98); }
+    .home-action .feature-icon { position: relative; z-index: 1; display: grid; place-items: center; width: 126px; height: 126px; flex: 0 0 126px; border: 0; border-radius: 0; color: #D8E2F0; background: transparent; }
+    .home-action .feature-icon svg { width: 60px; height: 60px; }
+    .home-action .feature-icon img { display: block; width: 138px; height: 138px; object-fit: contain; filter: drop-shadow(0 7px 8px rgba(0,0,0,.30)); }
+    .home-action .feature-icon.icon-referral img { width: 132px; height: 132px; }
+    .home-action .feature-icon.icon-nft img { width: 150px; height: 150px; transform: translateX(-12px); }
+    .home-action .feature-icon.icon-winners img { width: 140px; height: 140px; transform: translateX(-7px); }
+    .home-action-copy { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; min-height: 42px; }
+    .home-action h2 { max-width: 128px; margin: 0 auto; font-size: clamp(19px, 5.25vw, 22px); line-height: .98; letter-spacing: -0.025em; text-shadow: 0 2px 5px rgba(0,0,0,.85); }
+    .home-action p, .home-action .home-chevron { display: none; }
+    .feature-referral .feature-icon { color: #C9B5FF; }
+    .feature-nft .feature-icon { color: #F7C66A; }
+    .feature-winners .feature-icon { color: #61E5B2; }
+
+    body:has(.latest-winners-page) .home-page-shade {
+      background:
+        linear-gradient(180deg, rgba(1,20,15,.56), rgba(1,20,15,.42) 38%, rgba(1,16,13,.66)),
+        radial-gradient(circle at 50% 28%, rgba(67,255,111,.035), transparent 44%);
+    }
+    .winner-pool-section {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid rgba(158,255,108,.25);
+      border-radius: 18px;
+      background: rgba(2,37,28,.80);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 10px 24px rgba(0,0,0,.22);
+      backdrop-filter: blur(10px);
+    }
+    .winner-round {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid rgba(174,255,124,.20);
+      border-radius: 14px;
+      background: rgba(1,27,22,.90);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+    }
+    .winner-round-link { width: 100%; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .winner-round-link:active { transform: scale(.988); }
+    .winner-proof-stack { display: grid; justify-items: end; gap: 3px; }
+    .winner-proof { display: inline-flex; align-items: center; gap: 5px; color: #8ff7df; font-size: 10px; font-weight: 850; }
+    .winner-proof svg { width: 13px; height: 13px; }
+    .latest-winners-page .winner-pool-section > .panel {
+      background: rgba(1,27,22,.90);
+      border-color: rgba(174,255,124,.18);
+    }
+    .winner-round-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .winner-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding-top: 9px; border-top: 1px solid rgba(148, 163, 184, 0.10); }
+    .winner-rank { color: var(--emerald); font-size: 12px; font-weight: 900; }
+    .winner-wallet { color: #fff; font-size: 12px; }
+    .winner-prize { color: var(--emerald); font-size: 13px; font-weight: 850; white-space: nowrap; }
+
     /* ---------- status pills / chips ---------- */
 
     .status-pill {
@@ -744,6 +899,611 @@ function page(
 
     .pool-grid { display: grid; gap: 12px; }
 
+    .pools-page { gap: 12px; }
+    .pools-hero {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      gap: 7px;
+      padding: 10px 5px 7px;
+      text-shadow: 0 2px 10px rgba(0,0,0,.72);
+    }
+    .pools-hero h1 { max-width: 340px; font-size: 30px; letter-spacing: -.035em; }
+    .pools-hero > p { max-width: 370px; color: rgba(255,255,255,.86); font-size: 13.5px; }
+    .pools-hero-badges { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 3px; }
+    .pools-hero-badges span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 27px;
+      padding: 0 9px;
+      border: 1px solid rgba(163,255,111,.35);
+      border-radius: 999px;
+      background: rgba(3,43,29,.48);
+      color: #d8ffd1;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      backdrop-filter: blur(5px);
+    }
+    .pool-selector-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+    .pool-selector-card {
+      position: relative;
+      min-width: 0;
+      min-height: 218px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 13px 12px 12px;
+      border: 2px solid var(--accent-line);
+      border-radius: 21px;
+      background:
+        radial-gradient(circle at 50% 45%, var(--accent-soft), transparent 72%),
+        linear-gradient(160deg, rgba(24,91,41,.26), rgba(2,34,24,.52));
+      color: #fff;
+      text-align: left;
+      box-shadow: inset 0 0 0 3px rgba(216,255,93,.08), 0 0 17px var(--accent-glow), 0 10px 24px rgba(0,0,0,.25);
+      backdrop-filter: blur(5px);
+    }
+    .pool-selector-card::after { content: ""; position: absolute; inset: 5px; border: 1px solid var(--accent-line); border-radius: 15px; opacity: .52; pointer-events: none; }
+    .pool-selector-watermark {
+      position: absolute;
+      z-index: 0;
+      top: 50%;
+      left: 50%;
+      width: 188px;
+      height: 188px;
+      object-fit: contain;
+      opacity: .76;
+      filter: saturate(1.12) contrast(1.06);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      user-select: none;
+    }
+    .pool-selector-card:active { transform: scale(.98); }
+    .pool-selector-card:disabled { opacity: .62; cursor: default; }
+    .pool-selector-head { position: relative; z-index: 1; display: flex; align-items: start; justify-content: space-between; gap: 7px; }
+    .pool-selector-name { display: grid; gap: 2px; }
+    .pool-selector-name strong { color: rgba(255,255,255,.90); font-size: 21px; line-height: 1; text-shadow: 0 2px 7px rgba(0,0,0,.86); }
+    .pool-selector-name small { color: rgba(255,255,255,.52); font-size: 8px; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-status { max-width: 70px; padding: 4px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 82%, transparent); color: rgba(7,24,15,.86); font-size: 7.5px; font-weight: 900; letter-spacing: .04em; line-height: 1.12; text-align: center; text-transform: uppercase; }
+    .pool-selector-price { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 4px; }
+    .pool-selector-price strong { color: color-mix(in srgb, var(--accent) 88%, white); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 25px; line-height: 1; letter-spacing: -.035em; text-shadow: 0 2px 8px rgba(0,0,0,.92), 0 0 12px var(--accent-glow); }
+    .pool-selector-price span { color: rgba(255,255,255,.58); font-size: 8.5px; font-weight: 850; letter-spacing: .05em; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-progress { position: relative; z-index: 1; display: grid; gap: 6px; }
+    .pool-selector-progress-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .pool-selector-progress-head span { color: rgba(255,255,255,.54); font-size: 8.5px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-progress-head strong { color: rgba(255,255,255,.88); font-size: 12px; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-card .progress-track { height: 7px; background: rgba(1,20,14,.70); border: 1px solid rgba(255,255,255,.10); }
+    .pool-selector-card .progress-fill { background: linear-gradient(90deg, var(--accent), #caff8d); }
+    .pool-selector-metrics { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, .65fr); gap: 7px; margin-top: auto; }
+    .pool-selector-metric { min-width: 0; min-height: 50px; display: grid; align-content: center; gap: 4px; padding: 7px; border: 1px solid rgba(196,255,158,.12); border-radius: 10px; background: rgba(1,24,17,.54); backdrop-filter: blur(2px); }
+    .pool-selector-metric span { color: rgba(255,255,255,.48); font-size: 7.5px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+    .pool-selector-metric strong { color: rgba(255,255,255,.86); font-size: 10px; line-height: 1.15; overflow-wrap: anywhere; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-enter { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; color: color-mix(in srgb, var(--accent) 82%, white); font-size: 9px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-enter svg { width: 14px; height: 14px; }
+
+    /* ---------- activity dashboard ---------- */
+
+    .activity-page { display: grid; gap: 10px; }
+    .activity-hero {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 4px 3px;
+      text-shadow: 0 2px 10px rgba(0,0,0,.76);
+    }
+    .activity-hero-copy { display: grid; gap: 4px; min-width: 0; }
+    .activity-hero h1 { font-size: 29px; letter-spacing: -.035em; }
+    .activity-hero p { color: rgba(255,255,255,.76); font-size: 12px; }
+    .activity-wallet-state {
+      flex: 0 0 auto;
+      display: grid;
+      justify-items: end;
+      gap: 3px;
+      padding: 7px 9px;
+      border: 1px solid rgba(163,255,111,.34);
+      border-radius: 11px;
+      background: rgba(2,38,27,.58);
+      backdrop-filter: blur(6px);
+    }
+    .activity-wallet-state span { color: rgba(255,255,255,.48); font-size: 7px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    .activity-wallet-state strong { color: #d9ffd2; font-size: 9px; }
+    .activity-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      padding: 8px;
+      border: 1px solid rgba(163,255,111,.30);
+      border-radius: 16px;
+      background: linear-gradient(160deg, rgba(22,91,42,.34), rgba(2,34,24,.58));
+      box-shadow: inset 0 0 0 2px rgba(216,255,93,.05), 0 8px 22px rgba(0,0,0,.22);
+      backdrop-filter: blur(6px);
+    }
+    .activity-summary-item { min-width: 0; display: grid; gap: 2px; padding: 3px 5px; text-align: center; }
+    .activity-summary-item + .activity-summary-item { border-left: 1px solid rgba(196,255,158,.15); }
+    .activity-summary-item span { color: rgba(255,255,255,.48); font-size: 7.5px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+    .activity-summary-item strong { color: #edffe8; font-size: 18px; line-height: 1; text-shadow: 0 0 12px rgba(126,255,91,.23); }
+    .activity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .activity-card {
+      position: relative;
+      min-width: 0;
+      min-height: 198px;
+      overflow: hidden;
+      display: grid;
+      align-content: space-between;
+      gap: 7px;
+      padding: 11px 10px 10px;
+      border: 2px solid var(--accent-line);
+      border-radius: 19px;
+      background:
+        linear-gradient(180deg, rgba(2,36,25,.20), rgba(1,24,17,.79)),
+        radial-gradient(circle at 50% 46%, var(--accent-soft), transparent 72%);
+      color: #fff;
+      text-align: left;
+      box-shadow: inset 0 0 0 3px rgba(216,255,93,.06), 0 0 14px var(--accent-glow), 0 9px 22px rgba(0,0,0,.24);
+      backdrop-filter: blur(5px);
+    }
+    .activity-card::after { content: ""; position: absolute; inset: 5px; border: 1px solid var(--accent-line); border-radius: 13px; opacity: .45; pointer-events: none; }
+    .activity-card-art {
+      position: absolute;
+      z-index: 0;
+      top: 52%;
+      left: 50%;
+      width: 128px;
+      height: 128px;
+      object-fit: contain;
+      opacity: .54;
+      filter: saturate(1.08) contrast(1.04) drop-shadow(0 3px 8px rgba(0,0,0,.35));
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .activity-card-head, .activity-entry, .activity-card-progress, .activity-card-footer { position: relative; z-index: 1; }
+    .activity-card-head { display: flex; align-items: start; justify-content: space-between; gap: 6px; }
+    .activity-card-title { display: grid; gap: 2px; }
+    .activity-card-title strong { color: rgba(255,255,255,.94); font-size: 18px; line-height: 1; text-shadow: 0 2px 7px rgba(0,0,0,.9); }
+    .activity-card-title small { color: rgba(255,255,255,.52); font-size: 7px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+    .activity-card-status { max-width: 67px; padding: 4px 6px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 78%, transparent); color: rgba(4,24,14,.88); font-size: 6.8px; font-weight: 950; letter-spacing: .04em; line-height: 1.1; text-align: center; text-transform: uppercase; }
+    .activity-entry { display: grid; gap: 2px; text-shadow: 0 2px 7px rgba(0,0,0,.95); }
+    .activity-entry span { color: rgba(255,255,255,.52); font-size: 7.5px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    .activity-entry strong { color: color-mix(in srgb, var(--accent) 84%, white); font-size: 18px; line-height: 1.05; }
+    .activity-entry strong.no-entry { color: rgba(255,255,255,.72); font-size: 13px; }
+    .activity-card-progress { display: grid; gap: 5px; }
+    .activity-card-progress-head { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
+    .activity-card-progress-head span { color: rgba(255,255,255,.50); font-size: 7px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+    .activity-card-progress-head strong { color: rgba(255,255,255,.88); font-size: 10px; }
+    .activity-card .progress-track { height: 6px; background: rgba(1,20,14,.74); border: 1px solid rgba(255,255,255,.09); }
+    .activity-card .progress-fill { background: linear-gradient(90deg, var(--accent), #caff8d); }
+    .activity-card-footer { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 7px; }
+    .activity-card-metric { min-width: 0; display: grid; gap: 2px; }
+    .activity-card-metric span { color: rgba(255,255,255,.45); font-size: 6.7px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+    .activity-card-metric strong { color: rgba(255,255,255,.83); font-size: 8.5px; line-height: 1.12; overflow-wrap: anywhere; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .activity-card-chevron { color: color-mix(in srgb, var(--accent) 82%, white); }
+    .activity-card-chevron svg { width: 15px; height: 15px; }
+    .activity-safety-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border: 1px solid rgba(163,255,111,.22);
+      border-radius: 12px;
+      background: rgba(2,34,24,.52);
+      color: rgba(255,255,255,.66);
+      font-size: 8.5px;
+      font-weight: 700;
+      line-height: 1.25;
+      backdrop-filter: blur(5px);
+    }
+    .activity-safety-note svg { width: 17px; height: 17px; flex: 0 0 auto; color: #a9ff7d; }
+
+    .home-themed .activity-page .tone-cyan { --accent: #6ff7ff; --accent-line: rgba(111,247,255,.64); --accent-soft: rgba(111,247,255,.13); --accent-glow: rgba(111,247,255,.21); }
+    .home-themed .activity-page .tone-purple { --accent: #95ff70; --accent-line: rgba(149,255,112,.64); --accent-soft: rgba(149,255,112,.13); --accent-glow: rgba(149,255,112,.21); }
+    .home-themed .activity-page .tone-violet { --accent: #ffe36d; --accent-line: rgba(255,227,109,.64); --accent-soft: rgba(255,227,109,.13); --accent-glow: rgba(255,227,109,.21); }
+    .home-themed .activity-page .tone-prime { --accent: #dca0ff; --accent-line: rgba(220,160,255,.64); --accent-soft: rgba(220,160,255,.14); --accent-glow: rgba(220,160,255,.23); }
+
+    .activity-page-v2 { display: grid; gap: 9px; }
+    .activity-page-v2 .activity-hero { align-items: center; padding-top: 5px; }
+    .activity-page-v2 .activity-hero h1 { font-size: 27px; }
+    .activity-page-v2 .activity-summary { padding: 7px; }
+    .activity-switcher {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px;
+      padding: 5px;
+      border: 1px solid rgba(163,255,111,.28);
+      border-radius: 14px;
+      background: rgba(2,34,24,.62);
+      backdrop-filter: blur(7px);
+    }
+    .activity-switch {
+      min-height: 36px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: rgba(255,255,255,.58);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .04em;
+    }
+    .activity-switch[aria-selected="true"] {
+      background: linear-gradient(135deg, rgba(92,199,65,.45), rgba(11,91,63,.56));
+      color: #f3ffce;
+      box-shadow: inset 0 0 0 1px rgba(202,255,99,.48), 0 0 13px rgba(105,255,72,.14);
+    }
+    .activity-view {
+      min-height: 372px;
+      display: grid;
+      align-content: start;
+      gap: 7px;
+      padding: 8px;
+      border: 1px solid rgba(163,255,111,.28);
+      border-radius: 17px;
+      background: linear-gradient(160deg, rgba(17,76,37,.30), rgba(1,28,20,.68));
+      box-shadow: inset 0 0 0 2px rgba(216,255,93,.04), 0 10px 24px rgba(0,0,0,.22);
+      backdrop-filter: blur(7px);
+    }
+    .activity-view[hidden] { display: none; }
+    .activity-compact-row {
+      position: relative;
+      min-width: 0;
+      min-height: 76px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 9px;
+      border: 1px solid var(--accent-line);
+      border-radius: 13px;
+      background: linear-gradient(100deg, rgba(1,27,19,.72), rgba(9,56,35,.48));
+      color: #fff;
+      text-align: left;
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .activity-compact-icon { width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,.42)); }
+    .activity-compact-copy { min-width: 0; display: grid; gap: 3px; }
+    .activity-compact-title { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+    .activity-compact-title strong { color: #fff; font-size: 14px; }
+    .activity-compact-title small { color: rgba(255,255,255,.45); font-size: 7px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+    .activity-compact-meta { color: rgba(255,255,255,.67); font-size: 9px; font-weight: 720; line-height: 1.2; }
+    .activity-compact-sub { color: rgba(255,255,255,.43); font-size: 7.5px; line-height: 1.2; }
+    .activity-compact-state { display: grid; justify-items: end; gap: 4px; text-align: right; }
+    .activity-compact-state strong { color: color-mix(in srgb, var(--accent) 84%, white); font-size: 11px; line-height: 1.05; }
+    .activity-compact-state span { max-width: 62px; color: rgba(255,255,255,.48); font-size: 7px; line-height: 1.15; }
+    .activity-history-row { min-height: 62px; grid-template-columns: 42px minmax(0, 1fr) auto; }
+    .activity-history-row .activity-compact-icon { width: 42px; height: 42px; }
+    .activity-result-won { color: #fff18a !important; }
+    .activity-result-refund { color: #8fffd1 !important; }
+    .activity-empty {
+      min-height: 350px;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 10px;
+      padding: 28px;
+      text-align: center;
+    }
+    .activity-empty img { width: 116px; height: 116px; object-fit: contain; opacity: .88; filter: drop-shadow(0 4px 12px rgba(0,0,0,.4)); }
+    .activity-empty h2 { font-size: 20px; }
+    .activity-empty p { max-width: 260px; color: rgba(255,255,255,.60); font-size: 11px; line-height: 1.4; }
+    .activity-empty button { min-height: 39px; padding: 0 18px; border: 1px solid rgba(202,255,99,.52); border-radius: 11px; background: rgba(68,158,49,.34); color: #f3ffce; font-size: 11px; font-weight: 900; }
+    .activity-page-v2 .activity-safety-note { padding-block: 6px; font-size: 8px; }
+
+    /* ---------- compact How To wiki ---------- */
+
+    .how-wiki-page { display: grid; gap: 9px; }
+    .how-wiki-hero { display: grid; gap: 4px; padding: 5px 4px 2px; text-shadow: 0 2px 10px rgba(0,0,0,.76); }
+    .how-wiki-hero h1 { font-size: 27px; letter-spacing: -.035em; }
+    .how-wiki-hero p { color: rgba(255,255,255,.70); font-size: 11px; }
+    .how-wiki-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .how-wiki-tab {
+      min-width: 0;
+      min-height: 92px;
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      gap: 3px;
+      padding: 5px;
+      border: 1px solid rgba(163,255,111,.28);
+      border-radius: 15px;
+      background: linear-gradient(160deg, rgba(22,91,42,.30), rgba(2,34,24,.60));
+      color: rgba(255,255,255,.65);
+      backdrop-filter: blur(6px);
+    }
+    .how-wiki-tab[aria-selected="true"] {
+      border-color: rgba(202,255,99,.70);
+      color: #f4ffcf;
+      box-shadow: inset 0 0 0 2px rgba(216,255,93,.10), 0 0 17px rgba(105,255,72,.21);
+      background: linear-gradient(150deg, rgba(76,173,54,.42), rgba(6,60,41,.66));
+    }
+    .how-wiki-tab img { width: 58px; height: 58px; object-fit: contain; filter: drop-shadow(0 3px 7px rgba(0,0,0,.42)); }
+    .how-wiki-tab strong { font-size: 10px; line-height: 1; }
+    .how-wiki-content {
+      min-height: 447px;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid rgba(163,255,111,.30);
+      border-radius: 18px;
+      background: linear-gradient(155deg, rgba(18,79,38,.34), rgba(1,28,20,.72));
+      box-shadow: inset 0 0 0 2px rgba(216,255,93,.05), 0 10px 24px rgba(0,0,0,.24);
+      backdrop-filter: blur(7px);
+    }
+    .how-wiki-content[hidden] { display: none; }
+    .how-wiki-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .how-wiki-title-copy { display: grid; gap: 2px; }
+    .how-wiki-title h2 { font-size: 18px; }
+    .how-wiki-title p { color: rgba(255,255,255,.52); font-size: 8.5px; line-height: 1.25; }
+    .how-wiki-badge { flex: 0 0 auto; padding: 5px 8px; border: 1px solid rgba(202,255,99,.38); border-radius: 999px; background: rgba(44,111,36,.34); color: #dfffb2; font-size: 7px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+    .how-pool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+    .how-pool-card { min-width: 0; min-height: 76px; display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 6px; padding: 7px; border: 1px solid var(--accent-line); border-radius: 12px; background: rgba(1,29,20,.62); }
+    .how-pool-card img { width: 42px; height: 42px; object-fit: contain; }
+    .how-pool-copy { display: grid; gap: 2px; }
+    .how-pool-copy strong { color: #fff; font-size: 11px; }
+    .how-pool-copy span { color: color-mix(in srgb, var(--accent) 82%, white); font-size: 9px; font-weight: 850; }
+    .how-pool-copy small { color: rgba(255,255,255,.44); font-size: 6.8px; line-height: 1.2; }
+    .how-wiki-steps { display: grid; gap: 6px; }
+    .how-wiki-step { min-height: 56px; display: grid; grid-template-columns: 25px minmax(0, 1fr); align-items: center; gap: 8px; padding: 7px 8px; border: 1px solid rgba(163,255,111,.15); border-radius: 11px; background: rgba(1,29,20,.54); }
+    .how-wiki-step-number { width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid rgba(202,255,99,.44); border-radius: 8px; background: rgba(74,155,50,.28); color: #efffc5; font-size: 9px; font-weight: 950; }
+    .how-wiki-step-copy { display: grid; gap: 2px; min-width: 0; }
+    .how-wiki-step-copy strong { color: rgba(255,255,255,.92); font-size: 10px; }
+    .how-wiki-step-copy span { color: rgba(255,255,255,.52); font-size: 7.7px; line-height: 1.28; }
+    .how-wiki-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .how-wiki-fact { min-width: 0; display: grid; gap: 2px; padding: 7px 5px; border: 1px solid rgba(202,255,99,.20); border-radius: 10px; background: rgba(17,67,35,.45); text-align: center; }
+    .how-wiki-fact strong { color: #efffc7; font-size: 13px; line-height: 1; }
+    .how-wiki-fact span { color: rgba(255,255,255,.48); font-size: 6.5px; font-weight: 850; letter-spacing: .04em; line-height: 1.15; text-transform: uppercase; }
+    .how-wiki-note { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border: 1px solid rgba(255,220,103,.22); border-radius: 10px; background: rgba(57,42,8,.46); color: rgba(255,244,199,.70); font-size: 7.5px; line-height: 1.3; }
+    .how-wiki-note svg { width: 16px; height: 16px; flex: 0 0 auto; color: #ffe071; }
+    .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+
+    .home-themed .how-wiki-page .tone-cyan { --accent: #6ff7ff; --accent-line: rgba(111,247,255,.55); }
+    .home-themed .how-wiki-page .tone-purple { --accent: #95ff70; --accent-line: rgba(149,255,112,.55); }
+    .home-themed .how-wiki-page .tone-violet { --accent: #ffe36d; --accent-line: rgba(255,227,109,.55); }
+    .home-themed .how-wiki-page .tone-prime { --accent: #dca0ff; --accent-line: rgba(220,160,255,.55); }
+
+    /* ---------- compact Social hub ---------- */
+
+    .social-page { display: grid; gap: 10px; }
+    .social-hero {
+      min-height: 136px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 104px;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 15px;
+      border: 1px solid rgba(163,255,111,.24);
+      border-radius: 19px;
+      background: linear-gradient(135deg, rgba(5,50,33,.78), rgba(19,74,38,.48));
+      box-shadow: inset 0 0 34px rgba(103,255,92,.05), 0 11px 30px rgba(0,0,0,.22);
+      overflow: hidden;
+    }
+    .social-hero-copy { display: grid; gap: 5px; min-width: 0; text-shadow: 0 2px 10px rgba(0,0,0,.76); }
+    .social-hero h1 { font-size: 27px; line-height: .98; letter-spacing: -.035em; }
+    .social-hero p { max-width: 25em; color: rgba(255,255,255,.68); font-size: 10px; line-height: 1.35; }
+    .social-hero-art { width: 104px; height: 104px; object-fit: contain; filter: drop-shadow(0 8px 13px rgba(0,0,0,.46)); }
+    .social-hero-fallback { width: 84px; height: 84px; display: grid; place-items: center; justify-self: center; color: #caff7d; }
+    .social-hero-fallback svg { width: 70px; height: 70px; }
+    .social-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .social-card {
+      min-height: 190px;
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 8px;
+      padding: 15px;
+      border: 1px solid var(--social-line, rgba(163,255,111,.25));
+      border-radius: 17px;
+      background: linear-gradient(145deg, var(--social-soft, rgba(15,79,43,.58)), rgba(1,31,23,.68));
+      color: #fff;
+      text-align: left;
+      box-shadow: inset 0 0 24px rgba(255,255,255,.025), 0 8px 22px rgba(0,0,0,.18);
+      overflow: hidden;
+    }
+    .social-card:active { transform: scale(.985); }
+    .social-card::after { content: ""; position: absolute; inset: auto -20px -34px auto; width: 96px; height: 96px; border-radius: 50%; background: var(--social-glow, rgba(129,255,103,.10)); filter: blur(12px); }
+    .social-card-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; opacity: .76; transform: scale(1.33); filter: saturate(1.08) contrast(1.04); }
+    .social-card-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,19,15,.02) 5%, rgba(0,22,17,.22) 44%, rgba(0,18,14,.94) 78%, rgba(0,17,13,.98) 100%); }
+    .social-card-icon { width: 47px; height: 47px; display: grid; place-items: center; border: 1px solid var(--social-line, rgba(163,255,111,.32)); border-radius: 14px; background: rgba(1,25,20,.55); color: var(--social-accent, #caff7d); box-shadow: 0 0 18px var(--social-glow, rgba(129,255,103,.12)); }
+    .social-card-icon svg { width: 27px; height: 27px; }
+    .social-icon-card .social-card-icon { padding: 2px; overflow: hidden; }
+    .social-icon-card .social-card-icon img { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; transform: scale(1.42); }
+    .social-card.has-art .social-card-icon { visibility: hidden; }
+    .social-card-copy { align-self: end; display: grid; gap: 3px; position: relative; z-index: 1; }
+    .social-card-copy strong { font-size: 18px; line-height: 1; }
+    .social-card-copy span { color: rgba(255,255,255,.60); font-size: 9px; line-height: 1.3; }
+    .social-card-action { display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; z-index: 1; color: var(--social-accent, #dfff9b); font-size: 8px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+    .social-card-action svg { width: 15px; height: 15px; }
+    .social-x { --social-accent: #fff; --social-line: rgba(255,255,255,.25); --social-soft: rgba(48,63,59,.58); --social-glow: rgba(255,255,255,.11); }
+    .social-discord { --social-accent: #bca8ff; --social-line: rgba(175,145,255,.35); --social-soft: rgba(61,43,98,.55); --social-glow: rgba(153,105,255,.18); }
+    .social-web { --social-accent: #72f7e7; --social-line: rgba(75,242,218,.32); --social-soft: rgba(13,83,70,.55); --social-glow: rgba(46,255,220,.15); }
+    .social-web .social-card-art { transform: scale(1.16); }
+    .social-support { --social-accent: #ffe275; --social-line: rgba(255,220,95,.31); --social-soft: rgba(92,67,17,.52); --social-glow: rgba(255,218,76,.15); }
+    .social-safety { min-height: 58px; display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1px solid rgba(255,220,103,.22); border-radius: 12px; background: rgba(48,38,9,.52); color: rgba(255,244,199,.72); font-size: 8.5px; line-height: 1.3; }
+    .social-safety svg { width: 18px; height: 18px; flex: 0 0 auto; color: #ffe071; }
+
+    .social-page-v3 { display: grid; gap: 10px; }
+    .social-v3-hero { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 111px; padding: 12px 15px; border: 1px solid rgba(163,255,111,.22); border-radius: 19px; background: rgba(4,49,32,.62); box-shadow: inset 0 0 28px rgba(124,255,91,.045); }
+    .social-v3-hero-copy { display: grid; gap: 4px; }
+    .social-v3-hero h1 { font-size: 27px; line-height: .98; letter-spacing: -.035em; }
+    .social-v3-hero p { max-width: 25em; color: rgba(255,255,255,.62); font-size: 9.5px; line-height: 1.35; }
+    .social-v3-hero img { width: 88px; height: 88px; flex: 0 0 auto; object-fit: contain; filter: drop-shadow(0 6px 12px rgba(0,0,0,.42)); }
+    .social-v3-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .social-v3-card { min-height: 214px; display: grid; grid-template-rows: 127px 1fr auto; gap: 8px; padding: 10px; border: 1px solid var(--social-line, rgba(163,255,111,.24)); border-radius: 18px; background: linear-gradient(155deg, var(--social-soft, rgba(19,78,45,.48)), rgba(1,31,22,.72)); color: #fff; text-align: left; box-shadow: inset 0 0 24px rgba(255,255,255,.02), 0 8px 22px rgba(0,0,0,.16); }
+    .social-v3-card:active { transform: scale(.985); }
+    .social-v3-art { width: 127px; height: 127px; justify-self: center; overflow: hidden; border: 1px solid var(--social-line, rgba(163,255,111,.26)); border-radius: 24px; background: rgba(0,22,17,.72); box-shadow: 0 7px 18px rgba(0,0,0,.28), 0 0 15px var(--social-glow, rgba(120,255,90,.10)); }
+    .social-v3-art img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.03); }
+    .social-v3-copy { align-self: end; display: grid; gap: 3px; min-width: 0; }
+    .social-v3-copy strong { font-size: 17px; line-height: 1; }
+    .social-v3-copy span { color: rgba(255,255,255,.54); font-size: 8px; line-height: 1.2; }
+    .social-v3-action { display: flex; align-items: center; justify-content: space-between; gap: 7px; color: var(--social-accent, #e3ff9a); font-size: 8px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+    .social-v3-action svg { width: 15px; height: 15px; }
+    .social-page-v3 .social-safety { min-height: 53px; }
+
+    .pool-entry-page { display: grid; gap: 10px; }
+    .pool-entry-hero {
+      position: relative;
+      min-height: 246px;
+      overflow: hidden;
+      display: grid;
+      align-content: space-between;
+      gap: 10px;
+      padding: 12px;
+      border: 2px solid var(--accent-line);
+      border-radius: 22px;
+      background:
+        radial-gradient(circle at 50% 47%, var(--accent-soft), transparent 72%),
+        linear-gradient(155deg, rgba(22,89,40,.30), rgba(2,29,21,.64));
+      box-shadow: inset 0 0 0 4px rgba(216,255,93,.07), 0 0 20px var(--accent-glow), 0 12px 28px rgba(0,0,0,.28);
+      backdrop-filter: blur(5px);
+    }
+    .pool-entry-hero::after { content: ""; position: absolute; z-index: 0; inset: 5px; border: 1px solid var(--accent-line); border-radius: 16px; opacity: .55; pointer-events: none; }
+    .pool-entry-art {
+      position: absolute;
+      z-index: 0;
+      top: 50%;
+      left: 50%;
+      width: 245px;
+      height: 245px;
+      object-fit: contain;
+      opacity: .84;
+      filter: saturate(1.1) contrast(1.05);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      user-select: none;
+    }
+    .pool-entry-top, .pool-entry-title, .pool-entry-progress, .pool-entry-stats { position: relative; z-index: 1; }
+    .pool-entry-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .pool-entry-back {
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 9px;
+      border: 1px solid rgba(220,255,180,.22);
+      border-radius: 999px;
+      background: rgba(2,25,18,.58);
+      color: rgba(255,255,255,.76);
+      font-size: 9px;
+      font-weight: 850;
+      text-transform: uppercase;
+      backdrop-filter: blur(4px);
+    }
+    .pool-entry-back svg { width: 13px; height: 13px; transform: rotate(180deg); }
+    .pool-entry-status { max-width: 92px; padding: 5px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 84%, transparent); color: #07180f; font-size: 8px; font-weight: 900; line-height: 1.1; text-align: center; text-transform: uppercase; }
+    .pool-entry-title { display: grid; justify-items: center; gap: 2px; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,.9); }
+    .pool-entry-title .eyebrow { color: rgba(255,255,255,.68); font-size: 9px; }
+    .pool-entry-title h1 { font-size: 31px; }
+    .pool-entry-price { display: flex; align-items: baseline; justify-content: center; gap: 5px; }
+    .pool-entry-price strong { color: color-mix(in srgb, var(--accent) 88%, white); font-size: 28px; letter-spacing: -.04em; }
+    .pool-entry-price span { color: rgba(255,255,255,.65); font-size: 9px; font-weight: 850; letter-spacing: .06em; }
+    .pool-entry-progress { display: grid; gap: 5px; padding: 8px 9px; border-radius: 11px; background: rgba(1,23,16,.56); backdrop-filter: blur(3px); }
+    .pool-entry-progress-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: rgba(255,255,255,.62); font-size: 8px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+    .pool-entry-progress-head strong { color: rgba(255,255,255,.92); font-size: 11px; }
+    .pool-entry-stats { display: grid; grid-template-columns: 1.4fr .6fr; gap: 7px; }
+    .pool-entry-stat { min-height: 43px; display: grid; align-content: center; gap: 3px; padding: 6px 8px; border: 1px solid rgba(220,255,180,.13); border-radius: 10px; background: rgba(1,22,15,.56); backdrop-filter: blur(3px); }
+    .pool-entry-stat span { color: rgba(255,255,255,.48); font-size: 7px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+    .pool-entry-stat strong { color: rgba(255,255,255,.88); font-size: 10px; line-height: 1.12; }
+    .pool-entry-panel {
+      display: grid;
+      gap: 9px;
+      padding: 11px;
+      border: 1px solid rgba(188,255,141,.24);
+      border-radius: 17px;
+      background: rgba(2,31,22,.72);
+      box-shadow: inset 0 0 0 2px rgba(216,255,93,.035), 0 8px 20px rgba(0,0,0,.18);
+      backdrop-filter: blur(8px);
+    }
+    .pool-entry-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .pool-entry-panel-head span { color: rgba(255,255,255,.55); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+    .pool-entry-panel-head strong { color: var(--accent); font-size: 13px; }
+    .pool-entry-page .ticket-picker { grid-template-columns: 43px 1fr 43px; gap: 8px; }
+    .pool-entry-page .ticket-step, .pool-entry-page .ticket-value { min-height: 43px; border-color: rgba(190,255,142,.28); background: rgba(6,52,36,.72); }
+    .pool-entry-page .ticket-value { color: #fff; }
+    .pool-entry-page .ticket-step:disabled { opacity: .34; cursor: default; }
+    .pool-entry-page .ticket-presets { gap: 6px; margin-top: 0; }
+    .pool-entry-page .ticket-preset { min-height: 34px; border-color: rgba(190,255,142,.20); border-radius: 9px; background: rgba(5,49,34,.60); font-size: 11px; }
+    .pool-entry-page .ticket-preset.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .pool-entry-premium-rule { color: rgba(255,255,255,.55); font-size: 8.5px; font-weight: 800; letter-spacing: .05em; text-align: center; text-transform: uppercase; }
+    .pool-entry-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .pool-entry-summary-item { min-width: 0; display: grid; gap: 3px; padding: 8px 7px; border: 1px solid rgba(190,255,142,.13); border-radius: 9px; background: rgba(1,24,17,.48); }
+    .pool-entry-summary-item span { color: rgba(255,255,255,.45); font-size: 6.8px; font-weight: 850; letter-spacing: .055em; text-transform: uppercase; }
+    .pool-entry-summary-item strong { color: rgba(255,255,255,.88); font-size: 9px; line-height: 1.15; }
+    .pool-entry-wallet { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: rgba(255,255,255,.53); font-size: 8px; font-weight: 800; }
+    .pool-entry-wallet strong { max-width: 57%; color: rgba(255,255,255,.84); font-size: 9px; text-align: right; }
+    .pool-entry-refund { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid rgba(245,193,66,.20); border-radius: 11px; background: rgba(49,36,5,.48); color: rgba(255,242,191,.72); font-size: 9px; line-height: 1.3; }
+    .pool-entry-refund svg { width: 16px; height: 16px; flex: 0 0 auto; color: #ffd76e; }
+    .pool-entry-page > .primary-button { min-height: 50px; background: linear-gradient(135deg, #a8ff62, #32d89a); color: #062117; box-shadow: 0 8px 25px rgba(104,255,87,.23); }
+
+    .pool-process-page { display: grid; gap: 11px; }
+    .pool-process-card {
+      position: relative;
+      min-height: 536px;
+      overflow: hidden;
+      display: grid;
+      align-content: space-between;
+      gap: 18px;
+      padding: 14px;
+      border: 2px solid var(--accent-line);
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 50% 34%, var(--accent-soft), transparent 62%),
+        linear-gradient(165deg, rgba(22,91,41,.32), rgba(2,25,18,.78));
+      box-shadow: inset 0 0 0 4px rgba(216,255,93,.06), 0 0 23px var(--accent-glow), 0 14px 34px rgba(0,0,0,.30);
+      backdrop-filter: blur(7px);
+    }
+    .pool-process-card::after { content: ""; position: absolute; z-index: 0; inset: 6px; border: 1px solid var(--accent-line); border-radius: 17px; opacity: .48; pointer-events: none; }
+    .pool-process-art {
+      position: absolute;
+      z-index: 0;
+      top: 42%;
+      left: 50%;
+      width: 310px;
+      height: 310px;
+      object-fit: contain;
+      opacity: .72;
+      filter: saturate(1.08) contrast(1.04);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      user-select: none;
+    }
+    .pool-process-head, .pool-process-copy, .pool-process-timeline, .pool-process-trust { position: relative; z-index: 1; }
+    .pool-process-head { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+    .pool-process-pool { display: flex; align-items: center; gap: 7px; color: rgba(255,255,255,.65); font-size: 9px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+    .pool-process-pool::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    .pool-process-status { padding: 5px 9px; border: 1px solid rgba(255,230,140,.28); border-radius: 999px; background: rgba(59,39,5,.58); color: #ffe49a; font-size: 8px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+    .pool-process-status.confirmed { border-color: rgba(112,255,139,.32); background: rgba(7,63,34,.64); color: #baffc8; }
+    .pool-process-status.error { border-color: rgba(255,136,136,.34); background: rgba(73,13,18,.65); color: #ffb0b0; }
+    .pool-process-copy { display: grid; justify-items: center; gap: 7px; padding: 20px 8px 8px; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,.9); }
+    .pool-process-copy .eyebrow { color: rgba(255,255,255,.60); font-size: 9px; }
+    .pool-process-copy h1 { max-width: 300px; font-size: 30px; }
+    .pool-process-copy p { max-width: 320px; color: rgba(255,255,255,.68); font-size: 12px; line-height: 1.35; }
+    .pool-process-timeline { display: grid; gap: 7px; padding: 10px; border: 1px solid rgba(205,255,165,.18); border-radius: 15px; background: rgba(1,22,15,.69); backdrop-filter: blur(6px); }
+    .pool-process-step { display: grid; grid-template-columns: 31px 1fr auto; align-items: center; gap: 9px; min-height: 54px; padding: 6px 7px; border-radius: 11px; color: rgba(255,255,255,.48); }
+    .pool-process-step.active { background: rgba(84,167,66,.16); color: rgba(255,255,255,.92); box-shadow: inset 0 0 0 1px rgba(171,255,112,.18); }
+    .pool-process-step.done { color: rgba(255,255,255,.76); }
+    .pool-process-step.failed { background: rgba(116,20,26,.22); color: #ffd1d1; }
+    .pool-process-step-dot { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.13); border-radius: 50%; background: rgba(255,255,255,.05); color: rgba(255,255,255,.42); font-size: 11px; font-weight: 900; }
+    .pool-process-step.active .pool-process-step-dot { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 13px var(--accent-glow); }
+    .pool-process-step.done .pool-process-step-dot { border-color: rgba(108,255,131,.38); background: rgba(46,150,74,.28); color: #baffc5; }
+    .pool-process-step.failed .pool-process-step-dot { border-color: rgba(255,116,116,.40); background: rgba(138,27,32,.32); color: #ffb0b0; }
+    .pool-process-step-copy { display: grid; gap: 2px; }
+    .pool-process-step-copy strong { color: inherit; font-size: 12px; }
+    .pool-process-step-copy span { color: rgba(255,255,255,.42); font-size: 8px; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
+    .pool-process-step-state { color: rgba(255,255,255,.46); font-size: 8px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+    .pool-process-step.active .pool-process-step-state { color: var(--accent); }
+    .pool-process-step.done .pool-process-step-state { color: #aaffb9; }
+    .pool-process-step.failed .pool-process-step-state { color: #ffaaaa; }
+    .pool-process-trust { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid rgba(196,255,158,.14); border-radius: 11px; background: rgba(2,25,18,.54); color: rgba(255,255,255,.56); font-size: 9px; line-height: 1.3; }
+    .pool-process-trust svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--accent); }
+    .pool-process-page > .primary-button, .pool-process-page > .secondary-button { min-height: 50px; }
+    .pool-process-page > .primary-button { background: linear-gradient(135deg, #a8ff62, #32d89a); color: #062117; box-shadow: 0 8px 25px rgba(104,255,87,.23); }
+
     .pool-card {
       position: relative;
       overflow: hidden;
@@ -756,6 +1516,43 @@ function page(
       border-color: var(--accent-line);
       box-shadow: 0 0 26px var(--accent-glow);
     }
+
+    .home-themed .pools-page .pool-card {
+      padding: 14px;
+      gap: 11px;
+      border-width: 2px;
+      border-radius: 21px;
+      background:
+        radial-gradient(circle at 88% 5%, var(--accent-soft), transparent 55%),
+        linear-gradient(155deg, rgba(30,100,49,.42), rgba(3,38,27,.74));
+      box-shadow: inset 0 0 0 3px rgba(223,255,129,.075), 0 0 18px var(--accent-glow), 0 12px 28px rgba(0,0,0,.26);
+      backdrop-filter: blur(5px);
+    }
+    .home-themed .pools-page .pool-card::after {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border: 1px solid var(--accent-line);
+      border-radius: 15px;
+      pointer-events: none;
+    }
+    .home-themed .pools-page .tone-cyan { --accent: #6ff7ff; --accent-line: rgba(111,247,255,.64); --accent-soft: rgba(111,247,255,.12); --accent-glow: rgba(111,247,255,.22); }
+    .home-themed .pools-page .tone-purple { --accent: #95ff70; --accent-line: rgba(149,255,112,.64); --accent-soft: rgba(149,255,112,.12); --accent-glow: rgba(149,255,112,.22); }
+    .home-themed .pools-page .tone-violet { --accent: #ffe36d; --accent-line: rgba(255,227,109,.64); --accent-soft: rgba(255,227,109,.12); --accent-glow: rgba(255,227,109,.22); }
+    .home-themed .pools-page .tone-prime { --accent: #dca0ff; --accent-line: rgba(220,160,255,.64); --accent-soft: rgba(220,160,255,.13); --accent-glow: rgba(220,160,255,.24); }
+    .pool-name-stack { display: grid; gap: 2px; }
+    .pool-name-stack small { color: rgba(255,255,255,.64); font-size: 9.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .home-themed .pools-page .pool-marker { width: 38px; height: 38px; border-radius: 12px; box-shadow: 0 0 12px var(--accent-glow); }
+    .home-themed .pools-page .pool-chip { color: #07180f; background: var(--accent); border-color: transparent; box-shadow: 0 0 12px var(--accent-glow); }
+    .pool-price-row { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+    .pool-price-caption { display: grid; gap: 3px; text-align: right; }
+    .pool-price-caption strong { color: #fff; font-size: 12px; }
+    .home-themed .pools-page .entry-big strong { font-size: 33px; text-shadow: 0 0 14px var(--accent-glow); }
+    .home-themed .pools-page .fact { background: rgba(1,28,20,.42); border-color: rgba(197,255,162,.14); }
+    .home-themed .pools-page .target-box { padding: 11px; background: rgba(2,35,25,.46); }
+    .home-themed .pools-page .primary-button { position: relative; z-index: 1; color: #07180f; background: linear-gradient(135deg, var(--accent), #baff88); box-shadow: 0 8px 22px var(--accent-glow); }
+    .home-themed .pools-page .refund-copy { background: rgba(47,35,7,.55); backdrop-filter: blur(5px); }
+    .home-themed .pools-page > .secondary-button { background: rgba(3,42,29,.65); border-color: rgba(141,255,100,.34); }
 
     .tone-cyan { --accent: var(--cyan); --accent-line: rgba(0, 209, 255, 0.26); --accent-soft: rgba(0, 209, 255, 0.08); --accent-glow: rgba(0, 209, 255, 0.08); }
     .tone-purple { --accent: var(--purple); --accent-line: rgba(153, 69, 255, 0.30); --accent-soft: rgba(153, 69, 255, 0.10); --accent-glow: rgba(153, 69, 255, 0.10); }
@@ -1276,6 +2073,12 @@ function page(
       box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.45), 0 0 30px rgba(124, 58, 237, 0.08);
     }
 
+    .home-themed .bottom-nav {
+      border-color: rgba(130,255,90,.48);
+      background: linear-gradient(180deg, rgba(3,42,29,.94), rgba(5,20,31,.97));
+      box-shadow: 0 -14px 40px rgba(0,0,0,.44), 0 0 24px rgba(110,255,71,.18);
+    }
+
     .nav-item {
       min-width: 0;
       min-height: 58px;
@@ -1290,13 +2093,83 @@ function page(
       letter-spacing: 0.02em;
     }
     .nav-item svg { width: 22px; height: 22px; }
+    .nav-item img.nav-art { display: block; width: 31px; height: 31px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,.42)); }
+    .nav-item img.nav-art-home { width: 29px; height: 29px; }
+    .nav-item img.nav-art-activity { width: 34px; height: 34px; }
+    .nav-item img.nav-art-howTo { width: 30px; height: 30px; }
+    .nav-item img.nav-art-social { width: 30px; height: 30px; }
     .nav-item.active {
       color: var(--violet);
       background: rgba(153, 69, 255, 0.13);
       box-shadow: inset 0 0 0 1px rgba(153, 69, 255, 0.24), 0 0 16px rgba(153, 69, 255, 0.14);
     }
+    .home-themed .nav-item { color: rgba(255,255,255,.74); }
+    .home-themed .nav-item.active {
+      color: #ffe86e;
+      background: rgba(87,174,64,.22);
+      box-shadow: inset 0 0 0 1px rgba(202,255,99,.46), 0 0 15px rgba(105,255,72,.20);
+    }
 
     .wallet-native-space { min-height: 250px; }
+
+    /* ---------- compact authenticated feature pages ---------- */
+
+    .feature-page { display: grid; gap: 10px; padding-bottom: 4px; }
+    .feature-hero, .feature-panel {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(155,255,104,.34);
+      border-radius: 20px;
+      background: linear-gradient(145deg, rgba(12,77,48,.76), rgba(3,42,34,.74));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 10px 28px rgba(0,0,0,.22);
+    }
+    .feature-hero { min-height: 202px; padding: 18px; display: grid; align-content: end; }
+    .feature-hero-art { position: absolute; width: 190px; height: 190px; right: -22px; top: -24px; object-fit: contain; opacity: .72; filter: drop-shadow(0 8px 18px rgba(0,0,0,.36)); }
+    .feature-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(2,31,24,.96) 0%, rgba(2,31,24,.72) 54%, rgba(2,31,24,.10)); }
+    .feature-hero-copy { position: relative; z-index: 2; max-width: 71%; display: grid; gap: 5px; }
+    .feature-hero h1 { margin: 0; font-size: 30px; line-height: .98; letter-spacing: -.035em; }
+    .feature-hero p { margin: 0; color: rgba(255,255,255,.76); font-size: 12px; line-height: 1.35; }
+    .feature-prize { color: #ffe66f; font-size: 14px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+    .feature-panel { padding: 13px; }
+    .feature-facts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+    .feature-fact { min-width: 0; min-height: 67px; padding: 9px 7px; display: grid; place-content: center; gap: 3px; text-align: center; border: 1px solid rgba(168,255,112,.20); border-radius: 13px; background: rgba(2,35,28,.60); }
+    .feature-fact strong { color: #fff5a5; font-size: 19px; line-height: 1; }
+    .feature-fact span { color: rgba(255,255,255,.68); font-size: 9px; font-weight: 800; line-height: 1.15; letter-spacing: .03em; text-transform: uppercase; }
+    .feature-progress-head, .feature-identity, .wallet-hub-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .feature-progress-head { margin-bottom: 8px; font-size: 11px; }
+    .feature-progress-head span { color: rgba(255,255,255,.68); font-weight: 750; }
+    .feature-progress-head strong { color: #fff; }
+    .feature-progress-track { display: block; height: 9px; overflow: hidden; border-radius: 999px; background: rgba(0,0,0,.38); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    .feature-progress-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#44f0c3,#bfff62,#ffe66f); box-shadow: 0 0 14px rgba(137,255,96,.46); }
+    .feature-identity { min-height: 58px; }
+    .feature-identity-copy { min-width: 0; display: grid; gap: 2px; }
+    .feature-identity-copy span { color: rgba(255,255,255,.57); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+    .feature-identity-copy strong { font-size: 13px; }
+    .feature-state { flex: none; padding: 6px 8px; border: 1px solid rgba(255,224,101,.30); border-radius: 999px; color: #ffe477; background: rgba(95,72,8,.30); font-size: 8px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+    .feature-note { display: flex; align-items: flex-start; gap: 7px; color: rgba(255,255,255,.63); font-size: 10px; line-height: 1.34; }
+    .feature-note svg { flex: none; width: 16px; height: 16px; color: #76f2c5; }
+    .feature-page > .primary-button { min-height: 49px; background: linear-gradient(135deg,#b7ff65,#38e2a4); color: #05291d; box-shadow: 0 8px 24px rgba(88,255,159,.22); }
+    .feature-subaction { min-height: 36px; padding: 6px; border: 0; background: transparent; color: rgba(255,255,255,.68); font-size: 11px; font-weight: 800; }
+    .wallet-hub-hero { min-height: 185px; }
+    .wallet-hub-status { position: relative; z-index: 2; margin-top: 10px; padding: 9px 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(1,28,22,.64); }
+    .wallet-hub-status span { color: rgba(255,255,255,.64); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .wallet-hub-status strong { font-size: 11px; }
+    .wallet-quick-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+    .wallet-quick { min-height: 92px; padding: 10px; display: grid; align-content: end; gap: 3px; border: 1px solid rgba(153,255,102,.24); border-radius: 15px; background: rgba(3,47,34,.66); text-align: left; }
+    .wallet-quick strong { font-size: 13px; }
+    .wallet-quick span { color: rgba(255,255,255,.60); font-size: 9px; line-height: 1.25; }
+    .auth-card { min-height: 438px; padding: 18px; display: grid; align-content: center; gap: 18px; }
+    .auth-symbol { width: 76px; height: 76px; margin: 0 auto; display: grid; place-items: center; border: 1px solid rgba(174,255,111,.42); border-radius: 25px; background: rgba(45,121,72,.30); color: #c9ff75; box-shadow: 0 0 28px rgba(114,255,93,.16); }
+    .auth-symbol svg { width: 38px; height: 38px; }
+    .auth-copy { text-align: center; display: grid; gap: 6px; }
+    .auth-copy h1 { margin: 0; font-size: 27px; }
+    .auth-copy p { margin: 0; color: rgba(255,255,255,.64); font-size: 12px; line-height: 1.4; }
+    .auth-steps { display: grid; gap: 7px; }
+    .auth-step { padding: 10px; display: grid; grid-template-columns: 25px 1fr; gap: 9px; align-items: center; border: 1px solid rgba(255,255,255,.09); border-radius: 12px; background: rgba(0,0,0,.18); }
+    .auth-step > span:first-child { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: rgba(120,255,105,.16); color: #c9ff75; font-size: 10px; font-weight: 900; }
+    .auth-step-copy { display: grid; gap: 1px; }
+    .auth-step-copy strong { font-size: 11px; }
+    .auth-step-copy span { color: rgba(255,255,255,.56); font-size: 9px; }
 
     @media (min-width: 640px) {
       .pool-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1308,9 +2181,22 @@ function page(
       .topbar { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; }
       .pill { display: none; }
       .pool-facts { grid-template-columns: 1fr; }
+      .home-themed .pools-page .pool-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pool-selector-grid { gap: 8px; }
+      .pool-selector-card { min-height: 210px; padding: 12px 10px 10px; gap: 9px; }
+      .pool-selector-price strong { font-size: 22px; }
+      .pool-selector-status { max-width: 62px; padding-inline: 5px; font-size: 7px; }
       .cta-row { grid-template-columns: 1fr; }
       .badge-grid { grid-template-columns: 1fr; }
       h1 { font-size: 26px; }
+      .home-action-grid { gap: 8px; }
+      .home-action { padding: 4px 4px 10px; }
+      .home-action .feature-icon { width: 115px; height: 115px; flex-basis: 115px; }
+      .home-action .feature-icon img { width: 125px; height: 125px; }
+      .home-action .feature-icon.icon-referral img { width: 120px; height: 120px; }
+      .home-action .feature-icon.icon-nft img { width: 136px; height: 136px; transform: translateX(-10px); }
+      .home-action .feature-icon.icon-winners img { width: 127px; height: 127px; transform: translateX(-6px); }
+      .home-action h2 { font-size: 19px; }
     }
 
     @media (max-width: 520px) {
@@ -1389,12 +2275,13 @@ function page(
     }
   </style>
 </head>
-<body>
+<body class="${homeTheme ? "home-themed" : ""}">
+  ${homeTheme && options.homeBackground ? `<img class="home-page-background" src="${escapeHtml(options.homeBackground)}" alt="" aria-hidden="true" /><div class="home-page-shade" aria-hidden="true"></div>` : ""}
   <div class="app ${chrome ? "" : "standalone-app"}">
-    ${chrome ? topbar(onchainAvailable) : ""}
+    ${chrome ? topbar(onchainAvailable, homeTheme ? options.homeLogo : undefined) : ""}
     ${body}
   </div>
-  ${chrome ? bottomNav(active) : ""}
+  ${chrome ? bottomNav(active, homeTheme ? options.navigationIcons : undefined) : ""}
   <script>
     (() => {
       const formatRemaining = (remaining) => {
@@ -1414,21 +2301,44 @@ function page(
       };
       updateRoundCountdowns();
       window.setInterval(updateRoundCountdowns, 1000);
+      document.querySelectorAll("[data-activity-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const selected = button.getAttribute("data-activity-tab");
+          document.querySelectorAll("[data-activity-tab]").forEach((candidate) => {
+            candidate.setAttribute("aria-selected", String(candidate === button));
+          });
+          document.querySelectorAll("[data-activity-view]").forEach((view) => {
+            view.hidden = view.getAttribute("data-activity-view") !== selected;
+          });
+        });
+      });
+      document.querySelectorAll("[data-how-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const selected = button.getAttribute("data-how-tab");
+          document.querySelectorAll("[data-how-tab]").forEach((candidate) => {
+            candidate.setAttribute("aria-selected", String(candidate === button));
+          });
+          document.querySelectorAll("[data-how-view]").forEach((view) => {
+            view.hidden = view.getAttribute("data-how-view") !== selected;
+          });
+        });
+      });
     })();
   </script>
 </body>
 </html>`;
 }
 
-function topbar(onchainAvailable: boolean) {
+function topbar(onchainAvailable: boolean, homeLogo?: string) {
   const status = onchainAvailable
     ? `<div class="pill"><span class="status-dot dot-live"></span><span>Mainnet</span></div>`
     : `<div class="pill pill-sync"><span class="status-dot dot-sync"></span><span>Mainnet &middot; Syncing</span></div>`;
 
   return String.raw`<header class="topbar">
   <div class="brand">
-    <img src="${LOGO_MINI}" alt="" aria-hidden="true" />
-    <span class="brand-text">LuckyMe<small>Solana pools</small></span>
+    ${homeLogo
+      ? `<img class="home-wordmark" src="${escapeHtml(homeLogo)}" alt="LuckyMe" />`
+      : `<img src="${LOGO_MINI}" alt="" aria-hidden="true" /><span class="brand-text">LuckyMe<small>Solana pools</small></span>`}
   </div>
   <div class="top-actions">
     ${status}
@@ -1437,13 +2347,22 @@ function topbar(onchainAvailable: boolean) {
 </header>`;
 }
 
-function bottomNav(active: StitchScreenId) {
+function bottomNav(
+  active: StitchScreenId,
+  navigationIcons?: StitchRenderOptions["navigationIcons"],
+) {
+  const navArt = (key: "home" | "pools" | "activity" | "howTo" | "social", fallback: string) => {
+    const src = navigationIcons?.[key];
+    return src
+      ? `<img class="nav-art nav-art-${key}" src="${escapeHtml(src)}" alt="" />`
+      : fallback;
+  };
   const items: Array<[StitchScreenId, string, string]> = [
-    ["home", ICONS.home, "Home"],
-    ["pools", ICONS.pools, "Pools"],
-    ["activity", ICONS.activity, "Activity"],
-    ["how-to-play", ICONS.help, "How To"],
-    ["social", ICONS.x, "Social"],
+    ["home", navArt("home", ICONS.home), "Home"],
+    ["pools", navArt("pools", ICONS.pools), "Pools"],
+    ["activity", navArt("activity", ICONS.activity), "Activity"],
+    ["how-to-play", navArt("howTo", ICONS.help), "How To"],
+    ["social", navArt("social", ICONS.x), "Social"],
   ];
 
   // aria-hidden: the native wrapper renders the accessible tab controls
@@ -1561,11 +2480,14 @@ function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: Stitch
   <div class="row">
     <div class="row-left">
       <span class="icon-chip pool-marker">${ICONS.diamond}</span>
-      <h3>${pool.name}</h3>
+      <span class="pool-name-stack"><h3>${pool.name}</h3><small>${pool.chip}</small></span>
     </div>
     <span class="pool-chip">${facts.status}</span>
   </div>
-  <div class="entry-big mono"><strong>${priceSol(pool, facts.live)}</strong><span>SOL</span></div>
+  <div class="pool-price-row">
+    <div class="entry-big mono"><strong>${priceSol(pool, facts.live)}</strong><span>SOL</span></div>
+    <span class="pool-price-caption"><span class="label">Ticket price</span><strong>${pool.winners}</strong></span>
+  </div>
   <div class="pool-facts">
     <div class="fact"><span class="label">Prize</span><strong>${pool.prize}</strong></div>
     <div class="fact"><span class="label">Sold</span><strong>${escapeHtml(facts.tickets)} tickets</strong></div>
@@ -1581,131 +2503,357 @@ function poolCard(pool: PoolSpec, joinRoute: "pools" | "review", options: Stitch
 </article>`;
 }
 
+function poolSelectorCard(pool: PoolSpec, options: StitchRenderOptions = {}) {
+  const facts = roundFacts(pool, options);
+  const poolReady = hasLivePoolState(pool.id, options);
+  const sold = facts.threshold.sold;
+  const minimum = facts.threshold.minimumTickets;
+  const percentage = poolReady
+    ? Math.max(0, Math.min(100, (sold / minimum) * 100))
+    : 0;
+  const disabledAttr = poolReady ? "" : " disabled";
+  const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
+  return String.raw`<button type="button" class="pool-selector-card tone-${pool.tone}" data-route="review" data-pool="${pool.id}"${disabledAttr}>
+    ${poolIcon ? `<img class="pool-selector-watermark" src="${escapeHtml(poolIcon)}" alt="" />` : ""}
+    <span class="pool-selector-head">
+      <span class="pool-selector-name"><strong>${pool.name}</strong><small>${pool.chip}</small></span>
+      <span class="pool-selector-status">${escapeHtml(facts.status)}</span>
+    </span>
+    <span class="pool-selector-price"><strong>${priceSol(pool, facts.live)}</strong><span>SOL / TICKET</span></span>
+    <span class="pool-selector-progress">
+      <span class="pool-selector-progress-head"><span>Tickets sold</span><strong class="mono">${poolReady ? sold : "—"} / ${minimum}</strong></span>
+      <span class="progress-track" role="progressbar" aria-label="${pool.name} tickets sold" aria-valuemin="0" aria-valuemax="${minimum}" aria-valuenow="${poolReady ? Math.min(sold, minimum) : 0}"><span class="progress-fill" style="width: ${percentage.toFixed(2)}%"></span></span>
+    </span>
+    <span class="pool-selector-metrics">
+      <span class="pool-selector-metric"><span>Timer</span><strong ${countdownAttributes(facts.round)}>${escapeHtml(roundTimeLeft(facts.round))}</strong></span>
+      <span class="pool-selector-metric"><span>Players</span><strong>${escapeHtml(facts.players)}</strong></span>
+    </span>
+    <span class="pool-selector-enter"><span>${poolReady ? "Tap to enter" : "Unavailable"}</span>${ICONS.chevron}</span>
+  </button>`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Screens                                                              */
 /* ------------------------------------------------------------------ */
 
 function homeBody(options: StitchRenderOptions = {}) {
-  return String.raw`<main class="stack">
-  <section class="hero-card">
-    <img class="hero-art" src="${LOGO_HERO}" alt="LuckyMe" />
-    <div class="hero-copy">
-      <p class="eyebrow">Solana mainnet pools</p>
-      <h1>Pick a pool. Reach the ticket target.</h1>
-      <p>The first confirmed ticket starts a 1-hour round. Valid draws happen only after the pool's total-ticket target is reached.</p>
-      <div class="cta-row">
-        <button class="primary-button" data-route="pools">View pools</button>
-      </div>
-    </div>
+  const homeIcon = (key: "pools" | "referral" | "nft" | "winners", fallback: string) => {
+    const src = options.homeIcons?.[key];
+    return src
+      ? `<span class="feature-icon has-image icon-${key}"><img src="${escapeHtml(src)}" alt="" /></span>`
+      : `<span class="feature-icon">${fallback}</span>`;
+  };
+  return String.raw`<main class="stack latest-winners-page">
+  <section class="home-intro">
+    <p class="eyebrow">LuckyMe on Solana</p>
+    <h1>What are you feeling lucky about?</h1>
+    <p>Pick your way into LuckyMe. Every result stays transparent and verifiable on Solana.</p>
   </section>
-  <section class="panel glow-purple">
-    <div class="row">
-      <div class="row-left">
-        <span class="icon-chip chip-purplebox">${ICONS.diamond}</span>
-        <div>
-          <span class="label">Seeker exclusive</span>
-          <h2 style="margin-top: 3px;">LuckyMe Referral League</h2>
-          <p class="muted" style="margin-top: 4px;">Monthly prizes up to 10,000 SKR — exclusive to the LuckyMe app from the Solana dApp Store.</p>
-          <p class="soft" style="margin-top: 7px; font-size: 12.5px;">#1 3,000 · #2 2,000 · #3 1,250 · #4 750 · #5–#10 500 SKR each.</p>
-          <p class="soft" style="margin-top: 7px; font-size: 12.5px;">A referral qualifies after 3 completed rounds with a winner on 3 different days and at least 7 active app days. Refunded rounds never count.</p>
-        </div>
-      </div>
-      <span class="status-pill neutral">SGT verified</span>
-    </div>
-    <button class="primary-button" style="margin-top: 16px;" data-route="referral">Open referral</button>
+  <section class="home-action-grid" aria-label="LuckyMe features">
+    <button class="home-action home-action-primary feature-pools" data-route="pools">
+      ${homeIcon("pools", ICONS.homePools)}
+      <span class="home-action-copy"><h2>Pools</h2></span>
+    </button>
+    <button class="home-action feature-referral" data-route="referral">
+      ${homeIcon("referral", ICONS.homeReferral)}
+      <span class="home-action-copy"><h2>Referral League</h2></span>
+    </button>
+    <button class="home-action feature-nft" data-route="seeker-pass">
+      ${homeIcon("nft", ICONS.homeNft)}
+      <span class="home-action-copy"><h2>NFT Holders</h2></span>
+    </button>
+    <button class="home-action feature-winners" data-route="latest-winners">
+      ${homeIcon("winners", ICONS.homeWinners)}
+      <span class="home-action-copy"><h2>Latest Winners</h2></span>
+    </button>
   </section>
 </main>`;
 }
 
-function socialBody() {
+function winnerPrizeSol(
+  winner: NonNullable<LiveRound["winners"]>[number],
+  pool?: LivePool,
+  round?: LiveRound,
+) {
+  if (winner.prizeSol !== undefined && winner.prizeSol !== null) {
+    const direct = numberValue(winner.prizeSol);
+    return direct.toFixed(3).replace(/\.?0+$/, "");
+  }
+  if (winner.prizeLamports !== undefined && winner.prizeLamports !== null) {
+    const lamports = numberValue(winner.prizeLamports);
+    return (lamports / 1_000_000_000).toFixed(3).replace(/\.?0+$/, "");
+  }
+  try {
+    const totalLamports = BigInt(String(round?.totalLamports ?? 0));
+    const mainPrizeBps = BigInt(String(pool?.mainPrizeBps ?? 9_500));
+    const rank = Math.max(1, Math.trunc(numberValue(winner.rank, 1)));
+    const splitBps = BigInt(String(pool?.prizeSplitBps?.[rank - 1] ?? (rank === 1 ? 10_000 : 0)));
+    const prizeLamports = totalLamports * mainPrizeBps * splitBps / 100_000_000n;
+    return (Number(prizeLamports) / 1_000_000_000).toFixed(3).replace(/\.?0+$/, "");
+  } catch {
+    return "0";
+  }
+}
+
+function settlementSolscanUrl(round: LiveRound) {
+  const signature = String(round.settlementSignature ?? "").trim();
+  return /^[1-9A-HJ-NP-Za-km-z]{80,100}$/.test(signature)
+    ? `https://solscan.io/tx/${signature}`
+    : "";
+}
+
+function latestWinnersBody(options: StitchRenderOptions = {}) {
+  const poolSections = POOLS.map((spec) => {
+    const live = livePool(spec.id, options);
+    const rounds = [...(live?.recentRounds ?? [])]
+      .filter((round) => (round.settled || round.status === "settled" || round.roundOutcome === "settled") && (round.winners?.length ?? 0) > 0 && settlementSolscanUrl(round))
+      .sort((a, b) => numberValue(b.roundId ?? b.id) - numberValue(a.roundId ?? a.id))
+      .slice(0, 3);
+
+    const roundCards = rounds.map((round) => {
+      const roundId = numberValue(round.roundId ?? round.id);
+      const solscanUrl = settlementSolscanUrl(round);
+      const date = round.archivedAt
+        ? new Date(round.archivedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+        : "Verified settlement";
+      const winners = (round.winners ?? []).map((winner, index) => {
+        const wallet = String(winner.wallet ?? winner.winner ?? "");
+        return String.raw`<div class="winner-row">
+          <span class="winner-rank">#${escapeHtml(winner.rank ?? index + 1)}</span>
+          <span class="winner-wallet mono">${escapeHtml(shortAddress(wallet))}</span>
+          <strong class="winner-prize">${escapeHtml(winnerPrizeSol(winner, live, round))} SOL</strong>
+        </div>`;
+      }).join("");
+      return String.raw`<button type="button" class="winner-round winner-round-link" data-route="external" data-url="${escapeHtml(solscanUrl)}" aria-label="Verify ${escapeHtml(spec.name)} round ${escapeHtml(roundId)} on Solscan">
+        <div class="winner-round-head">
+          <div><span class="label">Round</span><h3>#${escapeHtml(roundId)}</h3></div>
+          <span class="winner-proof-stack"><span class="soft" style="font-size: 11px;">${escapeHtml(date)}</span><span class="winner-proof">${ICONS.external} Solscan</span></span>
+        </div>
+        ${winners}
+      </button>`;
+    }).join("");
+
+    return String.raw`<section class="winner-pool-section">
+      <div class="section-header">
+        <div><span class="label">${escapeHtml(spec.name)} pool</span><h2>Latest winners</h2></div>
+        <span class="status-pill ${rounds.length ? "emerald" : "neutral"}">${rounds.length ? `${rounds.length} ${rounds.length === 1 ? "round" : "rounds"}` : "No result"}</span>
+      </div>
+      ${roundCards || `<div class="panel"><p>No settlement with a verified Solana transaction is available for this pool yet.</p></div>`}
+    </section>`;
+  }).join("");
+
   return String.raw`<main class="stack">
-  <section class="section-header">
-    <div>
-      <span class="label">Official community</span>
-      <h2>Follow LuckyMe</h2>
-      <p class="muted" style="margin-top: 5px;">Round updates, announcements and community support.</p>
-    </div>
+    <section class="section-header">
+      <div><span class="eyebrow">Verified settlements</span><h1>Latest Winners</h1><p class="muted" style="margin-top: 6px;">Tap any displayed round or winner to verify its settlement transaction directly on Solscan.</p></div>
+    </section>
+    ${poolSections}
+  </main>`;
+}
+
+function socialBodyV2(options: StitchRenderOptions = {}) {
+  const socialArt = options.navigationIcons?.social
+    ? `<img class="social-hero-art" src="${escapeHtml(options.navigationIcons.social)}" alt="" aria-hidden="true" />`
+    : `<span class="social-hero-fallback">${ICONS.referral}</span>`;
+  const card = (className: string, icon: string, art: string | undefined, title: string, description: string, action: string, url: string) => String.raw`<button type="button" class="social-card ${className}${art ? " has-art" : ""}" data-route="external" data-url="${escapeHtml(url)}">
+    ${art ? `<img class="social-card-art" src="${escapeHtml(art)}" alt="" aria-hidden="true" /><span class="social-card-shade" aria-hidden="true"></span>` : ""}
+    <span class="social-card-icon">${icon}</span>
+    <span class="social-card-copy"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span>
+    <span class="social-card-action">${escapeHtml(action)} ${ICONS.external}</span>
+  </button>`;
+  return String.raw`<main class="social-page">
+  <section class="social-hero">
+    <div class="social-hero-copy"><span class="eyebrow">LuckyMe Community</span><h1>Stay close<br />to the luck</h1><p>Official announcements, winner updates, help and everything happening around LuckyMe.</p></div>
+    ${socialArt}
   </section>
-  <section class="panel glow-cyan">
-    <div class="row-left">
-      <span class="icon-chip chip-cyanbox">${ICONS.x}</span>
-      <div><span class="label">X</span><h3>@LuckyMeSolana</h3></div>
-    </div>
-    <button class="primary-button" style="margin-top: 16px;" data-route="external" data-url="https://x.com/LuckyMeSolana">Open X</button>
+  <section class="social-grid" aria-label="Official LuckyMe links">
+    ${card("social-x", ICONS.x, options.socialIcons?.x, "X", "Announcements, campaigns and winner updates from @LuckyMeSolana.", "Follow us", "https://x.com/LuckyMeSolana")}
+    ${card("social-discord", ICONS.referral, options.socialIcons?.discord, "Discord", "Join the LuckyMe community, chat and get direct updates.", "Join Discord", "https://discord.gg/rZVjBJtMZ")}
+    ${card("social-web", ICONS.external, options.socialIcons?.website, "Official Website", "Open the official LuckyMe home and verified information.", "Visit website", "https://lucky-me.app/")}
+    ${card("social-support", ICONS.help, options.socialIcons?.support, "Support", "Open LuckyMe Discord and create a private support ticket.", "Open ticket", "https://discord.gg/rZVjBJtMZ")}
   </section>
-  <section class="panel glow-purple">
-    <div class="row-left">
-      <span class="icon-chip chip-purplebox">${ICONS.help}</span>
-      <div><span class="label">Discord</span><h3>LuckyMe community</h3></div>
-    </div>
-    <button class="secondary-button" style="margin-top: 16px;" data-route="external" data-url="https://discord.gg/rZVjBJtMZ">Join Discord</button>
+  <div class="social-safety">${ICONS.shield}<span>Use only links opened from LuckyMe. We will never ask for your seed phrase or private key.</span></div>
+</main>`;
+}
+
+function socialBodyV4(options: StitchRenderOptions = {}) {
+  const socialArt = options.navigationIcons?.social
+    ? `<img class="social-hero-art" src="${escapeHtml(options.navigationIcons.social)}" alt="" aria-hidden="true" />`
+    : `<span class="social-hero-fallback">${ICONS.referral}</span>`;
+  const card = (className: string, fallbackIcon: string, art: string | undefined, title: string, description: string, action: string, url: string) => String.raw`<button type="button" class="social-card social-icon-card ${className}" data-route="external" data-url="${escapeHtml(url)}">
+    <span class="social-card-icon">${art ? `<img src="${escapeHtml(art)}" alt="" aria-hidden="true" />` : fallbackIcon}</span>
+    <span class="social-card-copy"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span>
+    <span class="social-card-action">${escapeHtml(action)} ${ICONS.external}</span>
+  </button>`;
+  return String.raw`<main class="social-page">
+  <section class="social-hero">
+    <div class="social-hero-copy"><span class="eyebrow">LuckyMe Community</span><h1>Stay close<br />to the luck</h1><p>Official announcements, winner updates, help and everything happening around LuckyMe.</p></div>
+    ${socialArt}
   </section>
+  <section class="social-grid" aria-label="Official LuckyMe links">
+    ${card("social-x", ICONS.x, options.socialIcons?.x, "X", "Announcements, campaigns and winner updates from @LuckyMeSolana.", "Follow us", "https://x.com/LuckyMeSolana")}
+    ${card("social-discord", ICONS.referral, options.socialIcons?.discord, "Discord", "Join the LuckyMe community, chat and get direct updates.", "Join Discord", "https://discord.gg/rZVjBJtMZ")}
+    ${card("social-web", ICONS.external, options.socialIcons?.website, "Official Website", "Open the official LuckyMe home and verified information.", "Visit website", "https://lucky-me.app/")}
+    ${card("social-support", ICONS.help, options.socialIcons?.support, "Support", "Open LuckyMe Discord and create a private support ticket.", "Open ticket", "https://discord.gg/rZVjBJtMZ")}
+  </section>
+  <div class="social-safety">${ICONS.shield}<span>Use only links opened from LuckyMe. We will never ask for your seed phrase or private key.</span></div>
+</main>`;
+}
+
+function socialBody(options: StitchRenderOptions = {}) {
+  if (options.socialVariant === "v2") {
+    return socialBodyV2(options);
+  }
+  if (options.socialVariant === "v4" || options.socialVariant === undefined) {
+    return socialBodyV4(options);
+  }
+  const socialArt = options.navigationIcons?.social
+    ? `<img src="${escapeHtml(options.navigationIcons.social)}" alt="" aria-hidden="true" />`
+    : "";
+  const card = (className: string, art: string | undefined, title: string, subtitle: string, action: string, url: string) => String.raw`<button type="button" class="social-v3-card ${className}" data-route="external" data-url="${escapeHtml(url)}">
+    <span class="social-v3-art">${art ? `<img src="${escapeHtml(art)}" alt="" aria-hidden="true" />` : ""}</span>
+    <span class="social-v3-copy"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(subtitle)}</span></span>
+    <span class="social-v3-action">${escapeHtml(action)} ${ICONS.external}</span>
+  </button>`;
+  return String.raw`<main class="social-page-v3">
+  <section class="social-v3-hero">
+    <div class="social-v3-hero-copy"><span class="eyebrow">LuckyMe Community</span><h1>Connect with<br />LuckyMe</h1><p>Four official destinations. Clear, direct and protected from fake links.</p></div>
+    ${socialArt}
+  </section>
+  <section class="social-v3-grid" aria-label="Official LuckyMe links">
+    ${card("social-x", options.socialIcons?.x, "X", "@LuckyMeSolana", "Follow us", "https://x.com/LuckyMeSolana")}
+    ${card("social-discord", options.socialIcons?.discord, "Discord", "LuckyMe community server", "Join Discord", "https://discord.gg/rZVjBJtMZ")}
+    ${card("social-web", options.socialIcons?.website, "Official Website", "lucky-me.app", "Visit website", "https://lucky-me.app/")}
+    ${card("social-support", options.socialIcons?.support, "Support", "Create a private Discord ticket", "Open ticket", "https://discord.gg/rZVjBJtMZ")}
+  </section>
+  <div class="social-safety">${ICONS.shield}<span>Only use links opened from LuckyMe. We never ask for your seed phrase or private key.</span></div>
 </main>`;
 }
 
 function poolsBody(options: StitchRenderOptions = {}) {
-  return String.raw`<main class="stack">
-  <section class="section-header">
-    <div>
-      <span class="label">Entry tiers</span>
-      <h2>Live ticket targets</h2>
+  return String.raw`<main class="stack pools-page">
+  <section class="pools-hero">
+    <span class="eyebrow">LuckyMe pools</span>
+    <h1>Choose your luck level</h1>
+    <p>Four entry tiers, one transparent Solana draw system. Pick the balance that feels right for you.</p>
+    <div class="pools-hero-badges" aria-label="Pool guarantees">
+      <span>1-hour rounds</span><span>Automatic refunds</span><span>ORAO verified</span>
     </div>
-    <span class="status-pill neutral">Fixed rules</span>
   </section>
-  <section class="pool-grid two">
-    ${POOLS.map((pool) => poolCard(pool, "review", options)).join("\n    ")}
+  <section class="pool-selector-grid" aria-label="LuckyMe pools">
+    ${POOLS.map((pool) => poolSelectorCard(pool, options)).join("\n    ")}
   </section>
-  ${refundPolicyPanel()}
-  <button class="secondary-button" data-route="how-to-play">Read the full How to Play guide</button>
-  ${rulesPanel()}
 </main>`;
 }
 
 function activityBody(options: StitchRenderOptions = {}) {
-  const rows = POOLS.map((pool) => {
-    const facts = roundFacts(pool, options, true);
-    const round = facts.round;
-    const roundLabel = round?.roundId ?? round?.id ?? "-";
-    const value = round
-      ? `${facts.threshold.sold} / ${facts.threshold.minimumTickets} tickets`
-      : "No current round";
-    const detail = `Round #${roundLabel} · ${facts.players} players · ${facts.status}`;
-    const tone = facts.statusTone === "amber" ? "warning" : facts.statusTone === "emerald" ? "success" : "";
-    return String.raw`<div class="list-row">
-      <div><span class="label">${pool.name}</span><p class="soft" style="font-size: 13px;">${escapeHtml(detail)}</p></div>
-      <strong class="mono ${tone}">${escapeHtml(value)}</strong>
-    </div>`;
-  }).join("\n    ");
-  const myRows = POOLS.map((pool) => {
-    const facts = roundFacts(pool, options, true);
-    if (facts.myTickets === "0") {
-      return "";
+  const activityIcon = options.navigationIcons?.activity;
+  const entryAmountSol = (pool: PoolSpec, live: LivePool | undefined, entry: LiveUserEntry | null | undefined) => {
+    const lamports = numberValue(entry?.lamports, Number.NaN);
+    if (Number.isFinite(lamports)) {
+      return (lamports / 1_000_000_000).toFixed(4).replace(/\.?0+$/, "");
     }
-    return String.raw`<div class="list-row">
-      <div><span class="label">My ${pool.name} entry</span><p class="soft" style="font-size: 13px;">Confirmed from /pools?player</p></div>
-      <strong class="mono success">${escapeHtml(facts.myTickets)} tickets</strong>
-    </div>`;
-  }).filter(Boolean).join("\n    ");
+    return (numberValue(entry?.ticketCount) * numberValue(priceSol(pool, live)))
+      .toFixed(4)
+      .replace(/\.?0+$/, "");
+  };
+  const activityDate = (round: LiveRound) => {
+    const timestamp = round.archivedAt
+      ? new Date(round.archivedAt)
+      : numberValue(round.endTs) > 0
+        ? new Date(numberValue(round.endTs) * 1_000)
+        : null;
+    return timestamp && !Number.isNaN(timestamp.getTime())
+      ? timestamp.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+      : "Confirmed round";
+  };
+  const activeEntries = POOLS.flatMap((pool) => {
+    const live = livePool(pool.id, options);
+    const round = live?.activeRound;
+    const tickets = numberValue(round?.userEntry?.ticketCount);
+    if (!round || tickets <= 0 || round.settled || round.status === "settled") {
+      return [];
+    }
+    return [{ pool, live, round, tickets }];
+  });
+  const historyEntries = POOLS.flatMap((pool) => {
+    const live = livePool(pool.id, options);
+    return (live?.recentRounds ?? []).flatMap((round) => {
+      const tickets = numberValue(round.userEntry?.ticketCount);
+      if (tickets <= 0) {
+        return [];
+      }
+      const matchingWinner = (round.winners ?? []).find((winner) =>
+        Boolean(options.walletAddress) && String(winner.wallet ?? winner.winner ?? "") === options.walletAddress,
+      );
+      const refunded = round.refundStatus === "completed" || round.roundOutcome === "cancelled_below_minimum";
+      const result = matchingWinner ? "Won" : refunded ? "Refunded" : "Completed";
+      const resultDetail = matchingWinner
+        ? `${winnerPrizeSol(matchingWinner, live, round)} SOL prize`
+        : refunded
+          ? `${entryAmountSol(pool, live, round.userEntry)} SOL returned`
+          : `${tickets} ticket${tickets === 1 ? "" : "s"}`;
+      return [{ pool, live, round, tickets, result, resultDetail }];
+    });
+  }).sort((a, b) => {
+    const aTime = a.round.archivedAt ? new Date(a.round.archivedAt).getTime() : numberValue(a.round.endTs) * 1_000;
+    const bTime = b.round.archivedAt ? new Date(b.round.archivedAt).getTime() : numberValue(b.round.endTs) * 1_000;
+    return bTime - aTime;
+  });
+  const activeTicketTotal = activeEntries.reduce((total, entry) => total + entry.tickets, 0);
+  const walletLabel = options.walletAddress ? shortAddress(options.walletAddress) : "Wallet not connected";
+  const activeRows = activeEntries.slice(0, 4).map(({ pool, live, round, tickets }) => {
+    const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
+    const chance = round.userEntry?.chancePercent ? `${round.userEntry.chancePercent}% chance` : "Chance updates live";
+    return String.raw`<button type="button" class="activity-compact-row tone-${pool.tone}" data-route="review" data-pool="${pool.id}">
+      ${poolIcon ? `<img class="activity-compact-icon" src="${escapeHtml(poolIcon)}" alt="" />` : `<span></span>`}
+      <span class="activity-compact-copy">
+        <span class="activity-compact-title"><strong>${pool.name}</strong><small>Round #${escapeHtml(round.roundId ?? round.id ?? "-")}</small></span>
+        <span class="activity-compact-meta">${tickets} ticket${tickets === 1 ? "" : "s"} · ${escapeHtml(chance)}</span>
+        <span class="activity-compact-sub">Entry ${escapeHtml(entryAmountSol(pool, live, round.userEntry))} SOL · confirmed on-chain</span>
+      </span>
+      <span class="activity-compact-state"><strong ${countdownAttributes(round)}>${escapeHtml(roundTimeLeft(round))}</strong><span>${escapeHtml(roundStatus(round, thresholdState(pool, live, round)))}</span></span>
+    </button>`;
+  }).join("\n      ");
+  const historyRows = historyEntries.slice(0, 5).map(({ pool, round, result, resultDetail }) => {
+    const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
+    const resultClass = result === "Won" ? "activity-result-won" : result === "Refunded" ? "activity-result-refund" : "";
+    return String.raw`<article class="activity-compact-row activity-history-row tone-${pool.tone}">
+      ${poolIcon ? `<img class="activity-compact-icon" src="${escapeHtml(poolIcon)}" alt="" />` : `<span></span>`}
+      <span class="activity-compact-copy">
+        <span class="activity-compact-title"><strong>${pool.name}</strong><small>Round #${escapeHtml(round.roundId ?? round.id ?? "-")}</small></span>
+        <span class="activity-compact-meta">${escapeHtml(resultDetail)}</span>
+        <span class="activity-compact-sub">${escapeHtml(activityDate(round))} · verified result</span>
+      </span>
+      <span class="activity-compact-state"><strong class="${resultClass}">${escapeHtml(result)}</strong><span>On-chain</span></span>
+    </article>`;
+  }).join("\n      ");
+  const emptyState = (title: string, copy: string) => String.raw`<div class="activity-empty">
+    ${activityIcon ? `<img src="${escapeHtml(activityIcon)}" alt="" />` : ICONS.activity}
+    <h2>${escapeHtml(title)}</h2><p>${escapeHtml(copy)}</p>
+    <button type="button" data-route="pools">Explore Pools</button>
+  </div>`;
 
-  return String.raw`<main class="stack">
-  <section class="section-header">
-    <div>
-      <span class="label">Activity</span>
-      <h2>Round ledger</h2>
-    </div>
-    <span class="status-pill ${options.onchainAvailable ? "emerald" : "amber"}">${options.onchainAvailable ? "Mainnet" : "Syncing"}</span>
+  return String.raw`<main class="activity-page activity-page-v2">
+  <section class="activity-hero">
+    <span class="activity-hero-copy"><span class="eyebrow">Your wallet</span><h1>Activity</h1><p>Only your entries and results.</p></span>
+    <span class="activity-wallet-state"><span>Wallet</span><strong class="mono">${escapeHtml(walletLabel)}</strong></span>
   </section>
-  <p style="margin-top: -4px;">Live rows are read from confirmed Solana state.</p>
-  <section class="list">
-    ${rows}
-    ${myRows}
-    <div class="list-row">
-      <div><span class="label">Below-target rounds</span><p class="soft" style="font-size: 13px;">No winner is drawn; refunds are processed automatically</p></div>
-      <strong class="mono">No manual claim</strong>
-    </div>
+  <section class="activity-summary" aria-label="Activity summary">
+    <span class="activity-summary-item"><span>Active entries</span><strong>${activeEntries.length}</strong></span>
+    <span class="activity-summary-item"><span>Live tickets</span><strong>${activeTicketTotal}</strong></span>
+    <span class="activity-summary-item"><span>Results</span><strong>${historyEntries.length}</strong></span>
   </section>
-  ${refundPolicyPanel()}
-  ${trustBadges()}
+  <section class="activity-switcher" aria-label="Activity view">
+    <button type="button" class="activity-switch" data-activity-tab="active" aria-selected="true">Active</button>
+    <button type="button" class="activity-switch" data-activity-tab="history" aria-selected="false">History</button>
+  </section>
+  <section class="activity-view" data-activity-view="active">
+    ${activeRows || emptyState("No active entries", options.walletAddress ? "This wallet has no ticket in a live round." : "Connect your wallet to load its live entries.")}
+  </section>
+  <section class="activity-view" data-activity-view="history" hidden>
+    ${historyRows || emptyState("No history yet", options.walletAddress ? "Completed rounds and automatic refunds will appear here." : "Connect your wallet to load its verified results.")}
+  </section>
+  <section class="activity-safety-note">${ICONS.shield}<span>Refunds are automatic when a round expires below target. Network fees are not refundable.</span></section>
 </main>`;
 }
 
@@ -1897,93 +3045,194 @@ function winnerBody(input?: WinnerShareData) {
 </main>`;
 }
 
-function walletBody() {
-  return String.raw`<main class="stack">
-  <section class="hero-card">
-    <div class="hero-copy">
-      <p class="eyebrow">Wallet</p>
-      <h1>You hold the keys</h1>
-      <p>LuckyMe never stores seed phrases or private keys. Your wallet approves every action.</p>
+function walletBody(options: StitchRenderOptions = {}) {
+  const connected = Boolean(options.walletAddress);
+  const walletLabel = connected ? shortAddress(options.walletAddress ?? "") : "Not connected";
+  return String.raw`<main class="feature-page">
+  <section class="feature-hero wallet-hub-hero">
+    ${options.homeIcons?.referral ? `<img class="feature-hero-art" src="${escapeHtml(options.homeIcons.referral)}" alt="" />` : ""}
+    <div class="feature-hero-copy">
+      <span class="eyebrow">Secure wallet</span>
+      <h1>Your keys.<br />Your control.</h1>
+      <p>LuckyMe never stores seed phrases or private keys.</p>
+      <div class="wallet-hub-status"><span>Status</span><strong>${escapeHtml(walletLabel)}</strong></div>
     </div>
   </section>
-  <section class="panel glow-purple">
-    <div class="kv">
-      <div class="row"><span class="label">Connection</span><strong class="mono">Mobile Wallet Adapter</strong></div>
-      <div class="row"><span class="label">Network</span><strong class="mono">solana:mainnet</strong></div>
-      <div class="row"><span class="label">App custody</span><strong class="mono success">None</strong></div>
+  <section class="feature-panel">
+    <div class="feature-facts">
+      <span class="feature-fact"><strong>0</strong><span>App custody</span></span>
+      <span class="feature-fact"><strong>1</strong><span>Wallet approval</span></span>
+      <span class="feature-fact"><strong>SOL</strong><span>Mainnet</span></span>
     </div>
   </section>
-  <div class="wallet-native-space" aria-hidden="true"></div>
+  <button class="primary-button" data-action="${connected ? "disconnect-wallet" : "connect-wallet"}">${connected ? "Disconnect wallet" : "Connect wallet"}</button>
+  <section class="wallet-quick-grid">
+    <button class="wallet-quick" data-route="referral"><strong>Referral League</strong><span>Verify official SGT identity</span></button>
+    <button class="wallet-quick" data-route="seeker-pass"><strong>NFT Holders</strong><span>Verify Pass and enter free</span></button>
+  </section>
+  <div class="feature-note">${ICONS.shield}<span>All approvals open in your external Seed Vault wallet. LuckyMe cannot sign for you.</span></div>
 </main>`;
 }
 
-function howToPlayBody() {
-  const tableRows = POOLS.map((pool) => String.raw`<tr>
-    <td data-label="Pool">${pool.name}</td>
-    <td data-label="Ticket" class="mono">${pool.entry}</td>
-    <td data-label="Target tickets" class="mono">${pool.minimumTickets} total</td>
-    <td data-label="Winners">${pool.winners}</td>
-    <td data-label="Wallet limit">${pool.limits}</td>
-  </tr>`).join("\n    ");
-
-  return String.raw`<main class="stack how-to-page">
-  <section class="hero-card">
-    <div class="hero-copy">
-      <p class="eyebrow">How to Play</p>
-      <h1>Simple 1-hour pool rounds</h1>
-      <p>Choose a pool, approve your tickets in your own wallet, and follow the live total-ticket target.</p>
-      <div class="cta-row">
-        <button class="primary-button" data-route="pools">Choose a pool</button>
-        <button class="secondary-button" data-route="wallet">Connect wallet</button>
-      </div>
+function referralLeagueBody(options: StitchRenderOptions = {}) {
+  const icon = options.homeIcons?.referral;
+  return String.raw`<main class="feature-page">
+  <section class="feature-hero">
+    ${icon ? `<img class="feature-hero-art" src="${escapeHtml(icon)}" alt="" />` : ""}
+    <div class="feature-hero-copy">
+      <span class="eyebrow">Seeker APK exclusive</span>
+      <h1>Referral<br />League</h1>
+      <span class="feature-prize">Up to 10,000 SKR monthly</span>
+      <p>Official SGT holders build verified activity and invite other Seeker owners.</p>
     </div>
   </section>
-
-  <section aria-labelledby="how-steps-title">
-    <div class="section-header" style="margin-bottom: 10px;">
-      <div>
-        <span class="label">The basics</span>
-        <h2 id="how-steps-title">Ten things to know</h2>
-      </div>
-    </div>
-    <ol class="how-steps">
-      <li class="how-step"><div><h3>Choose a pool</h3><p>Mini costs 0.005 SOL per ticket, Normal 0.01 SOL, High 0.05 SOL, and Premium 0.1 SOL.</p></div></li>
-      <li class="how-step"><div><h3>Connect your wallet</h3><p>The connection is self-custody. LuckyMe never asks for your seed phrase or stores your private keys.</p></div></li>
-      <li class="how-step"><div><h3>Buy tickets</h3><p>Every ticket has an equal chance. Buying more tickets gives you more chances in Mini, Normal, and High.</p></div></li>
-      <li class="how-step"><div><h3>One temporary rent deposit</h3><p>Each wallet pays one small refundable rent deposit for its entry in a round, regardless of how many tickets it buys at once. It is returned automatically when that entry closes.</p></div></li>
-      <li class="how-step"><div><h3>The first ticket starts the clock</h3><p>The 1-hour countdown starts only when the first ticket is confirmed. An empty pool waits without running a timer.</p></div></li>
-      <li class="how-step"><div><h3>Reach the ticket target</h3><p>Mini needs 25 total tickets, Normal 13, High 3, and Premium 3.</p></div></li>
-      <li class="how-step"><div><h3>Valid draw</h3><p>If the target is reached, the winner or winners are selected after the 1-hour round ends.</p></div></li>
-      <li class="how-step"><div><h3>Automatic returns</h3><p>If the target is missed, your ticket money and rent deposit return automatically. If the target is reached and another player wins, only your rent deposit returns. Solana network fees are not refundable.</p></div></li>
-      <li class="how-step"><div><h3>Total tickets, not players</h3><p>Mini needs 25 tickets sold in total, not 25 different players. One wallet can buy all 25 in one entry. The same total-ticket rule applies to Normal and High.</p></div></li>
-      <li class="how-step"><div><h3>Premium rules</h3><p>Premium allows one ticket per wallet, requires three distinct wallets, selects three winners, and splits the main prize 70 / 20 / 10.</p></div></li>
-    </ol>
-  </section>
-
-  <section class="panel glow-cyan" aria-labelledby="pool-rules-title">
-    <div class="row" style="margin-bottom: 12px;">
-      <div>
-        <span class="label">Pool guide</span>
-        <h2 id="pool-rules-title">Prices and targets</h2>
-      </div>
-    </div>
-    <div class="pool-rules-wrap" tabindex="0" aria-label="Pool price and target table">
-      <table class="pool-rules-table">
-        <thead><tr><th scope="col">Pool</th><th scope="col">Ticket</th><th scope="col">Target tickets</th><th scope="col">Winners</th><th scope="col">Wallet limit</th></tr></thead>
-        <tbody>${tableRows}</tbody>
-      </table>
+  <section class="feature-panel">
+    <div class="feature-facts">
+      <span class="feature-fact"><strong>3</strong><span>Winning rounds</span></span>
+      <span class="feature-fact"><strong>3</strong><span>Different days</span></span>
+      <span class="feature-fact"><strong>7</strong><span>Active days</span></span>
     </div>
   </section>
-
-  ${refundPolicyPanel()}
-  <section class="panel">
-    <div class="row-left">
-      <span class="icon-chip chip-emeraldbox">${ICONS.shield}</span>
-      <div><h3>Confirm before signing</h3><p style="margin-top: 4px;">Your wallet shows the transaction before approval. LuckyMe cannot approve it for you.</p></div>
-    </div>
+  <section class="feature-panel feature-identity">
+    <span class="feature-identity-copy"><span>Seeker identity</span><strong>Official SGT verification required</strong></span>
+    <span class="feature-state">Not verified</span>
   </section>
-  <button class="secondary-button" data-route="links">Official and legal links</button>
+  <button class="primary-button" data-route="referral-auth">VERIFY</button>
+  <button class="feature-subaction" data-route="how-to-play">How Referral League works</button>
+  <div class="feature-note">${ICONS.shield}<span>Authentication only. No transaction and no fee. Cancelled or refunded rounds never count.</span></div>
 </main>`;
+}
+
+function nftHoldersBody(options: StitchRenderOptions = {}) {
+  const campaign = options.seekerPassCampaign ?? {};
+  const entries = Math.max(0, Number(campaign.entryCount ?? 0));
+  const threshold = Math.max(1, Number(campaign.entryThreshold ?? 1_000));
+  const progress = Math.min(100, Math.max(0, (entries / threshold) * 100));
+  const icon = options.homeIcons?.nft;
+  const fundingLabel = campaign.funded && campaign.payoutEnabled ? "Payout enabled" : "Funding pending";
+  return String.raw`<main class="feature-page">
+  <section class="feature-hero">
+    ${icon ? `<img class="feature-hero-art" src="${escapeHtml(icon)}" alt="" />` : ""}
+    <div class="feature-hero-copy">
+      <span class="eyebrow">LuckyMe Seeker Pass</span>
+      <h1>NFT Holders<br />Draw</h1>
+      <span class="feature-prize">${escapeHtml(campaign.prizeSol ?? 3)} SOL · ${escapeHtml(campaign.winnerCount ?? 20)} winners</span>
+      <p>One free verified entry per active wallet and official NFT.</p>
+    </div>
+  </section>
+  <section class="feature-panel">
+    <div class="feature-progress-head"><span>Verified entries</span><strong class="mono">${entries.toLocaleString("en-US")} / ${threshold.toLocaleString("en-US")}</strong></div>
+    <span class="feature-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="${threshold}" aria-valuenow="${entries}"><span class="feature-progress-fill" style="width:${progress.toFixed(2)}%"></span></span>
+    <div class="feature-facts" style="margin-top:10px">
+      <span class="feature-fact"><strong>Free</strong><span>Entry</span></span>
+      <span class="feature-fact"><strong>${escapeHtml(campaign.winnerCount ?? 20)}</strong><span>Winners</span></span>
+      <span class="feature-fact"><strong>${Math.max(threshold - entries, 0).toLocaleString("en-US")}</strong><span>Still needed</span></span>
+    </div>
+  </section>
+  <section class="feature-panel feature-identity">
+    <span class="feature-identity-copy"><span>Campaign payout</span><strong>${fundingLabel}</strong></span>
+    <span class="feature-state">${campaign.funded ? "Funded" : "Not funded"}</span>
+  </section>
+  <button class="primary-button" data-route="nft-auth">Verify NFT &amp; enter free</button>
+  <div class="feature-note">${ICONS.shield}<span>One authentication signature only—no transaction and no fee. Ownership is checked again before winner confirmation.</span></div>
+</main>`;
+}
+
+function walletAuthBody(kind: "wallet" | "referral" | "nft") {
+  const copy = kind === "referral"
+    ? { eyebrow: "Referral League", title: "Verify your SGT wallet", detail: "LuckyMe verifies the signed wallet and official Seeker Genesis Token." }
+    : kind === "nft"
+      ? { eyebrow: "NFT Holders", title: "Verify your NFT wallet", detail: "LuckyMe verifies ownership of the official Seeker Pass NFT on mainnet." }
+      : { eyebrow: "Wallet", title: "Connect your wallet", detail: "Choose the wallet you want to use with LuckyMe on Solana mainnet." };
+  const backRoute = kind === "referral" ? "referral" : kind === "nft" ? "seeker-pass" : "wallet";
+  return String.raw`<main class="feature-page">
+  <section class="feature-panel auth-card">
+    <span class="auth-symbol">${ICONS.wallet}</span>
+    <div class="auth-copy"><span class="eyebrow">${copy.eyebrow}</span><h1>${copy.title}</h1><p>${copy.detail}</p></div>
+    <div class="auth-steps">
+      <div class="auth-step"><span>1</span><span class="auth-step-copy"><strong>Wallet request opens</strong><span>Select the intended Seed Vault wallet</span></span></div>
+      <div class="auth-step"><span>2</span><span class="auth-step-copy"><strong>Approve one message</strong><span>Authentication only · no transaction</span></span></div>
+      <div class="auth-step"><span>3</span><span class="auth-step-copy"><strong>LuckyMe verifies</strong><span>Server-side check on Solana mainnet</span></span></div>
+    </div>
+    <div class="feature-note">${ICONS.shield}<span>This browser preview cannot request a real signature. The APK opens your external wallet here.</span></div>
+  </section>
+  <button class="secondary-button" data-route="${backRoute}">Back</button>
+</main>`;
+}
+
+function howToPlayBody(options: StitchRenderOptions = {}) {
+  const wikiIcon = (src: string | undefined, fallback: string) => src
+    ? `<img src="${escapeHtml(src)}" alt="" />`
+    : fallback;
+  const poolsIcon = options.homeIcons?.pools ?? options.navigationIcons?.pools;
+  const referralIcon = options.homeIcons?.referral;
+  const nftIcon = options.homeIcons?.nft;
+  const poolCards = POOLS.map((pool) => {
+    const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
+    const targetCopy = pool.id === "premium"
+      ? "3 tickets · 3 wallets · 3 winners"
+      : `${pool.minimumTickets} tickets · ${pool.winners}`;
+    return String.raw`<article class="how-pool-card tone-${pool.tone}">
+      ${poolIcon ? `<img src="${escapeHtml(poolIcon)}" alt="" />` : `<span></span>`}
+      <span class="how-pool-copy"><strong>${pool.name}</strong><span>${pool.entry}</span><small>${targetCopy}</small></span>
+    </article>`;
+  }).join("\n      ");
+  const step = (number: number, title: string, copy: string) => String.raw`<div class="how-wiki-step">
+    <span class="how-wiki-step-number">${number}</span><span class="how-wiki-step-copy"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(copy)}</span></span>
+  </div>`;
+
+  return String.raw`<main class="stack how-to-page"><div class="how-wiki-page">
+  <section class="how-wiki-hero"><span class="eyebrow">LuckyMe Guide</span><h1>How To</h1><p>Choose a topic. The guide opens here without leaving the page.</p></section>
+  <section class="how-wiki-tabs" aria-label="How To topics">
+    <button type="button" class="how-wiki-tab" data-how-tab="pools" aria-selected="true">${wikiIcon(poolsIcon, ICONS.pools)}<strong>Pools</strong></button>
+    <button type="button" class="how-wiki-tab" data-how-tab="referral" aria-selected="false">${wikiIcon(referralIcon, ICONS.referral)}<strong>Referral</strong></button>
+    <button type="button" class="how-wiki-tab" data-how-tab="nft" aria-selected="false">${wikiIcon(nftIcon, ICONS.homeNft)}<strong>NFT Pass</strong></button>
+  </section>
+
+  <section class="how-wiki-content" data-how-view="pools">
+    <div class="how-wiki-title"><span class="how-wiki-title-copy"><h2>LuckyMe Pools</h2><p>Self-custody, one-hour on-chain rounds.</p></span><span class="how-wiki-badge">Mainnet</span></div>
+    <div class="how-pool-grid">${poolCards}</div>
+    <div class="how-wiki-steps">
+      ${step(1, "Choose and buy", "Connect your wallet and approve the tickets. One refundable rent deposit covers that wallet entry.")}
+      ${step(2, "First ticket starts the timer", "The one-hour countdown begins only after the first confirmed ticket.")}
+      ${step(3, "Target reached", "After the timer, a valid round uses verifiable Solana randomness to select the winner or winners.")}
+      ${step(4, "Target missed", "No winner is drawn. Ticket principal and entry rent return automatically; network fees do not.")}
+    </div>
+    <span class="sr-only">Mini needs 25 tickets sold in total, not 25 different players. Each wallet pays one small refundable rent deposit for its entry in a round, regardless of how many tickets it buys at once. If the target is reached and another player wins, only your rent deposit returns.</span>
+  </section>
+
+  <section class="how-wiki-content" data-how-view="referral" hidden>
+    <div class="how-wiki-title"><span class="how-wiki-title-copy"><h2>Referral League</h2><p>Seeker APK and official SGT identity only.</p></span><span class="how-wiki-badge">APK only</span></div>
+    <div class="how-wiki-facts">
+      <span class="how-wiki-fact"><strong>3</strong><span>Winning rounds</span></span>
+      <span class="how-wiki-fact"><strong>3</strong><span>Different days</span></span>
+      <span class="how-wiki-fact"><strong>7</strong><span>Active days</span></span>
+    </div>
+    <div class="how-wiki-steps">
+      ${step(1, "Activate your SGT", "Claim or activate the official Seeker Genesis Token before joining the league.")}
+      ${step(2, "Verify the holder wallet", "Sign the authentication request. LuckyMe verifies the wallet and official SGT on mainnet.")}
+      ${step(3, "Share your invite", "Your referral link opens the LuckyMe Solana dApp Store listing and carries your invite code.")}
+      ${step(4, "Qualify automatically", "Complete winner-producing rounds on 3 different days and use the app on 7 distinct days.")}
+    </div>
+    <div class="how-wiki-note">${ICONS.shield}<span>Cancelled or refunded rounds never count. Web play remains available but does not grant Referral League eligibility.</span></div>
+  </section>
+
+  <section class="how-wiki-content" data-how-view="nft" hidden>
+    <div class="how-wiki-title"><span class="how-wiki-title-copy"><h2>LuckyMe Seeker Pass</h2><p>Free holder campaign, separate from paid pools.</p></span><span class="how-wiki-badge">NFT holders</span></div>
+    <div class="how-wiki-facts">
+      <span class="how-wiki-fact"><strong>Free</strong><span>Entry</span></span>
+      <span class="how-wiki-fact"><strong>1,000</strong><span>Eligible entries</span></span>
+      <span class="how-wiki-fact"><strong>20</strong><span>Winners</span></span>
+    </div>
+    <div class="how-wiki-steps">
+      ${step(1, "Hold the official Pass", "The selected wallet must currently own an active LuckyMe Seeker Pass NFT.")}
+      ${step(2, "Open NFT Holders", "Choose the wallet holding the Pass from inside the LuckyMe Seeker APK.")}
+      ${step(3, "Sign once for free", "Approve one authentication message. It is not a transaction and charges no entry fee.")}
+      ${step(4, "Verify and enter", "LuckyMe checks the official collection on mainnet. One active entry is allowed per wallet and NFT.")}
+    </div>
+    <div class="how-wiki-note">${ICONS.shield}<span>Ownership is checked again before winner confirmation. The 3 SOL prize schedule activates only after campaign funding is enabled.</span></div>
+  </section>
+</div></main>`;
 }
 
 function linksBody() {
@@ -2021,6 +3270,27 @@ function reviewBody(options: StitchRenderOptions = {}) {
     facts.threshold.minimumTickets - ticketsAfterPurchase,
     0,
   );
+  const isPremium = pool.id === "premium";
+  const premiumWalletsAfterPurchase = Math.min(
+    facts.threshold.minimumDistinctEntrants,
+    facts.threshold.players + (alreadyEntered ? 0 : 1),
+  );
+  const premiumWalletsRemaining = Math.max(
+    facts.threshold.minimumDistinctEntrants - premiumWalletsAfterPurchase,
+    0,
+  );
+  const validTargetCopy = isPremium
+    ? `${facts.threshold.minimumDistinctEntrants} wallets`
+    : `${facts.threshold.minimumTickets} tickets`;
+  const afterPurchaseCopy = isPremium
+    ? `${premiumWalletsAfterPurchase} / ${facts.threshold.minimumDistinctEntrants} wallets`
+    : `${ticketsAfterPurchase} / ${facts.threshold.minimumTickets}`;
+  const remainingAfterCopy = isPremium
+    ? `${premiumWalletsRemaining} ${premiumWalletsRemaining === 1 ? "wallet" : "wallets"}`
+    : `${remainingAfterPurchase} ${ticketWord(remainingAfterPurchase)}`;
+  const refundThresholdCopy = isPremium
+    ? `${facts.threshold.minimumTickets} tickets from ${facts.threshold.minimumDistinctEntrants} distinct wallets`
+    : `${facts.threshold.minimumTickets} tickets`;
   const wallet = options.walletAddress ? shortAddress(options.walletAddress) : "Connect in wallet";
   const buttonClass = canBuy ? "primary-button" : "primary-button button-disabled";
   const buttonLabel = !poolReady
@@ -2028,100 +3298,109 @@ function reviewBody(options: StitchRenderOptions = {}) {
     : alreadyEntered
       ? "Entry already confirmed"
       : canBuy
-        ? "Sign in wallet"
+        ? "BUY"
         : facts.status;
-  return String.raw`<main class="stack" data-ticket-picker-root data-ticket-price="${escapeHtml(priceSol(pool, facts.live))}" data-ticket-limit="${pool.id === "premium" ? 1 : 1000}" data-ticket-sold="${facts.threshold.sold}" data-ticket-minimum="${facts.threshold.minimumTickets}">
-  <section class="section-header">
-    <div>
-      <span class="label">Review</span>
-      <h2>Review entry</h2>
+  const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
+  const percentage = hasRound
+    ? Math.max(0, Math.min(100, (facts.threshold.sold / facts.threshold.minimumTickets) * 100))
+    : 0;
+  return String.raw`<main class="pool-entry-page tone-${pool.tone}" data-ticket-picker-root data-ticket-price="${escapeHtml(priceSol(pool, facts.live))}" data-ticket-limit="${pool.id === "premium" ? 1 : 1000}" data-ticket-sold="${facts.threshold.sold}" data-ticket-minimum="${facts.threshold.minimumTickets}">
+  <section class="pool-entry-hero">
+    ${poolIcon ? `<img class="pool-entry-art" src="${escapeHtml(poolIcon)}" alt="" />` : ""}
+    <div class="pool-entry-top">
+      <button class="pool-entry-back" data-route="pools">${ICONS.chevron} Pools</button>
+      <span class="pool-entry-status">${escapeHtml(facts.status)}</span>
+    </div>
+    <div class="pool-entry-title">
+      <span class="eyebrow">${escapeHtml(pool.chip)}</span>
+      <h1>${escapeHtml(pool.name)} Pool</h1>
+      <div class="pool-entry-price"><strong class="mono">${escapeHtml(priceSol(pool, facts.live))}</strong><span>SOL / TICKET</span></div>
+    </div>
+    <div class="pool-entry-progress">
+      <div class="pool-entry-progress-head"><span>Tickets sold</span><strong class="mono">${hasRound ? facts.threshold.sold : "—"} / ${facts.threshold.minimumTickets}</strong></div>
+      <span class="progress-track" role="progressbar" aria-label="${pool.name} tickets sold" aria-valuemin="0" aria-valuemax="${facts.threshold.minimumTickets}" aria-valuenow="${hasRound ? Math.min(facts.threshold.sold, facts.threshold.minimumTickets) : 0}"><span class="progress-fill" style="width:${percentage.toFixed(2)}%"></span></span>
+    </div>
+    <div class="pool-entry-stats">
+      <div class="pool-entry-stat"><span>Timer</span><strong ${countdownAttributes(facts.round)}>${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
+      <div class="pool-entry-stat"><span>Players</span><strong>${escapeHtml(facts.players)}</strong></div>
     </div>
   </section>
-  <p style="margin-top: -4px;">Final pool and amount are read from live chain state before your wallet approves.</p>
-  <section class="panel glow-purple">
-    <div class="kv">
-      <div class="row"><span class="label">Pool</span><strong class="mono">${pool.name}</strong></div>
-      <div class="row"><span class="label">Ticket price</span><strong class="mono">${escapeHtml(priceSol(pool, facts.live))} SOL</strong></div>
-      <div class="row"><span class="label">Round status</span><strong class="mono ${facts.statusTone === "emerald" ? "success" : facts.statusTone === "amber" ? "warning" : ""}">${facts.status}</strong></div>
-      <div class="row"><span class="label">Time left</span><strong ${countdownAttributes(facts.round)}>${escapeHtml(roundTimeLeft(facts.round))}</strong></div>
-      <div class="row"><span class="label">Valid draw target</span><strong class="mono">${facts.threshold.minimumTickets} total tickets</strong></div>
-      <div class="row"><span class="label">Sold now</span><strong class="mono">${hasRound ? `${facts.threshold.sold} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
-      <div class="row"><span class="label">After this purchase</span><strong class="mono" data-ticket-after>${hasRound ? `${ticketsAfterPurchase} / ${facts.threshold.minimumTickets}` : "Unavailable"}</strong></div>
-      <div class="row"><span class="label">Still needed after</span><strong class="mono" data-ticket-remaining>${hasRound ? `${remainingAfterPurchase} ${ticketWord(remainingAfterPurchase)}` : "Unavailable"}</strong></div>
-      <div class="row"><span class="label">Players</span><strong class="mono">${escapeHtml(facts.players)}</strong></div>
-      ${alreadyEntered ? `<div class="row"><span class="label">My tickets</span><strong class="mono success">${escapeHtml(facts.myTickets)}</strong></div>` : ""}
-      <div class="row"><span class="label">Wallet</span><strong class="mono">${escapeHtml(wallet)}</strong></div>
-      <div class="row"><span class="label">Network</span><strong class="mono">Mainnet</strong></div>
-      <div class="row"><span class="label">Signer</span><strong class="mono">External wallet</strong></div>
-    </div>
-  </section>
-  <section class="panel">
-    <div class="row" style="margin-bottom: 12px;">
-      <span class="label">Tickets</span>
-      <strong class="mono" data-ticket-total>${escapeHtml(total)} SOL total</strong>
-    </div>
+  <section class="pool-entry-panel">
+    <div class="pool-entry-panel-head"><span>Choose tickets</span><strong class="mono" data-ticket-total>${escapeHtml(total)} SOL total</strong></div>
     <div class="ticket-picker">
-      <button class="ticket-step" data-action="ticket-dec" data-pool="${pool.id}">-</button>
+      <button class="ticket-step" data-action="ticket-dec" data-pool="${pool.id}" ${isPremium ? "disabled" : ""}>-</button>
       <input class="ticket-value mono" data-ticket-input type="number" min="1" max="${pool.id === "premium" ? 1 : 1000}" step="1" inputmode="numeric" value="${count}" aria-label="Ticket quantity" ${pool.id === "premium" ? "disabled" : ""} />
-      <button class="ticket-step" data-action="ticket-inc" data-pool="${pool.id}">+</button>
+      <button class="ticket-step" data-action="ticket-inc" data-pool="${pool.id}" ${isPremium ? "disabled" : ""}>+</button>
     </div>
-    ${pool.id === "premium" ? "" : `<div class="ticket-presets" role="group" aria-label="Quick ticket quantity">
+    ${pool.id === "premium" ? `<span class="pool-entry-premium-rule">One ticket maximum per wallet</span>` : `<div class="ticket-presets" role="group" aria-label="Quick ticket quantity">
       ${[5, 10, 20, 25].map((value) => `<button class="ticket-preset${count === value ? " selected" : ""}" data-ticket-count="${value}" type="button">${value}</button>`).join("")}
     </div>`}
-    <p class="muted" style="font-size: 12.5px; margin-top: 10px;">${pool.id === "premium"
-      ? "Premium allows one ticket per wallet and needs three distinct wallets."
-      : `The target is based on total tickets sold, not the number of players. One wallet can buy multiple ${pool.name} tickets in this entry.`}</p>
   </section>
-  ${minimumProgressPanel(pool, facts)}
-  ${refundPolicyPanel()}
-  <section class="panel">
-    <div class="row-left">
-      <span class="icon-chip chip-purplebox">${ICONS.shield}</span>
-      <p style="font-size: 14px;">Your wallet shows the full transaction before anything is signed.</p>
+  <section class="pool-entry-panel">
+    <div class="pool-entry-summary">
+      <div class="pool-entry-summary-item"><span>Valid target</span><strong>${validTargetCopy}</strong></div>
+      <div class="pool-entry-summary-item"><span>After purchase</span><strong class="mono" ${isPremium ? "" : "data-ticket-after"}>${hasRound ? afterPurchaseCopy : "Unavailable"}</strong></div>
+      <div class="pool-entry-summary-item"><span>Still needed</span><strong class="mono" ${isPremium ? "" : "data-ticket-remaining"}>${hasRound ? remainingAfterCopy : "Unavailable"}</strong></div>
     </div>
+    <div class="pool-entry-wallet"><span>Wallet · Mainnet · external signer</span><strong class="mono">${escapeHtml(wallet)}</strong></div>
+    ${alreadyEntered ? `<div class="pool-entry-wallet"><span>My confirmed tickets</span><strong class="mono success">${escapeHtml(facts.myTickets)}</strong></div>` : ""}
   </section>
+  <div class="pool-entry-refund">${ICONS.shield}<span>If the round ends below ${refundThresholdCopy}, principal and refundable Entry rent return automatically. Network fees are not refundable.</span></div>
   <button class="${buttonClass}" data-action="buy-entry" data-pool="${pool.id}"${canBuy ? "" : " disabled"}>${buttonLabel}</button>
-  <button class="secondary-button" data-route="pools">Back to pools</button>
 </main>`;
 }
 
 function syncingBody(options: StitchRenderOptions = {}) {
+  const pool = selectedPool(options);
   const tx = options.transaction ?? { state: "wallet" as const };
   const title = tx.state === "building"
     ? "Preparing transaction"
     : tx.state === "confirming"
       ? "Confirming on Solana"
       : tx.state === "error"
-        ? "Wallet request failed"
+        ? "Request not submitted"
         : "Waiting for wallet approval";
-  const status = tx.state === "error" ? "Error" : tx.state === "confirmed" ? "Confirmed" : "Pending";
-  const message = tx.message ?? "Nothing moves until your wallet approves and the backend confirms.";
-  return String.raw`<main class="stack">
-  <section class="section-header">
-    <div>
-      <span class="label">Wallet request</span>
-      <h2>${escapeHtml(title)}</h2>
+  const status = tx.state === "error" ? "Not submitted" : tx.state === "confirmed" ? "Confirmed" : "In progress";
+  const message = tx.state === "error"
+    ? "Return to the entry screen and try again."
+    : tx.message ?? "Nothing moves until your wallet approves and Solana confirms.";
+  const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
+  const stage = tx.state === "building" ? 0 : tx.state === "wallet" ? 1 : tx.state === "confirming" || tx.state === "confirmed" ? 2 : -1;
+  const stepClass = (index: number) => tx.state === "error"
+    ? index === Math.max(stage, 0) ? "failed" : index < stage ? "done" : ""
+    : index < stage || tx.state === "confirmed" ? "done" : index === stage ? "active" : "";
+  return String.raw`<main class="pool-process-page tone-${pool.tone}">
+  <section class="pool-process-card">
+    ${poolIcon ? `<img class="pool-process-art" src="${escapeHtml(poolIcon)}" alt="" />` : ""}
+    <div class="pool-process-head">
+      <span class="pool-process-pool">${escapeHtml(pool.name)} Pool</span>
+      <span class="pool-process-status ${tx.state === "confirmed" ? "confirmed" : tx.state === "error" ? "error" : ""}">${status}</span>
     </div>
-    <span class="status-pill ${tx.state === "error" ? "amber" : tx.state === "confirmed" ? "emerald" : "amber"}">${status}</span>
-  </section>
-  <p style="margin-top: -4px;">${escapeHtml(message)}</p>
-  <section class="panel glow-purple">
-    <div class="timeline" role="list">
-      <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot ${tx.state === "building" ? "now" : ""}"></span><span class="step-line"></span></div>
-        <div class="step-body"><span class="step-title">Unsigned transaction</span><span class="step-state ${tx.state === "building" ? "warning" : "soft"}">Built by backend</span></div>
+    <div class="pool-process-copy">
+      <span class="eyebrow">Secure wallet flow</span>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(message)}</p>
+    </div>
+    <div class="pool-process-timeline" role="list">
+      <div class="pool-process-step ${stepClass(0)}" role="listitem">
+        <span class="pool-process-step-dot">${stepClass(0) === "done" ? "✓" : "1"}</span>
+        <span class="pool-process-step-copy"><strong>Prepare transaction</strong><span>Ready for wallet review</span></span>
+        <span class="pool-process-step-state">${stepClass(0) === "done" ? "Ready" : stepClass(0) === "active" ? "Preparing" : stepClass(0) === "failed" ? "Failed" : "Waiting"}</span>
       </div>
-      <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot ${tx.state === "wallet" ? "now" : ""}"></span><span class="step-line"></span></div>
-        <div class="step-body"><span class="step-title">Wallet approval</span><span class="step-state ${tx.state === "wallet" ? "warning" : "soft"}">External wallet only</span></div>
+      <div class="pool-process-step ${stepClass(1)}" role="listitem">
+        <span class="pool-process-step-dot">${stepClass(1) === "done" ? "✓" : "2"}</span>
+        <span class="pool-process-step-copy"><strong>Approve in wallet</strong><span>External wallet only</span></span>
+        <span class="pool-process-step-state">${stepClass(1) === "done" ? "Approved" : stepClass(1) === "active" ? "Your action" : "Waiting"}</span>
       </div>
-      <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot ${tx.state === "confirming" || tx.state === "confirmed" ? "now" : ""}"></span></div>
-        <div class="step-body"><span class="step-title">Backend confirmation</span><span class="step-state ${tx.state === "confirmed" ? "success" : "soft"}">${tx.signature ? escapeHtml(shortAddress(tx.signature)) : "Refreshes after signature"}</span></div>
+      <div class="pool-process-step ${stepClass(2)}" role="listitem">
+        <span class="pool-process-step-dot">${stepClass(2) === "done" ? "✓" : "3"}</span>
+        <span class="pool-process-step-copy"><strong>Confirm on Solana</strong><span>${tx.signature ? escapeHtml(shortAddress(tx.signature)) : "Refresh pool after signature"}</span></span>
+        <span class="pool-process-step-state">${stepClass(2) === "done" ? "Confirmed" : stepClass(2) === "active" ? "Confirming" : "Waiting"}</span>
       </div>
     </div>
+    <div class="pool-process-trust">${ICONS.shield}<span>LuckyMe cannot sign for you. Nothing moves until your external wallet approves the transaction.</span></div>
   </section>
-  <button class="secondary-button" data-route="${tx.state === "error" ? "review" : "activity"}">Continue</button>
+  ${tx.state === "error" ? `<button class="secondary-button" data-route="review">Back to entry</button>` : tx.state === "confirmed" ? `<button class="primary-button" data-route="activity">View activity</button>` : ""}
 </main>`;
 }
 
@@ -2201,6 +3480,7 @@ function unavailableBody() {
 const TITLES: Record<StitchScreenId, string> = {
   home: "LuckyMe | Home",
   pools: "LuckyMe | Pools",
+  "latest-winners": "LuckyMe | Latest Winners",
   activity: "LuckyMe | Activity",
   wallet: "LuckyMe | Wallet",
   "how-to-play": "LuckyMe | How to Play",
@@ -2217,6 +3497,7 @@ const TITLES: Record<StitchScreenId, string> = {
 const BODIES: Record<StitchScreenId, (options?: StitchRenderOptions) => string> = {
   home: homeBody,
   pools: poolsBody,
+  "latest-winners": latestWinnersBody,
   activity: activityBody,
   wallet: walletBody,
   "how-to-play": howToPlayBody,
@@ -2233,6 +3514,7 @@ const BODIES: Record<StitchScreenId, (options?: StitchRenderOptions) => string> 
 const DEFAULT_TAB: Record<StitchScreenId, StitchScreenId> = {
   home: "home",
   pools: "pools",
+  "latest-winners": "home",
   activity: "activity",
   wallet: "home",
   "how-to-play": "how-to-play",
@@ -2259,7 +3541,26 @@ export function renderStitchScreen(
   const onchainAvailable = options.onchainAvailable ?? screen !== "unavailable";
   const active = options.activeTab ?? DEFAULT_TAB[screen];
   const body = screen === "winner" ? winnerBody(options.winner) : BODIES[screen](options);
-  return page(TITLES[screen], active, body, onchainAvailable, screen !== "winner");
+  const homeTheme = screen === "home" || screen === "welcome" || screen === "pools" || screen === "activity" || screen === "wallet" || screen === "how-to-play" || screen === "social" || screen === "latest-winners" || screen === "review" || screen === "syncing";
+  return page(TITLES[screen], active, body, onchainAvailable, screen !== "winner", homeTheme, options);
+}
+
+/** Preview the dedicated Referral League page before it is wired into the native route. */
+export function renderReferralLeaguePreview(options: StitchRenderOptions = {}): string {
+  return page("LuckyMe | Referral League", "home", referralLeagueBody(options), true, true, true, options);
+}
+
+/** Preview the dedicated NFT holder campaign page with truthful live campaign state. */
+export function renderNftHoldersPreview(options: StitchRenderOptions = {}): string {
+  return page("LuckyMe | NFT Holders", "home", nftHoldersBody(options), true, true, true, options);
+}
+
+/** Preview the external-wallet authentication handoff without simulating a signature. */
+export function renderWalletAuthPreview(
+  kind: "wallet" | "referral" | "nft",
+  options: StitchRenderOptions = {},
+): string {
+  return page("LuckyMe | Wallet Authentication", "home", walletAuthBody(kind), true, true, true, options);
 }
 
 /** Static default renders (kept for screen-id validation and previews). */
@@ -2269,6 +3570,7 @@ export const STITCH_SCREENS: Record<StitchScreenId, string> = {
   activity: renderStitchScreen("activity"),
   wallet: renderStitchScreen("wallet"),
   "how-to-play": renderStitchScreen("how-to-play"),
+  "latest-winners": renderStitchScreen("latest-winners"),
   social: renderStitchScreen("social"),
   links: renderStitchScreen("links"),
   review: renderStitchScreen("review"),

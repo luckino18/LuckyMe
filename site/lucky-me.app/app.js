@@ -27,6 +27,8 @@ const WALLETCONNECT_SOLANA_METHODS = [
 const WALLETCONNECT_SOLANA_EVENTS = ["accountsChanged"];
 const WALLETCONNECT_BUNDLE_URL = "/assets/vendor/walletconnect-bundle.js?v=20260712-walletconnect-recovery2";
 const OPERATOR_MODE = new URLSearchParams(window.location.search).has("operator");
+const REQUESTED_SCREEN = new URLSearchParams(window.location.search).get("screen");
+const PUBLIC_SCREENS = new Set(["home", "pools", "activity", "wallet", "how", "social"]);
 const DEFAULT_PUBLIC_KEY = "11111111111111111111111111111111";
 const MOBILE_WALLET_BROWSERS = [
   { id: "phantom", name: "Phantom" },
@@ -735,7 +737,7 @@ function normalizeReason(reason) {
 }
 
 function renderWalletPill() {
-  const label = state.wallet ? formatAddress(state.wallet.address) : "Connect wallet";
+  const label = state.wallet ? formatAddress(state.wallet.address) : "Wallet";
   dom.walletPill.textContent = label;
 }
 
@@ -2067,6 +2069,9 @@ setInterval(() => {
 renderPools();
 renderActivity();
 renderWalletPill();
+if (REQUESTED_SCREEN && PUBLIC_SCREENS.has(REQUESTED_SCREEN)) {
+  setRoute(REQUESTED_SCREEN);
+}
 if (new URLSearchParams(window.location.search).has("wallet")) {
   openWalletModal();
 }

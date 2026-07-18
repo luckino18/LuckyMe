@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <title>LuckyMe Admin</title>
-    <link rel="stylesheet" href="/admin/admin.css?v=20260715-referrals1" />
+    <link rel="stylesheet" href="/admin/admin.css?v=20260717-promotions1" />
   </head>
   <body>
     <main class="shell">
@@ -19,6 +19,8 @@
         <button class="admin-tab" data-admin-tab="treasury">Treasury estimate</button>
         <button class="admin-tab" data-admin-tab="winners">Winners</button>
         <button class="admin-tab" data-admin-tab="referrals">Referrals</button>
+        <button class="admin-tab" data-admin-tab="downloads">Downloads</button>
+        <button class="admin-tab" data-admin-tab="promotions">Promotions</button>
       </nav>
 
       <div class="admin-panel active" data-admin-panel="status">
@@ -71,8 +73,23 @@
           <div class="referral-list" id="referral-list"></div>
         </section>
       </div>
+      <div class="admin-panel" data-admin-panel="downloads">
+        <section class="panel">
+          <div class="panel-title"><div><span class="eyebrow">Solana dApp Store build</span><h2>Downloads &amp; activations</h2></div></div>
+          <p class="panel-copy">Measured first activations, repeat launches and daily active installs. Solana dApp Store does not provide certified download totals, so “downloads” here means unique LuckyMe app activations.</p>
+          <div class="referral-summary" id="acquisition-summary"></div>
+          <div class="referral-list" id="acquisition-versions"></div>
+        </section>
+      </div>
+      <div class="admin-panel" data-admin-panel="promotions">
+        <section class="panel">
+          <div class="panel-title"><div><span class="eyebrow">Campaign registry</span><h2>Promotions</h2></div></div>
+          <p class="panel-copy">Every LuckyMe promotion appears here with its verified entries, prize schedule, funding gate, public commitment and draw result.</p>
+          <div class="promotion-list" id="promotion-list"></div>
+        </section>
+      </div>
       <p class="readonly">Read-only panel. It cannot send transactions, open rounds, or change server settings.</p>
     </main>
-    <script src="/admin/admin.js?v=20260715-referrals1" defer></script>
+    <script src="/admin/admin.js?v=20260717-promotions1" defer></script>
   </body>
 </html>

@@ -101,12 +101,17 @@ function isPlaceholderUrl(value) {
 module.exports = ({ config }) => {
   validateReleaseEnv();
   const referralTestBuild = process.env.LUCKYME_REFERRAL_TEST_BUILD === "true";
+  const seekerPassTestBuild = process.env.LUCKYME_SEEKER_PASS_TEST_BUILD === "true";
+  const uiTestBuild = process.env.LUCKYME_UI_TEST_BUILD === "true";
+  if ([referralTestBuild, seekerPassTestBuild, uiTestBuild].filter(Boolean).length > 1) {
+    throw new Error("Only one isolated LuckyMe test build can be enabled at a time");
+  }
   const basePlugins = Array.isArray(expo.plugins) ? expo.plugins : [];
   const referralPlugins = basePlugins.includes("expo-secure-store")
     ? [...basePlugins]
     : [...basePlugins, "expo-secure-store"];
 
-  if (referralTestBuild) {
+  if (referralTestBuild || seekerPassTestBuild || uiTestBuild) {
     referralPlugins.push("./plugins/with-seeker-referral-test-android");
   }
 
@@ -121,7 +126,23 @@ module.exports = ({ config }) => {
           scheme: "luckyme-seeker-referral-test",
           plugins: referralPlugins,
         }
-      : { plugins: referralPlugins }),
+      : seekerPassTestBuild
+        ? {
+            name: "LuckyMe Seeker Pass Test",
+            slug: "luckyme-seeker-pass-test",
+            version: "1.0.0-seeker-pass-test.1",
+            scheme: "luckyme-seeker-pass-test",
+            plugins: referralPlugins,
+          }
+        : uiTestBuild
+          ? {
+              name: "LuckyMe Full UI Test",
+              slug: "luckyme-full-ui-test",
+              version: "1.2.1-ui-test.7",
+              scheme: "luckyme-ui-test",
+              plugins: referralPlugins,
+            }
+          : { plugins: referralPlugins }),
     android: {
       ...expo.android,
       ...(referralTestBuild
@@ -149,7 +170,31 @@ module.exports = ({ config }) => {
               },
             ],
           }
-        : {
+        : seekerPassTestBuild
+          ? {
+              package: "app.luckyme.seekerpasstest",
+              versionCode: 2,
+              permissions: [],
+              blockedPermissions: [
+                "android.permission.SYSTEM_ALERT_WINDOW",
+                "android.permission.READ_EXTERNAL_STORAGE",
+                "android.permission.WRITE_EXTERNAL_STORAGE",
+              ],
+              intentFilters: [],
+            }
+        : uiTestBuild
+          ? {
+              package: "app.luckyme.uitest",
+              versionCode: 7,
+              permissions: ["android.permission.POST_NOTIFICATIONS"],
+              blockedPermissions: [
+                "android.permission.SYSTEM_ALERT_WINDOW",
+                "android.permission.READ_EXTERNAL_STORAGE",
+                "android.permission.WRITE_EXTERNAL_STORAGE",
+              ],
+              intentFilters: [],
+            }
+          : {
             intentFilters: [
               {
                 action: "VIEW",
@@ -172,10 +217,15 @@ module.exports = ({ config }) => {
     extra: {
       ...expo.extra,
       referralTestBuild,
+      seekerPassTestBuild,
+      uiTestBuild,
       referralTestMode: referralTestBuild && process.env.EXPO_PUBLIC_LUCKYME_REFERRAL_TEST_MODE === "true",
       referralApiUrl: process.env.EXPO_PUBLIC_LUCKYME_REFERRAL_API_URL ?? "https://api.lucky-me.app",
       referralWalletChain: process.env.EXPO_PUBLIC_LUCKYME_WALLET_CHAIN ?? "solana:mainnet",
       referralWalletRpcUrl: process.env.EXPO_PUBLIC_LUCKYME_WALLET_RPC_URL ?? "https://api.mainnet-beta.solana.com",
+      storeBuild: process.env.EXPO_PUBLIC_LUCKYME_STORE_BUILD === "true",
+      appAnalyticsEnabled: process.env.EXPO_PUBLIC_LUCKYME_APP_ANALYTICS_ENABLED === "true",
+      seekerPassPromotionEnabled: seekerPassTestBuild || uiTestBuild || process.env.EXPO_PUBLIC_LUCKYME_SEEKER_PASS_PROMOTION_ENABLED === "true",
     },
   };
 };

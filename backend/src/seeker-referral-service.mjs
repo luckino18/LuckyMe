@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { PublicKey, Connection } from "@solana/web3.js";
@@ -22,6 +22,37 @@ export const REFERRAL_SEASON_ID = "seeker-referral-test-2026";
 export const REFERRAL_SEASON_NAME = "Seeker Referral League — Test Season";
 export const REFERRAL_SEASON_CLOSES_AT = "2026-09-30T23:59:59.000Z";
 export const MONTHLY_REFERRAL_PRIZE_SKr = 10_000;
+export const SEEKER_PASS_COLLECTION = "HqbzvQGhssViGrwaPkJWPPRTSnGbi4z2DsPeDYyJqo9J";
+export const SEEKER_PASS_TREE = "6MaEv559doM7sUkL1tFWRQST9JKRskSd64DzdkL3B22k";
+export const SEEKER_PASS_VERIFIED_CREATOR = "6p8dv8FaqjdoJ2MQHwrYADdP65FKcyyGX3a7kqKtf24H";
+export const SEEKER_PASS_CAMPAIGN_ID = "luckyme-seeker-pass-3-sol-1000-2026";
+export const SEEKER_PASS_CAMPAIGN_NAME = "LuckyMe Seeker Pass — 3 SOL Draw";
+export const SEEKER_PASS_ENTRY_THRESHOLD = 1_000;
+export const SEEKER_PASS_WINNER_COUNT = 20;
+export const SEEKER_PASS_PRIZE_LAMPORTS = 3_000_000_000;
+export const SEEKER_PASS_RANDOMNESS_SLOT_DELAY = 32;
+export const SEEKER_PASS_PRIZES_LAMPORTS = Object.freeze([
+  580_000_000,
+  350_000_000,
+  270_000_000,
+  220_000_000,
+  190_000_000,
+  170_000_000,
+  150_000_000,
+  140_000_000,
+  130_000_000,
+  120_000_000,
+  110_000_000,
+  100_000_000,
+  90_000_000,
+  80_000_000,
+  50_000_000,
+  50_000_000,
+  50_000_000,
+  50_000_000,
+  50_000_000,
+  50_000_000,
+]);
 
 const DEFAULT_DOMAIN = "www.lucky-me.app";
 const DEFAULT_URI = "https://www.lucky-me.app";
@@ -33,6 +64,13 @@ const CODE_RE = /^LM-[A-HJ-NP-Z2-9]{6}$/;
 const IDEMPOTENCY_RE = /^[A-Za-z0-9._:-]{12,120}$/;
 const MAINNET_BLOCKLIST_RE = /devnet|testnet|localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.|10\./i;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const INSTALL_ID_RE = /^[a-f0-9]{32}$/;
+const APP_VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$/;
+
+if (SEEKER_PASS_PRIZES_LAMPORTS.length !== SEEKER_PASS_WINNER_COUNT ||
+    SEEKER_PASS_PRIZES_LAMPORTS.reduce((total, amount) => total + amount, 0) !== SEEKER_PASS_PRIZE_LAMPORTS) {
+  throw new Error("LuckyMe Seeker Pass prize schedule is invalid");
+}
 
 export class ReferralHttpError extends Error {
   constructor(status, code, message) {
@@ -315,6 +353,183 @@ export function createMainnetSgtVerifier({ rpcUrl, timeoutMs = RPC_TIMEOUT_MS } 
   };
 }
 
+function isEligibleSeekerPassAsset(asset, walletAddress) {
+  if (!asset || typeof asset !== "object") return false;
+  if (asset.burnt === true || asset.compression?.compressed !== true) return false;
+  if (asset.compression?.tree !== SEEKER_PASS_TREE) return false;
+  if (asset.ownership?.owner !== walletAddress || asset.ownership?.ownership_model !== "single") return false;
+  const grouped = Array.isArray(asset.grouping) && asset.grouping.some((group) =>
+    group?.group_key === "collection" && group?.group_value === SEEKER_PASS_COLLECTION);
+  const creator = Array.isArray(asset.creators) && asset.creators.some((item) =>
+    item?.address === SEEKER_PASS_VERIFIED_CREATOR && item?.verified === true);
+  if (!grouped || !creator) return false;
+  try {
+    new PublicKey(asset.id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function createMainnetSeekerPassVerifier({ rpcUrl, timeoutMs = RPC_TIMEOUT_MS } = {}) {
+  const endpoint = rpcUrl ?? process.env.SEEKER_PASS_DAS_RPC_URL ??
+    process.env.SEEKER_SGT_RPC_URL ?? process.env.ANCHOR_PROVIDER_URL;
+  if (!endpoint) fail(500, "missing_rpc_configuration", "SEEKER_PASS_DAS_RPC_URL is required");
+  assertMainnetRpcUrl(endpoint);
+  const endpointUrl = new URL(endpoint);
+  if (!endpointUrl.hostname.endsWith("helius-rpc.com")) {
+    fail(500, "invalid_das_configuration", "Seeker Pass verification requires a Helius DAS endpoint");
+  }
+  return async function verifySeekerPassOwnership(walletAddress) {
+    const owner = new PublicKey(walletAddress).toBase58();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `seeker-pass-${randomBytes(6).toString("hex")}`,
+          method: "searchAssets",
+          params: {
+            ownerAddress: owner,
+            tokenType: "compressedNft",
+            grouping: ["collection", SEEKER_PASS_COLLECTION],
+            page: 1,
+            limit: 10,
+          },
+        }),
+      });
+    } catch {
+      fail(503, "seeker_pass_rpc_unavailable", "Seeker Pass verification is temporarily unavailable");
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!response?.ok) fail(503, "seeker_pass_rpc_unavailable", "Seeker Pass verification request failed");
+    const data = await response.json().catch(() => null);
+    if (data?.error || !Array.isArray(data?.result?.items)) {
+      fail(503, "seeker_pass_rpc_invalid", "Seeker Pass verification response was invalid");
+    }
+    const asset = data.result.items.find((item) => isEligibleSeekerPassAsset(item, owner));
+    if (!asset) return null;
+    return {
+      assetId: new PublicKey(asset.id).toBase58(),
+      tree: SEEKER_PASS_TREE,
+      leafId: Number.isSafeInteger(Number(asset.compression?.leaf_id)) ? Number(asset.compression.leaf_id) : null,
+    };
+  };
+}
+
+async function promotionRpc(endpoint, method, params, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `seeker-pass-draw-${randomBytes(6).toString("hex")}`,
+        method,
+        params,
+      }),
+    });
+    if (!response.ok) fail(503, "promotion_rpc_unavailable", "Promotion randomness RPC request failed");
+    const payload = await response.json().catch(() => null);
+    if (!payload || payload.error) {
+      if (method === "getBlock" && [-32004, -32007, -32009].includes(Number(payload?.error?.code))) return null;
+      fail(503, "promotion_rpc_unavailable", "Promotion randomness RPC response was invalid");
+    }
+    return payload.result;
+  } catch (error) {
+    if (error instanceof ReferralHttpError) throw error;
+    fail(503, "promotion_rpc_unavailable", "Promotion randomness RPC is temporarily unavailable");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function createMainnetPromotionRandomnessProvider({ rpcUrl, timeoutMs = RPC_TIMEOUT_MS } = {}) {
+  const endpoint = rpcUrl ?? process.env.SEEKER_PASS_RANDOMNESS_RPC_URL ??
+    process.env.ANCHOR_PROVIDER_URL;
+  if (!endpoint) fail(500, "missing_rpc_configuration", "SEEKER_PASS_RANDOMNESS_RPC_URL is required");
+  assertMainnetRpcUrl(endpoint);
+  return {
+    async currentFinalizedSlot() {
+      const slot = Number(await promotionRpc(endpoint, "getSlot", [{ commitment: "finalized" }], timeoutMs));
+      if (!Number.isSafeInteger(slot) || slot < 1) {
+        fail(503, "promotion_rpc_invalid", "Promotion randomness slot was invalid");
+      }
+      return slot;
+    },
+    async finalizedBlockAtOrAfter(targetSlot) {
+      const currentSlot = await this.currentFinalizedSlot();
+      if (currentSlot < targetSlot) return null;
+      const lastCandidate = Math.min(currentSlot, targetSlot + 64);
+      for (let slot = targetSlot; slot <= lastCandidate; slot += 1) {
+        const block = await promotionRpc(endpoint, "getBlock", [slot, {
+          commitment: "finalized",
+          transactionDetails: "none",
+          rewards: false,
+          maxSupportedTransactionVersion: 0,
+        }], timeoutMs);
+        if (!block) continue;
+        try {
+          new PublicKey(block.blockhash);
+        } catch {
+          fail(503, "promotion_rpc_invalid", "Promotion randomness blockhash was invalid");
+        }
+        return {
+          slot,
+          blockhash: block.blockhash,
+          blockTime: Number.isSafeInteger(Number(block.blockTime)) ? Number(block.blockTime) : null,
+        };
+      }
+      return null;
+    },
+  };
+}
+
+export function seekerPassEntryCommitment(entries) {
+  const lines = entries.map((entry, index) => [
+    index + 1,
+    Number(entry.id),
+    new PublicKey(entry.wallet).toBase58(),
+    new PublicKey(entry.asset_id ?? entry.assetId).toBase58(),
+  ].join(":"));
+  return sha256(`${SEEKER_PASS_CAMPAIGN_ID}\n${lines.join("\n")}`);
+}
+
+export function selectSeekerPassWinnerIndexes(randomnessHex, entryCount, winnerCount = SEEKER_PASS_WINNER_COUNT) {
+  if (!/^[a-f0-9]{64}$/.test(randomnessHex)) throw new Error("randomnessHex must contain 32 bytes");
+  if (!Number.isSafeInteger(entryCount) || entryCount < winnerCount || winnerCount < 1) {
+    throw new Error("entryCount and winnerCount are invalid");
+  }
+  const range = BigInt(entryCount);
+  const space = 1n << 256n;
+  const unbiasedLimit = space - (space % range);
+  const selected = [];
+  const used = new Set();
+  for (let counter = 0; selected.length < winnerCount; counter += 1) {
+    const digest = createHash("sha256")
+      .update(Buffer.from(randomnessHex, "hex"))
+      .update("luckyme-seeker-pass-winner-v1")
+      .update(Buffer.from(String(counter)))
+      .digest();
+    const value = BigInt(`0x${digest.toString("hex")}`);
+    if (value >= unbiasedLimit) continue;
+    const index = Number(value % range);
+    if (used.has(index)) continue;
+    used.add(index);
+    selected.push(index);
+  }
+  return selected;
+}
+
 function defaultLogger(event, details) {
   console.info(`[seeker-referral] ${event}`, details);
 }
@@ -330,11 +545,19 @@ export function createSeekerReferralService({
   sessionTtlMs = SESSION_TTL_MS,
   nonceTtlMs = NONCE_TTL_MS,
   settlementArchivePath = process.env.LUCKYME_SETTLEMENT_ARCHIVE_PATH,
+  appAnalyticsEnabled = process.env.APP_ANALYTICS_ENABLED === "true",
+  appAnalyticsHashKey = process.env.APP_ANALYTICS_HASH_KEY ?? "",
+  seekerPassVerifier,
+  seekerPassPromotionEnabled = process.env.SEEKER_PASS_PROMOTION_ENABLED === "true",
+  promotionRandomnessProvider,
 } = {}) {
   if (domain !== DEFAULT_DOMAIN || uri !== DEFAULT_URI) {
     if (process.env.NODE_ENV === "production") {
       fail(500, "invalid_siws_configuration", "Production SIWS domain or URI is invalid");
     }
+  }
+  if (appAnalyticsEnabled && process.env.NODE_ENV === "production" && appAnalyticsHashKey.length < 32) {
+    fail(500, "invalid_analytics_configuration", "APP_ANALYTICS_HASH_KEY must contain at least 32 characters");
   }
   const db = new DatabaseSync(dbPath);
   db.exec(readFileSync(new URL("../migrations/001_seeker_referral.sql", import.meta.url), "utf8"));
@@ -357,7 +580,35 @@ export function createSeekerReferralService({
       test_only = excluded.test_only
   `).run(season.id, season.name, season.closesAt, season.testOnly ? 1 : 0, createdAt);
 
+  db.prepare(`
+    INSERT INTO promotions
+      (campaign_id, name, status, entry_threshold, winner_count, prize_lamports,
+       collection_address, tree_address, verified_creator, funded, payout_enabled, created_at)
+    VALUES (?, ?, 'open', ?, ?, ?, ?, ?, ?, 0, 0, ?)
+    ON CONFLICT(campaign_id) DO UPDATE SET
+      name = excluded.name,
+      entry_threshold = excluded.entry_threshold,
+      winner_count = excluded.winner_count,
+      prize_lamports = excluded.prize_lamports,
+      collection_address = excluded.collection_address,
+      tree_address = excluded.tree_address,
+      verified_creator = excluded.verified_creator
+  `).run(
+    SEEKER_PASS_CAMPAIGN_ID,
+    SEEKER_PASS_CAMPAIGN_NAME,
+    SEEKER_PASS_ENTRY_THRESHOLD,
+    SEEKER_PASS_WINNER_COUNT,
+    SEEKER_PASS_PRIZE_LAMPORTS,
+    SEEKER_PASS_COLLECTION,
+    SEEKER_PASS_TREE,
+    SEEKER_PASS_VERIFIED_CREATOR,
+    createdAt,
+  );
+
   const verifySgt = sgtVerifier ?? createMainnetSgtVerifier({});
+  let verifySeekerPass = seekerPassVerifier;
+  let promotionRandomness = promotionRandomnessProvider;
+  let promotionAdvancePromise = null;
   const rateBuckets = new Map();
 
   function qualificationFor(row) {
@@ -474,6 +725,387 @@ export function createSeekerReferralService({
         requestId: randomBytes(12).toString("hex"),
       },
       expiresAt: expirationTime,
+    };
+  }
+
+  function seekerPassPromotionStatus({ includeWinnerWallets = false } = {}) {
+    const campaign = db.prepare("SELECT * FROM promotions WHERE campaign_id = ?").get(SEEKER_PASS_CAMPAIGN_ID);
+    const entryCount = Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM promotion_entries WHERE campaign_id = ?
+    `).get(SEEKER_PASS_CAMPAIGN_ID).count ?? 0);
+    const winners = db.prepare(`
+      SELECT rank, wallet, asset_id, prize_lamports, ownership_status, payout_status, payout_signature
+      FROM promotion_winners WHERE campaign_id = ? ORDER BY rank ASC
+    `).all(SEEKER_PASS_CAMPAIGN_ID).map((winner) => ({
+      rank: Number(winner.rank),
+      wallet: includeWinnerWallets ? winner.wallet : mask(winner.wallet),
+      assetId: includeWinnerWallets ? winner.asset_id : mask(winner.asset_id),
+      prizeLamports: String(winner.prize_lamports),
+      prizeSol: Number(winner.prize_lamports) / 1_000_000_000,
+      ownershipStatus: winner.ownership_status,
+      payoutStatus: winner.payout_status,
+      payoutSignature: includeWinnerWallets ? winner.payout_signature : null,
+    }));
+    return {
+      campaignId: campaign.campaign_id,
+      name: campaign.name,
+      enabled: seekerPassPromotionEnabled,
+      status: campaign.status,
+      entryCount,
+      entryThreshold: Number(campaign.entry_threshold),
+      entriesRemaining: Math.max(0, Number(campaign.entry_threshold) - entryCount),
+      progressPercent: Math.min(100, Number(((entryCount / Number(campaign.entry_threshold)) * 100).toFixed(1))),
+      winnerCount: Number(campaign.winner_count),
+      prizeLamports: String(campaign.prize_lamports),
+      prizeSol: Number(campaign.prize_lamports) / 1_000_000_000,
+      prizes: SEEKER_PASS_PRIZES_LAMPORTS.map((amount, index) => ({
+        rank: index + 1,
+        prizeLamports: String(amount),
+        prizeSol: amount / 1_000_000_000,
+      })),
+      funded: campaign.funded === 1,
+      payoutEnabled: campaign.payout_enabled === 1,
+      payoutState: campaign.status === "paid" ? "paid" : campaign.funded === 1 ? "funded_locked" : "not_funded",
+      frozenAt: campaign.frozen_at,
+      entryCommitment: campaign.entry_commitment,
+      targetSlot: campaign.target_slot === null ? null : Number(campaign.target_slot),
+      resolvedSlot: campaign.resolved_slot === null ? null : Number(campaign.resolved_slot),
+      randomnessBlockhash: campaign.randomness_blockhash,
+      randomnessHash: campaign.randomness_hash,
+      drawnAt: campaign.drawn_at,
+      winners,
+      collection: SEEKER_PASS_COLLECTION,
+      tree: SEEKER_PASS_TREE,
+      entryIsFree: true,
+      entryRequiresTransaction: false,
+    };
+  }
+
+  function registerSeekerPassEntry(wallet, pass) {
+    const timestamp = nowIso(clock);
+    return inTransaction(db, () => {
+      const campaign = db.prepare("SELECT status, entry_threshold FROM promotions WHERE campaign_id = ?")
+        .get(SEEKER_PASS_CAMPAIGN_ID);
+      const byWallet = db.prepare(`
+        SELECT id, wallet, asset_id FROM promotion_entries WHERE campaign_id = ? AND wallet = ?
+      `).get(SEEKER_PASS_CAMPAIGN_ID, wallet);
+      const byAsset = db.prepare(`
+        SELECT id, wallet, asset_id FROM promotion_entries WHERE campaign_id = ? AND asset_id = ?
+      `).get(SEEKER_PASS_CAMPAIGN_ID, pass.assetId);
+      const existing = byWallet ?? byAsset;
+      if (existing) {
+        if (existing.wallet !== wallet || existing.asset_id !== pass.assetId) {
+          fail(409, "promotion_entry_conflict", "This wallet or Seeker Pass is already registered to another entry");
+        }
+        const position = Number(db.prepare(`
+          SELECT COUNT(*) AS count FROM promotion_entries WHERE campaign_id = ? AND id <= ?
+        `).get(SEEKER_PASS_CAMPAIGN_ID, existing.id).count);
+        return { registered: true, alreadyRegistered: true, entryNumber: position, campaignFrozen: campaign.status !== "open" };
+      }
+      if (campaign.status !== "open") {
+        fail(409, "promotion_closed", "The promotion entry threshold has already been reached");
+      }
+      const before = Number(db.prepare(`
+        SELECT COUNT(*) AS count FROM promotion_entries WHERE campaign_id = ?
+      `).get(SEEKER_PASS_CAMPAIGN_ID).count ?? 0);
+      if (before >= Number(campaign.entry_threshold)) {
+        fail(409, "promotion_closed", "The promotion entry threshold has already been reached");
+      }
+      const result = db.prepare(`
+        INSERT INTO promotion_entries
+          (campaign_id, wallet, asset_id, tree_address, leaf_id, verified_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(SEEKER_PASS_CAMPAIGN_ID, wallet, pass.assetId, pass.tree, pass.leafId, timestamp);
+      const entryNumber = before + 1;
+      let campaignFrozen = false;
+      if (entryNumber === Number(campaign.entry_threshold)) {
+        const entries = db.prepare(`
+          SELECT id, wallet, asset_id FROM promotion_entries
+          WHERE campaign_id = ? ORDER BY id ASC
+        `).all(SEEKER_PASS_CAMPAIGN_ID);
+        const commitment = seekerPassEntryCommitment(entries);
+        const update = db.prepare(`
+          UPDATE promotions SET status = 'commitment_frozen', frozen_at = ?, entry_commitment = ?
+          WHERE campaign_id = ? AND status = 'open'
+        `).run(timestamp, commitment, SEEKER_PASS_CAMPAIGN_ID);
+        if (update.changes !== 1) fail(409, "promotion_closed", "The promotion was frozen by another request");
+        campaignFrozen = true;
+      }
+      return {
+        registered: true,
+        alreadyRegistered: false,
+        entryId: Number(result.lastInsertRowid),
+        entryNumber,
+        campaignFrozen,
+      };
+    });
+  }
+
+  async function advanceSeekerPassPromotionOnce() {
+    let campaign = db.prepare("SELECT * FROM promotions WHERE campaign_id = ?").get(SEEKER_PASS_CAMPAIGN_ID);
+    if (!seekerPassPromotionEnabled || !["commitment_frozen", "randomness_pending"].includes(campaign.status)) {
+      return seekerPassPromotionStatus();
+    }
+    promotionRandomness ??= createMainnetPromotionRandomnessProvider({});
+    if (campaign.status === "commitment_frozen") {
+      const currentSlot = await promotionRandomness.currentFinalizedSlot();
+      const targetSlot = currentSlot + SEEKER_PASS_RANDOMNESS_SLOT_DELAY;
+      inTransaction(db, () => {
+        const update = db.prepare(`
+          UPDATE promotions SET status = 'randomness_pending', target_slot = ?
+          WHERE campaign_id = ? AND status = 'commitment_frozen' AND target_slot IS NULL
+        `).run(targetSlot, SEEKER_PASS_CAMPAIGN_ID);
+        if (update.changes !== 1) return;
+        logger("seeker_pass_commitment_frozen", {
+          campaignId: SEEKER_PASS_CAMPAIGN_ID,
+          targetSlot,
+          commitment: campaign.entry_commitment,
+        });
+      });
+      campaign = db.prepare("SELECT * FROM promotions WHERE campaign_id = ?").get(SEEKER_PASS_CAMPAIGN_ID);
+    }
+    if (campaign.status !== "randomness_pending" || !Number.isSafeInteger(Number(campaign.target_slot))) {
+      return seekerPassPromotionStatus();
+    }
+    const block = await promotionRandomness.finalizedBlockAtOrAfter(Number(campaign.target_slot));
+    if (!block) return seekerPassPromotionStatus();
+    inTransaction(db, () => {
+      const current = db.prepare("SELECT * FROM promotions WHERE campaign_id = ?").get(SEEKER_PASS_CAMPAIGN_ID);
+      if (current.status !== "randomness_pending" || Number(current.target_slot) !== Number(campaign.target_slot)) return;
+      const entries = db.prepare(`
+        SELECT id, wallet, asset_id FROM promotion_entries WHERE campaign_id = ? ORDER BY id ASC
+      `).all(SEEKER_PASS_CAMPAIGN_ID);
+      if (entries.length !== SEEKER_PASS_ENTRY_THRESHOLD) {
+        fail(500, "promotion_entry_count_invalid", "Frozen promotion entry count is invalid");
+      }
+      const commitment = seekerPassEntryCommitment(entries);
+      if (commitment !== current.entry_commitment) {
+        fail(500, "promotion_commitment_mismatch", "Frozen promotion commitment does not match its entries");
+      }
+      const randomnessHash = sha256([
+        SEEKER_PASS_CAMPAIGN_ID,
+        commitment,
+        block.slot,
+        block.blockhash,
+      ].join(":"));
+      const indexes = selectSeekerPassWinnerIndexes(randomnessHash, entries.length, SEEKER_PASS_WINNER_COUNT);
+      const created = nowIso(clock);
+      const insert = db.prepare(`
+        INSERT INTO promotion_winners
+          (campaign_id, rank, entry_id, wallet, asset_id, prize_lamports,
+           ownership_status, payout_status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', 'locked_unfunded', ?)
+      `);
+      indexes.forEach((entryIndex, rankIndex) => {
+        const entry = entries[entryIndex];
+        insert.run(
+          SEEKER_PASS_CAMPAIGN_ID,
+          rankIndex + 1,
+          entry.id,
+          entry.wallet,
+          entry.asset_id,
+          SEEKER_PASS_PRIZES_LAMPORTS[rankIndex],
+          created,
+        );
+      });
+      db.prepare(`
+        UPDATE promotions SET status = 'drawn_unfunded', resolved_slot = ?,
+          randomness_blockhash = ?, randomness_hash = ?, drawn_at = ?
+        WHERE campaign_id = ? AND status = 'randomness_pending'
+      `).run(block.slot, block.blockhash, randomnessHash, created, SEEKER_PASS_CAMPAIGN_ID);
+      logger("seeker_pass_draw_completed", {
+        campaignId: SEEKER_PASS_CAMPAIGN_ID,
+        resolvedSlot: block.slot,
+        winnerCount: indexes.length,
+        funded: false,
+      });
+    });
+    return seekerPassPromotionStatus();
+  }
+
+  function advanceSeekerPassPromotion() {
+    if (promotionAdvancePromise) return promotionAdvancePromise;
+    promotionAdvancePromise = advanceSeekerPassPromotionOnce()
+      .finally(() => { promotionAdvancePromise = null; });
+    return promotionAdvancePromise;
+  }
+
+  function issueSeekerPassNonce({ ip = "unknown" } = {}) {
+    rateLimit("seeker-pass-nonce-ip", ip, 20, 10 * 60_000);
+    const nonce = randomBytes(16).toString("hex");
+    const issuedAt = nowIso(clock);
+    const expirationTime = new Date(clock() + nonceTtlMs).toISOString();
+    const requestId = randomBytes(12).toString("hex");
+    const statement = seekerPassPromotionEnabled
+      ? "Register this wallet once for the LuckyMe Seeker Pass 3 SOL promotion. This is not a transaction and does not authorize any transfer."
+      : "Verify this wallet for the LuckyMe Seeker Pass eligibility test. This is not a transaction and does not authorize any transfer.";
+    db.prepare(`
+      INSERT INTO seeker_pass_nonces
+        (nonce_hash, domain, uri, statement, issued_at, expires_at, request_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(sha256(nonce), domain, uri, statement, issuedAt, expirationTime, requestId, issuedAt);
+    return {
+      payload: {
+        domain,
+        statement,
+        uri,
+        version: "1",
+        chainId: "mainnet",
+        nonce,
+        issuedAt,
+        expirationTime,
+        requestId,
+      },
+      expiresAt: expirationTime,
+      campaignId: SEEKER_PASS_CAMPAIGN_ID,
+      testOnly: !seekerPassPromotionEnabled,
+      promotion: seekerPassPromotionStatus(),
+    };
+  }
+
+  function consumeSeekerPassNonce(payload, wallet) {
+    return inTransaction(db, () => {
+      const row = db.prepare("SELECT * FROM seeker_pass_nonces WHERE nonce_hash = ?").get(sha256(payload.nonce));
+      if (!row) fail(401, "invalid_siws", "Eligibility nonce is unknown");
+      if (row.consumed_at) fail(409, "nonce_reused", "Eligibility nonce was already used");
+      if (Date.parse(row.expires_at) < clock()) fail(401, "nonce_expired", "Eligibility nonce has expired");
+      if (row.domain !== payload.domain || row.uri !== payload.uri || row.statement !== payload.statement ||
+          row.issued_at !== payload.issuedAt || row.expires_at !== payload.expirationTime ||
+          row.request_id !== payload.requestId) {
+        fail(401, "invalid_siws", "Signed eligibility message does not match the issued nonce");
+      }
+      const result = db.prepare(`
+        UPDATE seeker_pass_nonces SET consumed_at = ?, wallet = ?
+        WHERE nonce_hash = ? AND consumed_at IS NULL
+      `).run(nowIso(clock), wallet, sha256(payload.nonce));
+      if (result.changes !== 1) fail(409, "nonce_reused", "Eligibility nonce was already used");
+    });
+  }
+
+  async function verifySeekerPassSiws({ payload, output, ip = "unknown" } = {}) {
+    rateLimit("seeker-pass-verify-ip", ip, 30, 10 * 60_000);
+    const input = validateSiwsPayload(payload);
+    if (!output || typeof output !== "object" || Array.isArray(output)) {
+      fail(400, "invalid_siws", "SIWS output is invalid");
+    }
+    const publicKey = decodeBase64(output.publicKey, "publicKey", 32);
+    const signature = decodeBase64(output.signature, "signature", 64);
+    const signedMessage = decodeBase64(output.signedMessage, "signedMessage");
+    if (signedMessage.length < 80 || signedMessage.length > 8_192) {
+      fail(400, "invalid_siws", "Signed SIWS message has an invalid length");
+    }
+    const parsed = parseSignInMessage(signedMessage);
+    let wallet;
+    try {
+      wallet = new PublicKey(parsed?.address);
+    } catch {
+      fail(401, "invalid_siws", "Wallet ownership verification failed");
+    }
+    if (!wallet.toBytes().every((byte, index) => byte === publicKey[index])) {
+      fail(401, "invalid_siws", "Wallet ownership verification failed");
+    }
+    const walletAddress = wallet.toBase58();
+    rateLimit("seeker-pass-wallet", walletAddress, 10, 10 * 60_000);
+    const verified = verifySignIn({ ...input, address: walletAddress }, {
+      account: { publicKey },
+      signature,
+      signedMessage,
+    });
+    if (!verified) fail(401, "invalid_siws", "Wallet ownership verification failed");
+    consumeSeekerPassNonce(input, walletAddress);
+    verifySeekerPass ??= createMainnetSeekerPassVerifier({});
+    const pass = await withTimeout(
+      Promise.resolve(verifySeekerPass(walletAddress)),
+      RPC_TIMEOUT_MS,
+      "seeker_pass_rpc_timeout",
+    );
+    const registration = pass && seekerPassPromotionEnabled
+      ? registerSeekerPassEntry(walletAddress, pass)
+      : { registered: false, alreadyRegistered: false, entryNumber: null, campaignFrozen: false };
+    if (registration.campaignFrozen) {
+      void advanceSeekerPassPromotion().catch((error) => logger("seeker_pass_draw_advance_failed", {
+        campaignId: SEEKER_PASS_CAMPAIGN_ID,
+        code: error?.code ?? "unknown",
+      }));
+    }
+    logger(seekerPassPromotionEnabled ? "seeker_pass_registration_checked" : "seeker_pass_tested", {
+      wallet: mask(walletAddress),
+      eligible: Boolean(pass),
+      assetId: pass?.assetId ? mask(pass.assetId) : null,
+      registered: registration.registered,
+      entryNumber: registration.entryNumber,
+    });
+    return {
+      campaignId: SEEKER_PASS_CAMPAIGN_ID,
+      testOnly: !seekerPassPromotionEnabled,
+      registered: registration.registered,
+      alreadyRegistered: registration.alreadyRegistered,
+      entryNumber: registration.entryNumber,
+      eligible: Boolean(pass),
+      wallet: walletAddress,
+      collection: SEEKER_PASS_COLLECTION,
+      asset: pass ?? null,
+      promotion: seekerPassPromotionStatus(),
+      message: pass && registration.registered
+        ? registration.alreadyRegistered
+          ? `This LuckyMe Seeker Pass is already registered as entry #${registration.entryNumber}.`
+          : `LuckyMe Seeker Pass verified and registered as entry #${registration.entryNumber}.`
+        : pass
+          ? "LuckyMe Seeker Pass ownership verified. Registration is not enabled in this build."
+        : "No eligible LuckyMe Seeker Pass was found in this wallet.",
+    };
+  }
+
+  function recordAppActivation({ installId, channel, platform, appVersion, versionCode } = {}, { ip = "unknown" } = {}) {
+    if (!appAnalyticsEnabled) fail(404, "not_found", "Not found");
+    rateLimit("app-activation-ip", ip, 30, 60 * 60_000);
+    const normalizedInstallId = stringField(installId, "installId", { pattern: INSTALL_ID_RE });
+    const normalizedChannel = stringField(channel, "channel", { max: 32 });
+    const normalizedPlatform = stringField(platform, "platform", { max: 16 });
+    const normalizedAppVersion = stringField(appVersion, "appVersion", { pattern: APP_VERSION_RE });
+    const normalizedVersionCode = Number(versionCode);
+    if (normalizedChannel !== "solana-dapp-store" || normalizedPlatform !== "android") {
+      fail(400, "invalid_input", "channel or platform is invalid");
+    }
+    if (!Number.isSafeInteger(normalizedVersionCode) || normalizedVersionCode < 1 || normalizedVersionCode > 2_147_483_647) {
+      fail(400, "invalid_input", "versionCode is invalid");
+    }
+    const hashKey = appAnalyticsHashKey || "luckyme-local-app-analytics-test-key";
+    const installHash = createHmac("sha256", hashKey).update(normalizedInstallId).digest("hex");
+    const timestamp = nowIso(clock);
+    const activityDate = timestamp.slice(0, 10);
+    const existing = db.prepare("SELECT first_seen_at FROM app_installations WHERE install_hash = ?").get(installHash);
+    inTransaction(db, () => {
+      db.prepare(`
+        INSERT INTO app_installations
+          (install_hash, channel, platform, app_version, version_code, first_seen_at, last_seen_at, launch_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(install_hash) DO UPDATE SET
+          channel = excluded.channel,
+          platform = excluded.platform,
+          app_version = excluded.app_version,
+          version_code = excluded.version_code,
+          last_seen_at = excluded.last_seen_at,
+          launch_count = app_installations.launch_count + 1
+      `).run(
+        installHash,
+        normalizedChannel,
+        normalizedPlatform,
+        normalizedAppVersion,
+        normalizedVersionCode,
+        timestamp,
+        timestamp,
+      );
+      db.prepare(`
+        INSERT OR IGNORE INTO app_installation_activity_days
+          (install_hash, activity_date, recorded_at)
+        VALUES (?, ?, ?)
+      `).run(installHash, activityDate, timestamp);
+    });
+    return {
+      accepted: true,
+      firstActivation: !existing,
+      firstSeenAt: existing?.first_seen_at ?? timestamp,
     };
   }
 
@@ -944,20 +1576,27 @@ export function createSeekerReferralService({
   }
 
   return {
+    advanceSeekerPassPromotion,
+    appAnalyticsEnabled,
     activateProfile,
     bindReferral,
     close,
     db,
     getProfile,
+    issueSeekerPassNonce,
     issueNonce,
     leaderboard,
     logout,
     previewReferral,
+    recordAppActivation,
     recordActivity,
     refreshReferralQualifications,
     referralMe,
     simulateQualification,
+    seekerPassPromotionEnabled,
+    seekerPassPromotionStatus,
     testMode,
+    verifySeekerPassSiws,
     verifySiws,
   };
 }

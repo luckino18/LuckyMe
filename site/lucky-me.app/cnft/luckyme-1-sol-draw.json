@@ -1,0 +1,41 @@
+{
+  "name": "LuckyMe Seeker Pass",
+  "symbol": "LUCKYME",
+  "description": "Official LuckyMe access pass for Solana Seeker owners. LuckyMe is available on the official Solana dApp Store.",
+  "image": "https://lucky-me.app/cnft/luckyme-seeker-pass-v2.png",
+  "attributes": [
+    {
+      "trait_type": "Pass",
+      "value": "LuckyMe Seeker Pass"
+    },
+    {
+      "trait_type": "Access",
+      "value": "LuckyMe member benefits"
+    },
+    {
+      "trait_type": "App",
+      "value": "LuckyMe on Solana Seeker"
+    },
+    {
+      "trait_type": "Eligibility",
+      "value": "Solana Seeker owner"
+    },
+    {
+      "trait_type": "Availability",
+      "value": "Official Solana dApp Store"
+    }
+  ],
+  "collection": {
+    "name": "LuckyMe Seeker Pass",
+    "family": "LuckyMe"
+  },
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://lucky-me.app/cnft/luckyme-seeker-pass-v2.png",
+        "type": "image/png"
+      }
+    ]
+  }
+}
