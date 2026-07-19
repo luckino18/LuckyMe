@@ -7,6 +7,7 @@ This document is the recovery and continuation entry point for the complete Luck
 - Authoritative repository: this directory.
 - GitHub: `https://github.com/luckino18/LuckyMe`
 - Branch: `main`.
+- Recovery baseline commit: `62d1e6a1de3f8434e4f41512dc7cfe78fae5cd87` (pushed on 2026-07-20).
 - Local project root: `/Users/victor/Desktop/LuckyMe_CURRENT`.
 - Obsidian project brain: `/Users/victor/Desktop/LuckyMe_CURRENT/LuckyMe_Brain`.
 - Public site: `https://lucky-me.app/` and `https://www.lucky-me.app/`.
@@ -140,6 +141,8 @@ GitHub is the canonical versioned source. NAS is the disaster-recovery mirror. T
 ## Desktop cleanup boundary
 
 Old files are never deleted automatically. Clearly historical APKs, superseded worktrees and earlier backup folders are moved into a dated `LuckyMe_OLD_FILES_TO_REVIEW_*` folder on Desktop. The current code-15 APK, current workspace, source assets and anything ambiguous remain in place until Victor reviews the holding folder.
+
+The 2026-07-20 holding folder is `/Users/victor/Desktop/LuckyMe_OLD_FILES_TO_REVIEW_2026-07-20` and contains `README-FIRST.md`, historical APKs, superseded worktrees and old preview/verification files. It contains 21 GB at handoff time. Nothing was deleted.
 
 ## Non-negotiable safety rules
 
