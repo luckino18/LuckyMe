@@ -1363,7 +1363,6 @@ export function LuckyMeScreen({
       }
 
       setNotificationOptInState("enabled");
-      setNotificationPromptVisible(false);
       await AsyncStorage.setItem(NOTIFICATION_PROMPT_KEY, "accepted");
 
       try {
@@ -1373,6 +1372,11 @@ export function LuckyMeScreen({
       } catch {
         setNotificationError("Notifications are enabled, but backend registration is not available yet.");
       }
+      await refreshFromBackend({
+        allowScreenChange: true,
+        targetScreen: INITIAL_SCREEN,
+      });
+      setNotificationPromptVisible(false);
     } catch (error) {
       setNotificationOptInState("error");
       setNotificationError(
@@ -1382,7 +1386,7 @@ export function LuckyMeScreen({
     } finally {
       setNotificationBusy(false);
     }
-  }, [walletAddress]);
+  }, [refreshFromBackend, walletAddress]);
 
   const declineNotifications = useCallback(async () => {
     setNotificationOptInState("declined");

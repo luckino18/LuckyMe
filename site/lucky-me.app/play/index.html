@@ -13,7 +13,7 @@
     <meta property="og:title" content="LuckyMe Play" />
     <meta property="og:description" content="Fixed-entry Solana pools. Approve every action inside your own wallet." />
     <meta property="og:image" content="https://lucky-me.app/assets/brand/og-image.png" />
-    <link rel="stylesheet" href="/styles.css?v=20260718-apk-match-v2" />
+  <link rel="stylesheet" href="/styles.css?v=20260718-floating-shell-v7" />
   </head>
   <body class="app-body luckyme-final-app">
     <div class="app-shell">
@@ -38,9 +38,9 @@
             <p>Pick your way to LuckyMe. Every result stays transparent and verifiable on Solana.</p>
           </section>
           <section class="web-apk-grid" aria-label="LuckyMe website sections">
-            <button class="web-apk-card" data-route="pools"><img src="/assets/app-theme/home/pools-rocket-v1.png" alt="" /><strong>Pools</strong><small>Choose a live Solana round</small></button>
+            <button class="web-apk-card" data-route="pools"><img src="/assets/app-theme/home/pools-medallion-v2.png" alt="" /><strong>Pools</strong><small>Choose a live Solana round</small></button>
             <button class="web-apk-card" data-route="how"><img src="/assets/app-theme/navigation/how-to-v1.png" alt="" /><strong>How To Play</strong><small>Targets, draws and refunds</small></button>
-            <button class="web-apk-card" data-route="activity"><img src="/assets/app-theme/home/winner-trophy-v1.png" alt="" /><strong>Latest Winners</strong><small>Recent rounds and prizes</small></button>
+            <button class="web-apk-card" data-route="activity"><img src="/assets/app-theme/home/latest-winners-medallion-v2.png" alt="" /><strong>Latest Winners</strong><small>Recent rounds and prizes</small></button>
             <button class="web-apk-card" data-route="social"><img src="/assets/app-theme/navigation/social-v1.png" alt="" /><strong>Social</strong><small>Official LuckyMe channels</small></button>
           </section>
           <section class="web-apk-status" aria-live="polite">
@@ -50,7 +50,7 @@
           <section class="pool-grid" id="home-pools" aria-label="Pool preview" hidden></section>
         </section>
 
-        <section class="screen" data-screen="pools" hidden>
+        <section class="screen pool-screen" data-screen="pools" hidden>
           <div class="screen-head">
             <div>
               <span class="label">Entry tiers</span>
@@ -65,44 +65,49 @@
           <section class="pool-grid" id="pool-list" aria-label="LuckyMe pools"></section>
         </section>
 
-        <section class="screen" data-screen="activity" hidden>
-          <div class="screen-head">
+        <section class="screen activity-page" data-screen="activity" hidden>
+          <div class="activity-head">
             <div>
-              <span class="label">Activity</span>
-              <h2>Round ledger</h2>
+              <span class="eyebrow">Live and transparent</span>
+              <h2>Activity</h2>
+              <p>Your entries plus public round history.</p>
             </div>
+            <span class="activity-wallet"><small>Wallet</small><strong id="activity-wallet-label">Not connected</strong></span>
           </div>
-          <section class="list" id="activity-list"></section>
+          <section class="activity-summary" id="activity-summary" aria-label="Activity summary"></section>
+          <section class="activity-tabs" role="tablist" aria-label="Activity view">
+            <button type="button" data-activity-tab="active" role="tab" aria-selected="true">Active</button>
+            <button type="button" data-activity-tab="history" role="tab" aria-selected="false">My History</button>
+            <button type="button" data-activity-tab="all-rounds" role="tab" aria-selected="false">All Rounds</button>
+          </section>
+          <section class="activity-list" id="activity-list" aria-live="polite"></section>
+          <section class="activity-safety">Refunds are automatic when a round expires below target. Solana network fees are not refundable.</section>
         </section>
 
         <section class="screen how-screen" data-screen="how" hidden>
-          <div class="screen-head">
+          <div class="screen-head compact-how-head">
             <div>
-              <span class="label">Simple rules</span>
+              <span class="eyebrow">LuckyMe guide</span>
               <h2>How to Play</h2>
+              <p>Everything needed for the four public Solana pools.</p>
             </div>
-            <a class="icon-button" href="/how-to-play/">Full guide</a>
+            <span class="how-mainnet-badge">Mainnet</span>
           </div>
-          <section class="panel how-intro">
-            <h3>Buy tickets. Reach the target. Let the round finish.</h3>
-            <p>Each ticket has an equal chance. Buying more tickets increases your chance in Mini, Normal, and High, within the pool limit.</p>
+          <section class="how-pool-guide" aria-label="Pool rules">
+            <article class="how-pool-mini"><span><strong>Mini</strong><b>0.005 SOL</b><small>25 tickets · 1 winner</small></span></article>
+            <article class="how-pool-normal"><span><strong>Normal</strong><b>0.01 SOL</b><small>13 tickets · 1 winner</small></span></article>
+            <article class="how-pool-high"><span><strong>High</strong><b>0.05 SOL</b><small>3 tickets · 1 winner</small></span></article>
+            <article class="how-pool-premium"><span><strong>Premium</strong><b>0.1 SOL</b><small>3 wallets · 3 winners</small></span></article>
           </section>
-          <ol class="how-grid" aria-label="How to play LuckyMe">
-            <li class="step-card"><span class="step-num">1</span><h3>Choose a pool</h3><p>Mini, Normal, High, or Premium each has its own ticket price and target.</p></li>
-            <li class="step-card"><span class="step-num">2</span><h3>Connect your wallet</h3><p>You stay in control. LuckyMe never asks for your seed phrase.</p></li>
-            <li class="step-card"><span class="step-num">3</span><h3>Buy tickets</h3><p>Review the amount, then approve the purchase only inside your wallet.</p></li>
-            <li class="step-card"><span class="step-num">4</span><h3>The clock starts</h3><p>The first confirmed ticket starts the one-hour round.</p></li>
-            <li class="step-card"><span class="step-num">5</span><h3>Reach the ticket target</h3><p>Mini 25, Normal 13, High 3, and Premium 3 total tickets.</p></li>
-            <li class="step-card"><span class="step-num">6</span><h3>Valid draw</h3><p>When the target is reached, the winner or winners are selected after the hour ends.</p></li>
+          <ol class="compact-how-steps" aria-label="How to play LuckyMe">
+            <li><span>1</span><div><strong>Choose and buy</strong><p>Connect your wallet, choose tickets, and approve only inside your wallet. One refundable rent deposit covers that wallet entry, regardless of how many tickets it buys at once.</p></div></li>
+            <li><span>2</span><div><strong>First ticket starts the timer</strong><p>The one-hour countdown begins only after the first confirmed ticket.</p></div></li>
+            <li><span>3</span><div><strong>Target reached</strong><p>After the timer, a valid round uses verifiable Solana randomness to select the winner or winners.</p></div></li>
+            <li><span>4</span><div><strong>Target missed</strong><p>No winner is drawn. 100% of the ticket purchase amount and entry rent return automatically; Solana network fees do not.</p></div></li>
           </ol>
-          <section class="refund-explainer">
-            <strong>Automatic refund if the target is missed</strong>
-            <p>If the minimum is not reached before the round ends, no winner is drawn. 100% of the ticket purchase amount is automatically returned to the wallet that bought the tickets.</p>
-            <p>No claim button is required. Solana network fees are not refundable.</p>
-          </section>
-          <section class="panel">
-            <h3>Total tickets, not total players</h3>
-            <p>Mini needs 25 tickets sold in total, not 25 different players. The same total-ticket rule applies to Normal and High. Premium is different: it allows one ticket per wallet and needs three distinct wallets for its three winners, split 70% / 20% / 10%.</p>
+          <section class="compact-how-note">
+            <strong>Total tickets, not total players</strong>
+            <p>Mini, Normal, and High count tickets. Premium is different: one ticket per wallet, three distinct wallets, and three winners split 70% / 20% / 10%. No claim button is required. If another player wins a valid round, your rent deposit still returns automatically.</p>
           </section>
           <div class="wallet-actions">
             <button class="primary-button" data-route="pools">Choose a pool</button>
@@ -110,8 +115,8 @@
           </div>
         </section>
 
-        <section class="screen" data-screen="wallet" hidden>
-          <div class="screen-head">
+        <section class="screen wallet-screen" data-screen="wallet" hidden>
+          <div class="screen-head wallet-screen-head">
             <div>
               <span class="label">Wallet</span>
               <h2>You hold the keys</h2>
@@ -153,13 +158,13 @@
               <h2>Social</h2>
             </div>
           </div>
-          <section class="panel">
-            <p>Follow LuckyMe for product updates, round news, and community announcements.</p>
-            <div class="wallet-actions link-actions">
-              <a class="secondary-button" href="https://x.com/LuckyMeSolana" target="_blank" rel="noopener noreferrer">Follow LuckyMe on X</a>
-              <button class="secondary-button" disabled>Discord — Coming soon</button>
-            </div>
+          <section class="web-social-grid" aria-label="Official LuckyMe links">
+            <a class="web-social-card social-x" href="https://x.com/LuckyMeSolana" target="_blank" rel="noopener noreferrer"><img src="/assets/app-theme/social/x-clean-v5.png" alt="" /><strong>X</strong><small>Announcements and winner updates</small><span>Follow us ↗</span></a>
+            <a class="web-social-card social-discord" href="https://discord.gg/rZVjBJtMZ" target="_blank" rel="noopener noreferrer"><img src="/assets/app-theme/social/discord-clean-v4.png" alt="" /><strong>Discord</strong><small>Community and direct updates</small><span>Join Discord ↗</span></a>
+            <a class="web-social-card social-web" href="/"><img src="/assets/app-theme/social/website-clean-v4.png" alt="" /><strong>Official Website</strong><small>LuckyMe home and verified information</small><span>Visit website ↗</span></a>
+            <a class="web-social-card social-support" href="https://discord.gg/rZVjBJtMZ" target="_blank" rel="noopener noreferrer"><img src="/assets/app-theme/social/support-clean-v4.png" alt="" /><strong>Support</strong><small>Create a private Discord support ticket</small><span>Open ticket ↗</span></a>
           </section>
+          <section class="notice social-safety">Use only links opened from LuckyMe. We will never ask for your seed phrase or private key.</section>
         </section>
 
         <section class="screen" data-screen="review" hidden>
@@ -202,7 +207,7 @@
         <header class="wallet-modal-head">
           <div>
             <h2 id="wallet-modal-title">Connect Wallet</h2>
-            <p>By connecting, you confirm that you understand and accept the <a href="/terms/">terms of service</a>.</p>
+            <p>Choose a trusted Solana wallet. Approval always happens inside your wallet.</p>
           </div>
           <button class="wallet-modal-close" data-action="close-wallet-modal" aria-label="Close wallet selector">×</button>
         </header>
@@ -211,6 +216,6 @@
     </section>
 
     <script src="/config.js?v=20260712-reown-project-owner"></script>
-    <script type="module" src="/app.js?v=20260718-apk-match-v2"></script>
+  <script type="module" src="/app.js?v=20260718-desktop-fit-v6"></script>
   </body>
 </html>

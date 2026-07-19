@@ -18,6 +18,9 @@ Environment=LUCKYME_ADMIN_STATUS_PATH=/var/www/luckyme/public/admin/status.json
 Environment=LUCKYME_SETTLEMENT_ARCHIVE_PATH=/var/lib/luckyme/settlements.jsonl
 Environment=SEEKER_REFERRAL_DB_PATH=/var/lib/luckyme-seeker-referral/referral.sqlite
 Environment=NPM_CONFIG_UPDATE_NOTIFIER=false
+# Static Admin deploys may replace this directory. Reassert the narrow ownership
+# required for the unprivileged monitor to atomically publish status.json.
+ExecStartPre=+/usr/bin/install -d -o luckyme -g www-data -m 2775 /var/www/luckyme/public/admin
 ExecStart=/usr/bin/npm run monitor:operations
 NoNewPrivileges=true
 PrivateTmp=true

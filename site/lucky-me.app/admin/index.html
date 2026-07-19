@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <title>LuckyMe Admin</title>
-    <link rel="stylesheet" href="/admin/admin.css?v=20260717-promotions1" />
+    <link rel="stylesheet" href="/admin/admin.css?v=20260719-skr-manual-remove1" />
   </head>
   <body>
     <main class="shell">
@@ -21,6 +21,8 @@
         <button class="admin-tab" data-admin-tab="referrals">Referrals</button>
         <button class="admin-tab" data-admin-tab="downloads">Downloads</button>
         <button class="admin-tab" data-admin-tab="promotions">Promotions</button>
+        <button class="admin-tab" data-admin-tab="skr-database">SKR Database</button>
+        <button class="admin-tab admin-tab-write" data-admin-tab="nft-send">Send NFT</button>
       </nav>
 
       <div class="admin-panel active" data-admin-panel="status">
@@ -88,8 +90,92 @@
           <div class="promotion-list" id="promotion-list"></div>
         </section>
       </div>
-      <p class="readonly">Read-only panel. It cannot send transactions, open rounds, or change server settings.</p>
+      <div class="admin-panel" data-admin-panel="skr-database">
+        <section class="panel skr-tool">
+          <div class="panel-title"><div><span class="eyebrow">Persistent recipient registry</span><h2>SKR Database</h2></div></div>
+          <p class="panel-copy">Paste every list collected locally. Save adds only new valid usernames, removes duplicates automatically and preserves each username's permanent number and NFT history.</p>
+          <div class="skr-database-import">
+            <label>List / source name<input id="skr-database-source" type="text" maxlength="100" placeholder="Example: Game reviews · 19 July" /></label>
+            <label>Paste usernames<textarea id="skr-database-input" rows="7" spellcheck="false" autocomplete="off" placeholder="luckino.skr&#10;gigi.skr&#10;friend.skr"></textarea></label>
+            <div class="nft-actions">
+              <button class="nft-button secondary" id="skr-database-clear" type="button">Clear paste</button>
+              <button class="nft-button" id="skr-database-save" type="button">Save to database</button>
+            </div>
+          </div>
+          <div class="nft-result" id="skr-database-result" hidden aria-live="polite"></div>
+          <div class="referral-summary" id="skr-registry-summary"></div>
+          <div class="history-filters">
+            <label>Status<select id="skr-registry-status"><option value="all">All usernames</option><option value="ready">Ready to send</option><option value="reserved">Reserved for Send NFT</option><option value="sent">NFT confirmed</option></select></label>
+            <label>Username or wallet<input id="skr-registry-search" type="search" placeholder="luckino.skr" /></label>
+          </div>
+          <div class="skr-database-actions">
+            <button class="nft-button secondary" id="skr-release-reserved" type="button">Return reserved to Ready</button>
+            <button class="nft-button danger" id="skr-prepare-50" type="button">Prepare next 50 in Send NFT</button>
+          </div>
+          <div class="skr-registry-list" id="skr-registry-list"></div>
+        </section>
+      </div>
+      <div class="admin-panel" data-admin-panel="nft-send">
+        <section class="panel nft-tool">
+          <div class="panel-title">
+            <div><span class="eyebrow">Protected mainnet operation</span><h2>Send LuckyMe Seeker Pass</h2></div>
+            <span class="status neutral" id="nft-tool-status">Locked</span>
+          </div>
+          <p class="panel-copy">Add one or more <strong>username.skr</strong> recipients. Every name is resolved again on-chain before the wallet receives a mint request.</p>
+          <div class="nft-safety">
+            <strong>No private key is stored here.</strong>
+            <span>The connected authority wallet reviews one batch of up to 50 NFTs, built from transactions containing at most three mints each. Existing pass holders and duplicate wallets are blocked.</span>
+          </div>
+
+          <section class="nft-batch-test" aria-labelledby="nft-batch-test-title">
+            <div>
+              <span class="eyebrow">No-broadcast Solflare diagnostic</span>
+              <h3 id="nft-batch-test-title">Test batch signing</h3>
+              <p>Signs memo-only transactions and immediately discards them. Nothing is sent to Solana, no NFT is created and no SOL is spent.</p>
+            </div>
+            <div class="nft-actions nft-batch-actions">
+              <button class="nft-button secondary" id="nft-batch-connect-wallet" type="button">Connect Solflare authority</button>
+              <button class="nft-button secondary" data-batch-sign-count="5" type="button" disabled>Test 5</button>
+              <button class="nft-button secondary" data-batch-sign-count="20" type="button" disabled>Test 20</button>
+              <button class="nft-button secondary" data-batch-sign-count="50" type="button" disabled>Test 50</button>
+              <button class="nft-button secondary" data-batch-sign-count="100" type="button" disabled>Test 100</button>
+            </div>
+            <small>Run the levels in order and stop at the first Solflare error or slowdown.</small>
+          </section>
+
+          <div class="nft-entry-head">
+            <label for="nft-recipient-input">Recipients</label>
+            <span id="nft-recipient-counter">0 / 1000</span>
+          </div>
+          <div class="nft-entry-composer">
+            <textarea id="nft-recipient-input" rows="3" spellcheck="false" autocomplete="off" placeholder="gigel.skr&#10;friend.skr&#10;another_friend.skr"></textarea>
+            <button class="nft-button secondary" id="nft-add-recipients" type="button">Add</button>
+          </div>
+          <p class="nft-hint">Press Enter after each username, or paste names separated by new lines, commas or spaces.</p>
+
+          <div class="nft-recipient-list" id="nft-recipient-list" aria-live="polite"></div>
+          <div class="nft-empty" id="nft-recipient-empty">No recipients added yet.</div>
+
+          <div class="nft-actions">
+            <button class="nft-button secondary" id="nft-clear" type="button">Clear list</button>
+            <button class="nft-button" id="nft-resolve" type="button">Resolve .skr names</button>
+          </div>
+
+          <section class="nft-preview" id="nft-preview" hidden>
+            <div class="panel-title"><div><span class="eyebrow">Final preview</span><h3 id="nft-preview-title">Recipients ready</h3></div></div>
+            <div class="nft-summary" id="nft-summary"></div>
+            <div class="nft-authority" id="nft-authority-copy"></div>
+            <div class="nft-actions">
+              <button class="nft-button secondary" id="nft-connect-wallet" type="button">Connect authority wallet</button>
+              <button class="nft-button danger" id="nft-mint" type="button" disabled>Review &amp; mint</button>
+            </div>
+          </section>
+
+          <div class="nft-result" id="nft-result" hidden aria-live="polite"></div>
+        </section>
+      </div>
+      <p class="readonly">Read-only panels remain reporting-only. “Send NFT” is a separate protected operation and always requires an external authority-wallet signature.</p>
     </main>
-    <script src="/admin/admin.js?v=20260717-promotions1" defer></script>
+    <script src="/admin/admin.js?v=20260719-skr-manual-remove1" type="module"></script>
   </body>
 </html>

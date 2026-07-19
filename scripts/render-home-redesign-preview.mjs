@@ -171,6 +171,8 @@ const prototypeRouteScript = String.raw`<script>
   }
   const requestedTab = new URLSearchParams(window.location.search).get("tab");
   if (requestedTab) document.querySelector('[data-how-tab="' + requestedTab + '"]')?.click();
+  const requestedActivityTab = new URLSearchParams(window.location.search).get("activityTab");
+  if (requestedActivityTab) document.querySelector('[data-activity-tab="' + requestedActivityTab + '"]')?.click();
 })();
 </script>`;
 
@@ -360,6 +362,33 @@ for (const poolId of ["normal", "high", "premium"]) {
     seekerFrameHtml(`SOLANA SEEKER ${poolId.toUpperCase()} WALLET FLOW V1`, `${poolId}-wallet-v1.html`),
   );
 }
+for (const poolId of ["mini", "normal", "high", "premium"]) {
+  const successPreview = renderStitchScreen("success", {
+    ...options,
+    activeTab: "pools",
+    selectedPool: poolId,
+    ticketCount: poolId === "premium" ? 1 : 2,
+    transaction: {
+      state: "confirmed",
+      signature: "5zYxJqD9LvKm2P8tN4rS6uW3cB7hF1aE9gQ2iT8oR5pV4mK7dC3nH6jL9sX1wZ8bY2qA5fG7eU4iP6tR3vN9kM",
+      message: "Your entry is confirmed on Solana.",
+    },
+  });
+  writeFileSync(path.join(outputDir, `${poolId}-purchase-confirmed-v2.html`), successPreview);
+  writeFileSync(
+    path.join(outputDir, `seeker-${poolId}-purchase-confirmed-v2.html`),
+    seekerFrameHtml(`SOLANA SEEKER ${poolId.toUpperCase()} CONFIRMED V2`, `${poolId}-purchase-confirmed-v2.html`),
+  );
+}
+const unavailablePreview = renderStitchScreen("unavailable", {
+  ...options,
+  activeTab: "home",
+});
+writeFileSync(path.join(outputDir, "startup-mainnet-sync-v2.html"), unavailablePreview);
+writeFileSync(
+  path.join(outputDir, "seeker-startup-mainnet-sync-v2.html"),
+  seekerFrameHtml("SOLANA SEEKER STARTUP MAINNET SYNC V2", "startup-mainnet-sync-v2.html"),
+);
 const activityPreview = renderStitchScreen("activity", { ...options, activeTab: "activity" });
 writeFileSync(path.join(outputDir, "activity-dashboard-v1.html"), activityPreview);
 writeFileSync(

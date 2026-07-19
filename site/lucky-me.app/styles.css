@@ -49,7 +49,13 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-body { overflow-x: hidden; }
+body {
+  overflow-x: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, select { -webkit-user-select: text; user-select: text; }
 
 a { color: var(--cyan); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -577,6 +583,28 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
 .fact strong { display: block; color: #fff; font-size: 12.5px; line-height: 1.2; overflow-wrap: anywhere; }
 .jackpot-fact { border-color: rgba(20, 241, 149, 0.18); background: rgba(20, 241, 149, 0.045); }
 .jackpot-fact strong { color: var(--emerald); }
+.pool-jackpot-fomo {
+  width: fit-content;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 11px;
+  border: 1px solid rgba(255, 220, 91, .62);
+  border-radius: 999px;
+  color: #fff2a2;
+  background: linear-gradient(105deg, rgba(93, 66, 4, .82), rgba(27, 92, 41, .76));
+  box-shadow: 0 0 20px rgba(255, 204, 56, .18), inset 0 0 12px rgba(255, 237, 128, .08);
+}
+.pool-jackpot-fomo span {
+  color: #ffe36f;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.pool-jackpot-fomo i { font-style: normal; filter: drop-shadow(0 0 6px rgba(255, 224, 84, .9)); }
+.pool-jackpot-fomo strong { color: #fff8c8; font-size: 13px; line-height: 1; text-shadow: 0 0 12px rgba(255, 224, 92, .45); }
 .time-fact { border-color: rgba(0, 209, 255, 0.18); background: rgba(0, 209, 255, 0.045); }
 .time-fact strong { color: var(--cyan); font-variant-numeric: tabular-nums; }
 
@@ -586,16 +614,19 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
 
 .minimum-target {
   display: grid;
-  gap: 7px;
-  padding: 12px;
-  border: 1px solid var(--line-cyan);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(181, 255, 110, .36);
   border-radius: 13px;
-  background: rgba(0, 209, 255, 0.045);
+  background: rgba(1, 29, 21, .91);
+  box-shadow: inset 0 0 22px rgba(104, 209, 75, .05);
 }
-.minimum-target > strong { color: #fff; font-size: 15px; font-variant-numeric: tabular-nums; }
-.minimum-target.success { border-color: var(--line-emerald); background: rgba(20, 241, 149, 0.06); }
-.minimum-target.warning { border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.06); }
-.minimum-progress { height: 8px; overflow: hidden; border-radius: 999px; background: rgba(148, 163, 184, 0.14); }
+.minimum-target-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.minimum-target-head .label { color: #c7e4c7; }
+.minimum-target-head > strong { color: #f0ffc2; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.minimum-target.success { border-color: rgba(69, 247, 158, .48); background: rgba(2, 44, 30, .94); }
+.minimum-target.warning { border-color: rgba(244, 194, 73, .38); background: rgba(37, 35, 16, .92); }
+.minimum-progress { height: 13px; overflow: hidden; border: 1px solid rgba(192, 255, 105, .20); border-radius: 999px; background: rgba(0, 10, 8, .72); box-shadow: inset 0 2px 5px rgba(0,0,0,.38); }
 .minimum-progress > span {
   display: block;
   height: 100%;
@@ -604,9 +635,9 @@ p { color: var(--muted); line-height: 1.55; font-size: 15px; overflow-wrap: anyw
   transition: width 300ms ease;
 }
 .minimum-target.warning .minimum-progress > span { background: linear-gradient(90deg, var(--purple), var(--amber)); }
-.minimum-message { color: var(--muted) !important; font-size: 12.5px !important; font-weight: 700; }
-.minimum-wallets { color: var(--violet) !important; font-weight: 750; }
-.minimum-clarification { color: var(--soft) !important; font-size: 11.5px !important; }
+.minimum-message { color: #d7ead8 !important; font-size: 12.5px !important; font-weight: 750; }
+.minimum-wallets { color: #dfffa9 !important; font-weight: 800; }
+.minimum-clarification { color: #9eb8a4 !important; font-size: 11.5px !important; }
 
 /* wallet cards (markup produced by app.js) */
 
@@ -679,12 +710,14 @@ body.wallet-modal-open { overflow: hidden; }
   justify-content: space-between;
   gap: 20px;
   padding: 24px 26px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(17, 21, 37, 0.96);
+  border-bottom: 1px solid rgba(185, 255, 109, .26);
+  background:
+    linear-gradient(135deg, rgba(17, 88, 45, .95), rgba(2, 33, 28, .98)),
+    url("/assets/app-theme/home/luckyme-home-background-v2.png") center 35% / cover;
   backdrop-filter: blur(18px);
 }
 .wallet-modal-head h2 { margin: 0 0 8px; font-size: clamp(26px, 4vw, 40px); }
-.wallet-modal-head p { max-width: 720px; color: var(--muted); font-size: 15px; }
+.wallet-modal-head p { max-width: 720px; color: #b9d1bf; font-size: 15px; }
 .wallet-modal-head a { color: var(--soft); text-decoration: underline; }
 .wallet-modal-close {
   flex: 0 0 auto;
@@ -714,7 +747,7 @@ body.wallet-modal-open { overflow: hidden; }
   font-size: 11px;
   line-height: 1.45;
   overflow-wrap: anywhere;
-  user-select: all;
+  user-select: none;
 }
 .wallet-modal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .wallet-modal-option {
@@ -724,10 +757,10 @@ body.wallet-modal-open { overflow: hidden; }
   align-content: center;
   gap: 12px;
   padding: 18px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(177, 255, 105, .24);
   border-radius: 16px;
   color: #fff;
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(2, 39, 28, .82);
   font: inherit;
   font-size: 16px;
   font-weight: 850;
@@ -736,8 +769,8 @@ body.wallet-modal-open { overflow: hidden; }
 }
 .wallet-modal-option:hover {
   transform: translateY(-2px);
-  border-color: var(--line-purple);
-  background: rgba(153, 69, 255, 0.08);
+  border-color: rgba(205, 255, 110, .58);
+  background: rgba(32, 91, 44, .72);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
 }
 .wallet-modal-icon {
@@ -747,16 +780,18 @@ body.wallet-modal-open { overflow: hidden; }
   place-items: center;
   overflow: hidden;
   border-radius: 16px;
+  padding: 5px;
   color: #fff;
-  background: linear-gradient(145deg, #9945ff, #00d1ff);
+  background: rgba(4, 28, 25, .90);
+  border: 1px solid rgba(207, 255, 132, .28);
   font-size: 24px;
   font-weight: 900;
 }
-.wallet-modal-icon img { width: 100%; height: 100%; object-fit: cover; }
+.wallet-modal-icon img { width: 100%; height: 100%; object-fit: contain; border-radius: 11px; }
 .wallet-modal-note { color: var(--soft); font-size: 13px; }
 .walletconnect-option { grid-template-columns: auto 1fr auto; min-height: 82px; place-items: center start; text-align: left; }
-.walletconnect-option .wallet-modal-icon { width: 48px; height: 48px; border-radius: 999px; background: #3b99fc; }
-.walletconnect-option strong { justify-self: end; color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+.walletconnect-option .wallet-modal-icon { width: 48px; height: 48px; border-radius: 14px; background: #0d63d8; }
+.walletconnect-option strong { justify-self: end; color: #dfff9b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
 .wallet-modal-option:disabled { cursor: wait; transform: none; opacity: 0.58; }
 .wallet-modal-controls { display: flex; justify-content: flex-end; margin-top: 10px; }
 .wallet-modal-controls .secondary-button { min-width: 130px; }
@@ -1236,19 +1271,283 @@ body.wallet-modal-open { overflow: hidden; }
 }
 .luckyme-final-app .bottom-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 
+/* Activity mirrors the three-view Seeker APK ledger. */
+.activity-page { max-width: 980px; }
+.activity-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 5px 4px 0;
+}
+.activity-head > div { display: grid; gap: 5px; }
+.activity-head h2 { font-size: clamp(30px, 5vw, 42px); }
+.activity-head p { font-size: 13px; }
+.activity-wallet {
+  min-width: 170px;
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid rgba(179, 255, 105, .27);
+  border-radius: 13px;
+  background: rgba(2, 44, 30, .68);
+  text-align: right;
+}
+.activity-wallet small,
+.activity-summary small { color: #91a69a; font-size: 8px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.activity-wallet strong { overflow: hidden; max-width: 210px; color: #f3fff1; font: 800 12px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.activity-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid rgba(179, 255, 105, .24);
+  border-radius: 17px;
+  background: rgba(2, 44, 30, .68);
+  overflow: hidden;
+}
+.activity-summary > span { display: grid; place-items: center; gap: 2px; min-height: 68px; padding: 9px; text-align: center; }
+.activity-summary > span + span { border-left: 1px solid rgba(179, 255, 105, .16); }
+.activity-summary strong { color: #efffc8; font-size: 24px; line-height: 1; }
+.activity-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid rgba(179, 255, 105, .22);
+  border-radius: 16px;
+  background: rgba(1, 34, 25, .72);
+}
+.activity-tabs button {
+  min-height: 44px;
+  border: 1px solid rgba(164, 235, 104, .18);
+  border-radius: 11px;
+  color: #bdd9bd;
+  background: linear-gradient(145deg, rgba(16, 65, 39, .46), rgba(2, 37, 29, .66));
+  font-weight: 850;
+}
+.activity-tabs button[aria-selected="true"] {
+  color: #f4ffc9;
+  border-color: rgba(192, 255, 105, .50);
+  background: linear-gradient(135deg, rgba(70, 152, 48, .50), rgba(18, 88, 46, .42));
+  box-shadow: inset 0 0 16px rgba(154, 255, 92, .08);
+}
+.activity-list { display: grid; gap: 9px; }
+.activity-row {
+  width: 100%;
+  min-height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(163, 255, 111, .18);
+  border-radius: 15px;
+  color: #fff;
+  background: rgba(1, 31, 22, .75);
+  text-align: left;
+}
+button.activity-row:hover { border-color: rgba(192, 255, 105, .52); }
+.activity-row > span:first-child { min-width: 0; display: grid; gap: 4px; }
+.activity-row small { color: #b8c5bb; font-size: 9px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+.activity-row strong { color: #f6fff1; font-size: 15px; }
+.activity-row em { color: #82968a; font-size: 10px; font-style: normal; }
+.activity-row > b,
+.activity-proof { flex: 0 0 auto; font-size: 11px; font-weight: 900; }
+.activity-proof { color: #7bf8ff; }
+.round-winners { color: #dae8dc; font-size: 12px; line-height: 1.45; }
+.round-winners strong { color: #f6df74; font-size: inherit; }
+.activity-result { flex: 0 0 auto; display: grid; justify-items: end; gap: 4px; }
+.activity-result b { color: #c9d5cc; font-size: 12px; }
+.activity-result.won b { color: #f6df74; }
+.activity-result.refund b { color: #77f4bf; }
+.activity-result a { color: #7bf8ff; font-size: 10px; font-weight: 850; }
+.activity-empty {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  padding: 26px;
+  border: 1px solid rgba(163, 255, 111, .18);
+  border-radius: 18px;
+  background: rgba(1, 31, 22, .70);
+  text-align: center;
+}
+.activity-empty img { width: 92px; height: 92px; object-fit: cover; border-radius: 20px; mix-blend-mode: screen; }
+.activity-empty p { max-width: 420px; font-size: 12px; }
+.activity-empty .primary-button,
+.activity-empty .secondary-button { margin-top: 5px; }
+.activity-safety {
+  padding: 11px 13px;
+  border: 1px solid rgba(180, 255, 106, .24);
+  border-radius: 12px;
+  color: #b9d7bc;
+  background: rgba(2, 43, 29, .72);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.wallet-screen-head {
+  padding: 18px 20px;
+  border: 1px solid rgba(185, 255, 109, .26);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(16, 83, 43, .84), rgba(2, 35, 29, .90)),
+    url("/assets/app-theme/home/luckyme-home-background-v2.png") center 34% / cover;
+  box-shadow: inset 0 0 24px rgba(121, 238, 82, .05);
+}
+.wallet-screen-head .label { color: #b9e1b8; }
+.wallet-screen > .panel { background: rgba(2, 43, 29, .82); }
+
+/* Compact, pool-only web guide using the same hierarchy as the APK. */
+.compact-how-head { align-items: end; }
+.compact-how-head > div { display: grid; gap: 5px; }
+.compact-how-head p { font-size: 12px; }
+.how-mainnet-badge {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border: 1px solid rgba(202, 255, 99, .38);
+  border-radius: 999px;
+  color: #dfffb2;
+  background: rgba(44, 111, 36, .34);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.how-pool-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.how-pool-guide article {
+  min-width: 0;
+  min-height: 88px;
+  display: grid;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 16px;
+  overflow: hidden;
+  border: 1px solid rgba(163, 255, 111, .20);
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(16, 72, 42, .76), rgba(1, 31, 22, .88));
+}
+.how-pool-guide article::before { content: ""; width: 26px; height: 4px; border-radius: 999px; background: #67e8f9; box-shadow: 0 0 12px currentColor; }
+.how-pool-guide .how-pool-normal::before { background: #c7ff68; }
+.how-pool-guide .how-pool-high::before { background: #f6df74; }
+.how-pool-guide .how-pool-premium::before { background: #c7a6ff; }
+.how-pool-guide article > span { min-width: 0; display: grid; gap: 2px; }
+.how-pool-guide strong { font-size: 17px; }
+.how-pool-guide b { color: #efffc7; font-size: 13px; }
+.how-pool-guide small { color: #879b8e; font-size: 9px; }
+.compact-how-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.compact-how-steps li {
+  min-width: 0;
+  min-height: 102px;
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid rgba(163, 255, 111, .16);
+  border-radius: 14px;
+  background: rgba(1, 29, 20, .60);
+}
+.compact-how-steps li > span { width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid rgba(202, 255, 99, .45); border-radius: 9px; color: #efffc5; background: rgba(74, 155, 50, .28); font-size: 11px; font-weight: 950; }
+.compact-how-steps li > div { min-width: 0; display: grid; gap: 3px; }
+.compact-how-steps strong { font-size: 13px; }
+.compact-how-steps p { color: #8ea094; font-size: 10px; line-height: 1.35; }
+.compact-how-note { display: grid; gap: 4px; padding: 11px 13px; border: 1px solid rgba(255, 220, 103, .22); border-radius: 13px; background: rgba(57, 42, 8, .46); }
+.compact-how-note strong { color: #fff1b5; font-size: 13px; }
+.compact-how-note p { color: rgba(255, 244, 199, .70); font-size: 10px; line-height: 1.4; }
+
 /* The live pool list uses each pool's approved APK artwork as its watermark. */
 .luckyme-final-app .pool-card {
   min-height: 360px;
   justify-content: flex-end;
-  background-position: center 20%;
-  background-size: auto 58%;
-  background-repeat: no-repeat;
+  background-position: center, calc(100% - 16px) 58px;
+  background-size: 100% 100%, 84px 84px;
+  background-repeat: no-repeat, no-repeat;
   background-color: rgba(2, 43, 28, .84);
 }
 .luckyme-final-app .pool-card:nth-child(4n+1) { background-image: linear-gradient(180deg, transparent 22%, rgba(2,34,25,.88) 62%), url("/assets/app-theme/pools/mini-watermark-v1.png"); }
 .luckyme-final-app .pool-card:nth-child(4n+2) { background-image: linear-gradient(180deg, transparent 22%, rgba(2,34,25,.88) 62%), url("/assets/app-theme/pools/normal-watermark-v1.png"); }
 .luckyme-final-app .pool-card:nth-child(4n+3) { background-image: linear-gradient(180deg, transparent 22%, rgba(2,34,25,.88) 62%), url("/assets/app-theme/pools/high-watermark-v1.png"); }
 .luckyme-final-app .pool-card:nth-child(4n) { background-image: linear-gradient(180deg, transparent 22%, rgba(2,34,25,.88) 62%), url("/assets/app-theme/pools/premium-watermark-v1.png"); }
+
+.review-panel {
+  background-position: center, center 38px !important;
+  background-size: 100% 100%, 165px 165px !important;
+  background-repeat: no-repeat, no-repeat !important;
+}
+.review-pool-mini { background-image: linear-gradient(180deg, rgba(2,37,28,.30), rgba(2,37,28,.96) 250px), url("/assets/app-theme/pools/mini-watermark-v1.png") !important; }
+.review-pool-normal { background-image: linear-gradient(180deg, rgba(2,37,28,.30), rgba(2,37,28,.96) 250px), url("/assets/app-theme/pools/normal-watermark-v1.png") !important; }
+.review-pool-high { background-image: linear-gradient(180deg, rgba(2,37,28,.30), rgba(2,37,28,.96) 250px), url("/assets/app-theme/pools/high-watermark-v1.png") !important; }
+.review-pool-premium { background-image: linear-gradient(180deg, rgba(2,37,28,.30), rgba(2,37,28,.96) 250px), url("/assets/app-theme/pools/premium-watermark-v1.png") !important; }
+.purchase-confirmation { display: grid; gap: 4px; border-color: rgba(70, 247, 160, .46); background: rgba(2, 55, 35, .90); }
+.purchase-confirmation strong { color: #efffc2; font-size: 16px; }
+.purchase-confirmation span { color: #c5e8cb; font-size: 12px; }
+
+/* Static public pages use the same visual shell as Home and /play. */
+.static-page .shell { min-height: 100dvh; }
+.static-page .static-content {
+  position: relative;
+  z-index: 1;
+  padding-bottom: 132px;
+}
+.static-page .how-hero,
+.static-page .legal-main {
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid rgba(179,255,105,.22);
+  border-radius: 22px;
+  background: rgba(2, 43, 29, .72);
+  box-shadow: inset 0 0 28px rgba(124,255,91,.035), 0 12px 34px rgba(0,0,0,.24);
+  backdrop-filter: blur(16px);
+}
+.static-page .legal-main { margin-top: clamp(28px, 5vw, 56px); }
+.static-page .legal-main h2 { color: #dfff9b; }
+.static-page .legal-main p,
+.static-page .legal-main li { color: rgba(239,249,240,.72); }
+.static-page .step-card,
+.static-page .panel,
+.static-page .table-wrap,
+.static-page .refund-explainer {
+  border-color: rgba(179,255,105,.20);
+  background: rgba(2, 43, 29, .70);
+}
+.static-page .step-num { color: #e3ff8d; background: rgba(87,153,39,.20); border-color: rgba(185,255,102,.38); }
+.static-page .rules-table thead th,
+.static-page .rules-table caption { color: #a8c6ae; }
+.static-page .rules-table tbody td { color: rgba(239,249,240,.72); }
+.static-page .static-footer { padding-bottom: 126px; }
+
+/* Compact APK-style social hub for the public website. */
+.web-social-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.web-social-card {
+  min-width: 0;
+  min-height: 255px;
+  display: grid;
+  grid-template-rows: 145px auto auto auto;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid rgba(179,255,105,.26);
+  border-radius: 20px;
+  color: #fff;
+  background: linear-gradient(155deg, rgba(20,83,47,.62), rgba(1,31,22,.82));
+  box-shadow: inset 0 0 24px rgba(255,255,255,.02), 0 8px 22px rgba(0,0,0,.20);
+  text-decoration: none;
+}
+.web-social-card:hover { border-color: #d4ff73; text-decoration: none; transform: translateY(-2px); }
+.web-social-card img { width: 145px; height: 145px; justify-self: center; object-fit: cover; border-radius: 24px; mix-blend-mode: screen; }
+.web-social-card strong { font-size: 20px; line-height: 1; }
+.web-social-card small { color: rgba(255,255,255,.62); line-height: 1.3; }
+.web-social-card span { color: #dfff9b; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.web-social-card.social-discord { border-color: rgba(175,145,255,.38); background: linear-gradient(155deg, rgba(61,43,98,.60), rgba(1,31,22,.82)); }
+.web-social-card.social-discord span { color: #c8b5ff; }
+.web-social-card.social-web { border-color: rgba(75,242,218,.34); }
+.web-social-card.social-web span { color: #72f7e7; }
+.web-social-card.social-support { border-color: rgba(255,220,95,.34); background: linear-gradient(155deg, rgba(92,67,17,.58), rgba(1,31,22,.82)); }
+.web-social-card.social-support span { color: #ffe275; }
+.social-safety { color: rgba(255,244,199,.78); background: rgba(48,38,9,.62); }
 
 @media (min-width: 900px) {
   .luckyme-final-app .app-shell { max-width: 1050px; }
@@ -1281,6 +1580,15 @@ body.wallet-modal-open { overflow: hidden; }
   .web-apk-intro h1 { font-size: 34px; }
   .web-apk-card { min-height: 198px; }
   .web-apk-status em { max-width: 190px; }
+  .static-page .static-content { padding-bottom: 112px; }
+  .static-page .how-hero,
+  .static-page .legal-main { padding: 20px 16px; border-radius: 18px; }
+  .static-page .static-footer { padding-bottom: 104px; }
+  .web-social-grid { gap: 9px; }
+  .web-social-card { min-height: 215px; grid-template-rows: 116px auto auto auto; padding: 9px; border-radius: 17px; }
+  .web-social-card img { width: 116px; height: 116px; border-radius: 20px; }
+  .web-social-card strong { font-size: 17px; }
+  .web-social-card small { font-size: 10px; }
 }
 
 /* bottom nav */
@@ -1403,10 +1711,11 @@ body.wallet-modal-open { overflow: hidden; }
 
 /* ---------------- /play/ desktop layout (full-width, sidebar nav) ---------------- */
 
-@media (min-width: 1024px) {
+@media (min-width: 800px) and (pointer: fine) {
   .app-body { --pad: clamp(28px, 3.5vw, 64px); }
 
-  .app-shell {
+  .app-shell,
+  .luckyme-final-app .app-shell {
     max-width: none;
     margin: 0 0 0 250px;
     padding: 0 var(--pad) 64px;
@@ -1524,7 +1833,370 @@ body.wallet-modal-open { overflow: hidden; }
   .navlinks a:not(.button):not(.nav-how) { display: none; }
   .facts-grid { grid-template-columns: 1fr; }
   .fact { min-height: 0; }
+  .luckyme-final-app .facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .luckyme-final-app .fact { min-height: 52px; padding: 8px 9px; }
+  .luckyme-final-app .pool-card {
+    background-position: center, calc(100% - 12px) 58px;
+    background-size: 100% 100%, 72px 72px;
+  }
+  .luckyme-final-app .pool-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(1,24,17,.02) 12%, rgba(1,28,20,.38) 29%, rgba(1,27,19,.94) 50%);
+  }
+  .luckyme-final-app .pool-card > * { position: relative; z-index: 1; }
   .how-grid, .how-screen .how-grid { grid-template-columns: 1fr; }
+  .activity-head { align-items: stretch; flex-direction: column; }
+  .activity-wallet { min-width: 0; text-align: left; }
+  .activity-tabs { gap: 4px; padding: 5px; }
+  .activity-tabs button { min-height: 40px; padding: 0 5px; font-size: 12px; }
+  .activity-row { align-items: flex-start; }
+  .activity-row.public-round { flex-direction: column; }
+  .activity-row.public-round > .activity-proof,
+  .activity-row.public-round > b { align-self: flex-end; }
+  .activity-empty { min-height: 250px; }
+  .how-pool-guide { gap: 7px; }
+  .how-pool-guide article { min-height: 78px; padding: 10px 12px; }
+  .how-pool-guide strong { font-size: 14px; }
+  .how-pool-guide b { font-size: 11px; }
+  .how-pool-guide small { font-size: 7.5px; }
+  .compact-how-steps { grid-template-columns: 1fr; }
+  .compact-how-steps li { min-height: 82px; }
   .how-cta { align-items: stretch; flex-direction: column; }
   .how-cta .button { width: 100%; }
+}
+
+/* ------------------------------------------------------------------
+   Desktop-first web application fit — approved direction 2026-07-18
+   Keeps every primary tab inside the browser viewport without page scroll.
+------------------------------------------------------------------- */
+
+.desktop-pool-summary { display: none; }
+.screen[hidden] { display: none !important; }
+
+.wallet-modal-connected {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid rgba(190, 255, 105, .32);
+  border-radius: 16px;
+  background: rgba(4, 57, 36, .72);
+}
+.wallet-modal-connected > div { min-width: 0; display: grid; gap: 4px; }
+.wallet-modal-connected .mono { overflow: hidden; color: #cbe0ce; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.wallet-disconnect-button { min-width: 132px; }
+
+@media (min-width: 800px) and (pointer: fine) {
+  html, body.app-body { height: 100%; overflow: hidden; }
+
+  .app-body { --desktop-sidebar: 218px; --desktop-pad: clamp(22px, 2.2vw, 42px); }
+
+  .app-shell,
+  .luckyme-final-app .app-shell {
+    width: auto;
+    height: 100dvh;
+    min-height: 0;
+    max-width: none;
+    margin: 0 0 0 var(--desktop-sidebar);
+    padding: 0 var(--desktop-pad) 14px;
+    display: grid;
+    grid-template-rows: 58px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .app-topbar {
+    position: relative;
+    min-height: 58px;
+    margin: 0 calc(var(--desktop-pad) * -1);
+    padding: 8px var(--desktop-pad);
+    justify-content: flex-end;
+    background: transparent !important;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  /* The sidebar owns the single desktop logo. */
+  .app-topbar .app-brand { display: none; }
+
+  .bottom-nav,
+  .luckyme-final-app .bottom-nav {
+    left: 0;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    width: var(--desktop-sidebar);
+    height: 100dvh;
+    max-width: none;
+    margin: 0;
+    padding: 15px 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 82px repeat(5, 52px);
+    align-items: stretch;
+    gap: 7px;
+    transform: none;
+    border: 0;
+    border-right: 1px solid rgba(180, 255, 103, .18);
+    border-radius: 0;
+    background: rgba(1, 35, 26, .58);
+    box-shadow: 10px 0 34px rgba(0, 0, 0, .22);
+    backdrop-filter: blur(20px) saturate(1.06);
+  }
+
+  .bottom-nav::before,
+  .luckyme-final-app .bottom-nav::before {
+    content: "";
+    display: block;
+    margin: 0 2px 7px;
+    border-bottom: 1px solid rgba(181, 255, 104, .16);
+    background: url("/assets/app-theme/home/luckyme-wordmark-v2.png") center / 184px auto no-repeat;
+  }
+
+  .nav-item {
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 11px;
+    padding: 0 13px;
+    border-radius: 13px;
+    font-size: 14px;
+  }
+
+  .luckyme-final-app .bottom-nav .nav-item img { width: 36px; height: 36px; }
+  .nav-item:hover,
+  .nav-item.active,
+  .nav-item.active:hover {
+    color: #f3ffc8 !important;
+    border-color: rgba(196, 255, 104, .46) !important;
+    background: rgba(69, 157, 56, .24) !important;
+    box-shadow: inset 0 0 0 1px rgba(184, 255, 103, .18), 0 0 18px rgba(96, 226, 83, .14) !important;
+  }
+
+  .app-shell > main { min-width: 0; min-height: 0; padding-top: 10px; overflow: hidden; }
+  .screen {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    gap: 11px;
+    align-content: start;
+    overflow: hidden;
+  }
+
+  .screen-head { min-height: 52px; }
+  .screen-head h2 { font-size: 30px; }
+
+  /* Four APK-style entrances, 2 x 2, instead of long desktop columns. */
+  .pool-screen { grid-template-rows: 48px 18px minmax(0, 1fr); }
+  .pool-screen > .soft { font-size: 13px; line-height: 1.3; }
+  #pool-list {
+    width: min(100%, 1320px);
+    height: 100%;
+    min-height: 0;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+  }
+
+  #pool-list .pool-card {
+    grid-row: auto !important;
+    min-height: 0;
+    height: 100%;
+    display: flex !important;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 11px 14px;
+    cursor: pointer;
+    background-position: center, calc(100% - 20px) 50%;
+    background-size: 100% 100%, clamp(92px, 9vw, 138px) clamp(92px, 9vw, 138px);
+  }
+  #pool-list .pool-card:hover { transform: translateY(-2px); }
+  #pool-list .pool-title { align-items: center; }
+  #pool-list .pool-title > div { display: block; min-height: 0; }
+  #pool-list .pool-title h3 { font-size: 20px; }
+  #pool-list .entry { font-size: 29px; }
+  #pool-list .pool-jackpot-fomo {
+    position: absolute;
+    top: 64px;
+    right: clamp(112px, 10vw, 150px);
+    z-index: 2;
+    min-height: 29px;
+    gap: 8px;
+    padding: 5px 10px;
+  }
+  #pool-list .pool-jackpot-fomo span { font-size: 8px; }
+  #pool-list .pool-jackpot-fomo strong { font-size: 12px; }
+  #pool-list .minimum-target { gap: 5px; padding: 8px 11px; max-width: 74%; }
+  #pool-list .minimum-target,
+  #pool-list .minimum-target.warning {
+    border-color: rgba(181, 255, 110, .27);
+    background: rgba(1, 29, 21, .76);
+    box-shadow: inset 0 0 22px rgba(104, 209, 75, .04);
+  }
+  #pool-list .minimum-target.warning .minimum-progress > span {
+    background: linear-gradient(90deg, var(--purple), var(--cyan), var(--emerald));
+  }
+  #pool-list .minimum-clarification { display: none; }
+  #pool-list .minimum-progress { height: 10px; }
+  #pool-list .minimum-message { font-size: 11px !important; }
+  #pool-list .facts-grid,
+  #pool-list .pool-card-footer { display: none; }
+
+  #pool-list .desktop-pool-summary {
+    width: 72%;
+    display: grid;
+    grid-template-columns: .8fr .8fr 1.4fr;
+    gap: 6px;
+    margin-top: auto;
+  }
+  .desktop-pool-summary > span {
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+    padding: 6px 8px;
+    border: 1px solid rgba(180, 255, 104, .15);
+    border-radius: 10px;
+    background: rgba(1, 30, 22, .70);
+  }
+  .desktop-pool-summary small { color: #93ac9b; font-size: 8px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+  .desktop-pool-summary strong { overflow: hidden; color: #f1ffc9; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Home, Activity, How To and Social remain inside the viewport. */
+  .web-apk-home { grid-template-rows: minmax(112px, auto) minmax(0, 1fr); gap: 10px; }
+  .web-apk-intro { width: min(100%, 1200px); margin: 0 auto; padding-top: 0; gap: 5px; }
+  .web-apk-intro h1 { font-size: clamp(30px, 2.7vw, 43px); line-height: .96; }
+  .web-apk-intro p:last-child { max-width: 760px; font-size: 14px; line-height: 1.35; }
+  .web-apk-grid {
+    width: min(100%, 1200px);
+    height: 100%;
+    min-height: 0;
+    margin: 0 auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+  }
+  .web-apk-card { min-height: 0; height: 100%; padding-bottom: 13px; border-radius: 20px; }
+  .web-apk-card img { width: min(62%, 176px); height: min(62%, 176px); top: 43%; }
+  .web-apk-card strong { font-size: clamp(17px, 1.6vw, 23px); }
+  .web-apk-card small { font-size: 10px; }
+  .web-apk-status { display: none; }
+
+  .activity-page { max-width: none; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+  .activity-head h2 { font-size: 34px; }
+  .activity-summary > span { min-height: 56px; }
+  .activity-tabs button { min-height: 38px; }
+  .activity-list { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .activity-empty { min-height: 0; height: 100%; }
+  .activity-row { min-height: 70px; padding: 9px 12px; }
+
+  .how-screen { grid-template-rows: auto auto auto auto auto; }
+  .how-pool-guide { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .how-pool-guide article { min-height: 72px; padding: 9px 12px; }
+  .compact-how-steps li { min-height: 82px; padding: 8px 10px; }
+  .compact-how-note { padding: 9px 12px; }
+
+  .web-social-grid {
+    height: min(100%, 620px);
+    min-height: 0;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+  .web-social-card,
+  .web-social-card.social-x,
+  .web-social-card.social-discord,
+  .web-social-card.social-web,
+  .web-social-card.social-support {
+    min-height: 0;
+    grid-template-rows: minmax(88px, 1fr) auto auto auto;
+    border-color: rgba(179, 255, 105, .26) !important;
+    background: linear-gradient(155deg, rgba(20, 83, 47, .62), rgba(1, 31, 22, .82)) !important;
+  }
+  .web-social-card img {
+    width: 132px;
+    height: 132px;
+    object-fit: contain;
+    border-radius: 0;
+    mix-blend-mode: normal;
+  }
+  .web-social-card span,
+  .web-social-card.social-discord span,
+  .web-social-card.social-web span,
+  .web-social-card.social-support span { color: #dfff9b; }
+  .web-social-card:hover,
+  .web-social-card.social-x:hover,
+  .web-social-card.social-discord:hover,
+  .web-social-card.social-web:hover,
+  .web-social-card.social-support:hover {
+    border-color: #d4ff73 !important;
+    background: linear-gradient(155deg, rgba(36, 114, 57, .72), rgba(2, 43, 29, .88)) !important;
+    box-shadow: 0 12px 30px rgba(76, 226, 88, .17), inset 0 0 26px rgba(180, 255, 105, .05) !important;
+  }
+
+  .wallet-screen { grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
+  .wallet-grid { min-height: 0; align-content: start; }
+  .wallet-modal { max-height: min(760px, calc(100dvh - 44px)); }
+
+  .screen[data-screen="review"] { grid-template-rows: auto minmax(0, 1fr); }
+  .screen[data-screen="review"] .review-panel { min-height: 0; overflow: auto; scrollbar-width: thin; }
+}
+
+/* ------------------------------------------------------------------
+   Desktop floating shell v7 — no solid top or side rails.
+   Navigation and status controls float directly over the shared artwork.
+------------------------------------------------------------------- */
+
+@media (min-width: 800px) and (pointer: fine) {
+  .luckyme-final-app .app-topbar,
+  .app-topbar {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .luckyme-final-app .bottom-nav,
+  .bottom-nav {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .luckyme-final-app .bottom-nav::before,
+  .bottom-nav::before {
+    border: 0 !important;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .42));
+  }
+
+  .luckyme-final-app .bottom-nav .nav-item,
+  .bottom-nav .nav-item,
+  .luckyme-final-app .bottom-nav .nav-item:hover,
+  .bottom-nav .nav-item:hover,
+  .luckyme-final-app .bottom-nav .nav-item.active,
+  .bottom-nav .nav-item.active,
+  .luckyme-final-app .bottom-nav .nav-item.active:hover,
+  .bottom-nav .nav-item.active:hover {
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .luckyme-final-app .bottom-nav .nav-item:hover,
+  .bottom-nav .nav-item:hover { transform: translateX(3px); }
+
+  .luckyme-final-app .bottom-nav .nav-item:hover img,
+  .bottom-nav .nav-item:hover img,
+  .luckyme-final-app .bottom-nav .nav-item.active img,
+  .bottom-nav .nav-item.active img {
+    filter: drop-shadow(0 0 12px rgba(183, 255, 103, .55)) drop-shadow(0 6px 10px rgba(0, 0, 0, .42));
+  }
+
+  .luckyme-final-app .bottom-nav .nav-item.active,
+  .bottom-nav .nav-item.active { color: #ffe77e !important; }
 }

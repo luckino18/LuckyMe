@@ -1,0 +1,35 @@
+[Unit]
+Description=LuckyMe protected Admin cNFT preparation API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luckyme
+Group=luckyme
+WorkingDirectory=/opt/luckyme
+Environment=LUCKYME_ADMIN_CNFT_HOST=127.0.0.1
+Environment=LUCKYME_ADMIN_CNFT_PORT=8792
+Environment=LUCKYME_ADMIN_CNFT_EXECUTION_ENABLED=false
+Environment=LUCKYME_ADMIN_SKR_REGISTRY_PATH=/var/lib/luckyme/admin-skr-registry.json
+EnvironmentFile=-/etc/luckyme/admin-cnft.env
+StateDirectory=luckyme
+StateDirectoryMode=0750
+ReadWritePaths=/var/lib/luckyme
+ExecStart=/usr/bin/node /opt/luckyme/scripts/admin-cnft-server.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

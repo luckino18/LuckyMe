@@ -10,143 +10,53 @@
     />
     <link rel="icon" type="image/png" href="/assets/brand/favicon.png" />
     <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/styles.css?v=20260712-pool-walletconnect-fix2" />
+    <link rel="stylesheet" href="/styles.css?v=20260718-site-final-polish-v4" />
   </head>
-  <body>
-    <header class="site-nav">
-      <a class="brand" href="/" aria-label="LuckyMe home">
-        <img src="/assets/brand/luckyme-mark-small.webp" alt="" aria-hidden="true" />
-        <span>LuckyMe</span>
+  <body class="luckyme-apk-site static-page">
+    <header class="apk-site-topbar">
+      <a class="apk-site-logo" href="/" aria-label="LuckyMe home">
+        <img src="/assets/app-theme/home/luckyme-wordmark-v2.png" alt="LuckyMe" />
       </a>
-      <nav class="navlinks" aria-label="Main navigation">
-        <a class="nav-how" aria-current="page" href="/how-to-play/">How to Play</a>
-        <a href="/support/">Support</a>
-        <a class="button" href="/play/">Play</a>
-      </nav>
+      <div class="apk-site-top-actions">
+        <span class="apk-mainnet"><i></i>Mainnet</span>
+        <a class="apk-wallet-link" href="/play/?screen=pools">Play</a>
+      </div>
     </header>
 
-    <main class="how-main">
-      <header class="how-hero">
-        <p class="eyebrow">The rules in a few minutes</p>
-        <h1>How to Play LuckyMe</h1>
-        <p class="lead">
-          Choose a pool, buy tickets, and help the round reach its total-ticket
-          target. The first confirmed ticket starts a one-hour clock.
-        </p>
-        <div class="chip-row" aria-label="Key rules">
-          <span class="chip">Equal chance per ticket</span>
-          <span class="chip">1 hour from first ticket</span>
-          <span class="chip">Automatic refunds</span>
+    <main class="how-main static-content compact-guide-page">
+      <header class="screen-head compact-how-head">
+        <div>
+          <p class="eyebrow">LuckyMe guide</p>
+          <h1>How to Play</h1>
+          <p>Everything needed for the four public Solana pools, on one page.</p>
         </div>
+        <span class="how-mainnet-badge">Mainnet</span>
       </header>
 
-      <section aria-labelledby="steps-title">
-        <div class="screen-head">
-          <div>
-            <span class="label">Step by step</span>
-            <h2 id="steps-title">From wallet connection to result</h2>
-          </div>
-        </div>
-        <ol class="how-grid">
-          <li class="step-card">
-            <span class="step-num">1</span>
-            <h3>Choose a pool</h3>
-            <p>Pick Mini, Normal, High, or Premium. Each pool has a fixed ticket price and target.</p>
-          </li>
-          <li class="step-card">
-            <span class="step-num">2</span>
-            <h3>Connect your wallet</h3>
-            <p>You remain in control of your wallet. LuckyMe never asks for your seed phrase or private key.</p>
-          </li>
-          <li class="step-card">
-            <span class="step-num">3</span>
-            <h3>Buy tickets</h3>
-            <p>Every ticket has an equal chance. More tickets mean a greater chance, within the pool limit.</p>
-          </li>
-          <li class="step-card">
-            <span class="step-num">4</span>
-            <h3>One temporary rent deposit</h3>
-            <p>Your wallet pays one small refundable rent deposit for its entry in the round, regardless of how many tickets it buys at once. It returns automatically when the entry closes.</p>
-          </li>
-          <li class="step-card">
-            <span class="step-num">5</span>
-            <h3>The first ticket starts the clock</h3>
-            <p>The round lasts one hour from the first confirmed ticket, not from when the empty round appears.</p>
-          </li>
-          <li class="step-card">
-            <span class="step-num">6</span>
-            <h3>Reach the ticket target</h3>
-            <p>Mini needs 25 total tickets, Normal 13, High 3, and Premium 3.</p>
-          </li>
-          <li class="step-card">
-            <span class="step-num">7</span>
-            <h3>Valid draw</h3>
-            <p>If the target is reached, the winner or winners are selected after the one-hour round ends.</p>
-          </li>
-        </ol>
+      <section class="how-pool-guide" aria-label="Pool rules">
+        <article class="how-pool-mini"><span><strong>Mini</strong><b>0.005 SOL</b><small>25 tickets · 1 winner</small></span></article>
+        <article class="how-pool-normal"><span><strong>Normal</strong><b>0.01 SOL</b><small>13 tickets · 1 winner</small></span></article>
+        <article class="how-pool-high"><span><strong>High</strong><b>0.05 SOL</b><small>3 tickets · 1 winner</small></span></article>
+        <article class="how-pool-premium"><span><strong>Premium</strong><b>0.1 SOL</b><small>3 wallets · 3 winners</small></span></article>
       </section>
 
-      <section class="refund-explainer" aria-labelledby="refund-title">
-        <strong id="refund-title">What comes back automatically</strong>
-        <p>If the target is missed, no winner is drawn. Your ticket money and refundable rent deposit return automatically.</p>
-        <p>If the target is reached and another player wins, your ticket stays in the prize pool, but your rent deposit still returns automatically when your entry closes.</p>
-        <p>No claim button is required. Solana network fees are not refundable.</p>
+      <ol class="compact-how-steps" aria-label="How to play LuckyMe">
+        <li><span>1</span><div><strong>Choose and buy</strong><p>Connect your wallet, choose tickets, and approve only inside your wallet. One refundable rent deposit covers that wallet entry, regardless of how many tickets it buys at once.</p></div></li>
+        <li><span>2</span><div><strong>First ticket starts the timer</strong><p>The one-hour countdown begins only after the first confirmed ticket.</p></div></li>
+        <li><span>3</span><div><strong>Target reached</strong><p>After the timer, a valid round uses verifiable Solana randomness to select the winner or winners.</p></div></li>
+        <li><span>4</span><div><strong>Target missed</strong><p>No winner is drawn. 100% of the ticket purchase amount and entry rent return automatically; Solana network fees do not.</p></div></li>
+      </ol>
+
+      <section class="compact-how-note">
+        <strong>Total tickets, not total players</strong>
+        <p>Mini needs 25 tickets sold in total, not 25 different players. Normal and High use the same total-ticket rule. Premium is different: one ticket per wallet, three distinct wallets, and three winners split 70% / 20% / 10%.</p>
+        <p>No claim button is required. If another player wins a valid round, your rent deposit still returns automatically.</p>
       </section>
 
-      <section class="panel clarification-panel" aria-labelledby="clarification-title">
-        <span class="label">Important clarification</span>
-        <h2 id="clarification-title">The target counts tickets, not players</h2>
-        <p>
-          Mini needs 25 tickets sold in total, not 25 different players. One
-          wallet may buy all 25 Mini tickets in one entry. The same
-          total-ticket rule applies to Normal and High.
-        </p>
-        <p>
-          Premium is the exception: it allows one ticket per wallet and needs
-          three distinct wallets. Its three winners share the main prize 70% /
-          20% / 10%.
-        </p>
-      </section>
-
-      <section aria-labelledby="pool-table-title">
-        <div class="screen-head">
-          <div>
-            <span class="label">Pool guide</span>
-            <h2 id="pool-table-title">Prices, targets, and limits</h2>
-          </div>
-        </div>
-        <div class="table-wrap" tabindex="0" aria-label="Scrollable LuckyMe pool rules table">
-          <table class="rules-table">
-            <caption>LuckyMe pool rules</caption>
-            <thead>
-              <tr>
-                <th scope="col">Pool</th>
-                <th scope="col">Ticket price</th>
-                <th scope="col">Target: total tickets</th>
-                <th scope="col">Winners</th>
-                <th scope="col">Limit per wallet</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><th scope="row">Mini</th><td>0.005 SOL</td><td>25</td><td>1</td><td>1,000 tickets</td></tr>
-              <tr><th scope="row">Normal</th><td>0.01 SOL</td><td>13</td><td>1</td><td>1,000 tickets</td></tr>
-              <tr><th scope="row">High</th><td>0.05 SOL</td><td>3</td><td>1</td><td>1,000 tickets</td></tr>
-              <tr><th scope="row">Premium</th><td>0.1 SOL</td><td>3</td><td>3</td><td>1 ticket</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel how-cta">
-        <div>
-          <h2>Ready to choose a pool?</h2>
-          <p>Check the live sold / target counter before reviewing your purchase.</p>
-        </div>
-        <a class="button" href="/play/">View live pools</a>
-      </section>
+      <a class="button" href="/play/?screen=pools">View live pools</a>
     </main>
 
-    <footer class="footer">
+    <footer class="footer static-footer">
       <span>LuckyMe · Solana mainnet</span>
       <span>
         <a href="/play/">Play</a>
@@ -156,5 +66,12 @@
         <a href="https://x.com/LuckyMeSolana" target="_blank" rel="noopener noreferrer">X</a>
       </span>
     </footer>
+    <nav class="apk-site-bottom" aria-label="Website navigation">
+      <a href="/"><img src="/assets/app-theme/navigation/home-v1.png" alt="" /><span>Home</span></a>
+      <a href="/play/?screen=pools"><img src="/assets/app-theme/navigation/pools-v1.png" alt="" /><span>Pools</span></a>
+      <a href="/play/?screen=activity"><img src="/assets/app-theme/navigation/activity-v1.png" alt="" /><span>Activity</span></a>
+      <a class="active" href="/how-to-play/"><img src="/assets/app-theme/navigation/how-to-v1.png" alt="" /><span>How To</span></a>
+      <a href="/play/?screen=social"><img src="/assets/app-theme/navigation/social-v1.png" alt="" /><span>Social</span></a>
+    </nav>
   </body>
 </html>

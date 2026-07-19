@@ -152,6 +152,7 @@ test("site and How to Play keep targets, refund wording, and wallet modal consis
   const play = fs.readFileSync("site/lucky-me.app/play/index.html", "utf8");
   const guide = fs.readFileSync("site/lucky-me.app/how-to-play/index.html", "utf8");
   const landing = fs.readFileSync("site/lucky-me.app/index.html", "utf8");
+  const styles = fs.readFileSync("site/lucky-me.app/styles.css", "utf8");
   const combined = `${app}\n${play}\n${guide}\n${landing}`;
 
   assert.match(app, /minimumTickets:\s*25/);
@@ -167,11 +168,21 @@ test("site and How to Play keep targets, refund wording, and wallet modal consis
   assert.match(guide, /regardless of how many tickets it buys at once/);
   assert.match(guide, /your rent deposit still returns automatically/);
   assert.doesNotMatch(combined, /25 players/i);
-  assert.match(guide, /Mini<\/th><td>0\.005 SOL<\/td><td>25/);
-  assert.match(guide, /Normal<\/th><td>0\.01 SOL<\/td><td>13/);
-  assert.match(guide, /Premium<\/th><td>0\.1 SOL<\/td><td>3<\/td><td>3/);
+  assert.match(guide, /<strong>Mini<\/strong><b>0\.005 SOL<\/b><small>25 tickets · 1 winner/);
+  assert.match(guide, /<strong>Normal<\/strong><b>0\.01 SOL<\/b><small>13 tickets · 1 winner/);
+  assert.match(guide, /<strong>Premium<\/strong><b>0\.1 SOL<\/b><small>3 wallets · 3 winners/);
+  assert.match(play, /data-activity-tab="active"/);
+  assert.match(play, /data-activity-tab="history"/);
+  assert.match(play, /data-activity-tab="all-rounds"/);
+  assert.match(combined, /pools-medallion-v2\.png/);
+  assert.match(combined, /latest-winners-medallion-v2\.png/);
   assert.match(play, /id="wallet-modal"/);
   assert.match(play, /data-action="open-wallet-modal"/);
+  assert.match(app, /wallet-modal-connected/);
+  assert.match(app, /wallet-disconnect-button/);
+  assert.match(app, /data-action="disconnect"/);
+  assert.match(app, /async function disconnectWallet\(\)[\s\S]*?closeWalletModal\(\);[\s\S]*?await clearConnectedWallet\(\);/);
+  assert.match(app, /Promise\.race\(\[[\s\S]*?disconnectPromise[\s\S]*?1_500/);
   assert.match(play, /data-route="how"/);
   assert.match(landing, /href="\/how-to-play\/"/);
   assert.match(app, /setInterval\(\(\) => \{[\s\S]*void loadPools\(\);[\s\S]*12_000/);
@@ -179,6 +190,33 @@ test("site and How to Play keep targets, refund wording, and wallet modal consis
   assert.match(app, /expectedRoundId/);
   assert.match(app, /expectedTotalTickets/);
   assert.match(app, /payload\.summary\?\.totalTicketsBefore/);
+  assert.match(app, /round\.settlementSignature/);
+  assert.match(app, /https:\/\/solscan\.io\/tx\//);
+  assert.match(app, /Verify on Solscan/);
+  assert.match(app, /class="pool-jackpot-fomo"/);
+  assert.match(app, /Live jackpot/);
+  assert.match(styles, /\.pool-jackpot-fomo \{[\s\S]*?rgba\(255, 220, 91, \.62\)/);
+  assert.match(play, /x-clean-v5\.png/);
+  assert.match(play, /discord-clean-v4\.png/);
+  assert.match(play, /website-clean-v4\.png/);
+  assert.match(play, /support-clean-v4\.png/);
+  assert.doesNotMatch(landing, /The website contains the four public LuckyMe pools/);
+  assert.doesNotMatch(`${play}\n${guide}`, /<article><img src="\/assets\/app-theme\/pools\//);
+  assert.match(app, /WALLETCONNECT_ICON/);
+  assert.match(app, /phantom\.com\/_web_platform_assets\/favicon\.svg/);
+  assert.match(app, /solflare-web-2024\/static\/ui\/favicon\/favicon\.svg/);
+  assert.match(app, /backpack\.app\/favicon\.ico/);
+  assert.match(app, /purchase-confirmation/);
+  assert.match(styles, /body \{[\s\S]*?user-select: none;/);
+  assert.match(styles, /\.screen\[hidden\] \{ display: none !important; \}/);
+  assert.match(styles, /\.web-apk-status \{ display: none; \}/);
+  assert.match(styles, /\.luckyme-final-app \.app-shell \{[\s\S]*?max-width: none;/);
+  assert.match(styles, /#pool-list \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*?grid-template-rows: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /\.web-apk-grid \{[\s\S]*?grid-template-rows: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /@media \(min-width: 800px\) and \(pointer: fine\)/);
+  assert.match(styles, /#pool-list \.desktop-pool-summary \{[\s\S]*?margin-top: auto;/);
+  assert.match(styles, /\.web-social-card\.social-support \{[\s\S]*?background: linear-gradient\(155deg, rgba\(20, 83, 47, \.62\), rgba\(1, 31, 22, \.82\)\) !important;/);
+  assert.doesNotMatch(`${play}\n${guide}\n${landing}`, /cNFT/);
 });
 
 test("web purchase supports visible multi-ticket presets and wallet-compatible send options", () => {

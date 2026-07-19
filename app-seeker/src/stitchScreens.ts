@@ -1108,7 +1108,7 @@ function page(
     .activity-page-v2 .activity-summary { padding: 7px; }
     .activity-switcher {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 5px;
       padding: 5px;
       border: 1px solid rgba(163,255,111,.28);
@@ -1122,7 +1122,7 @@ function page(
       border-radius: 10px;
       background: transparent;
       color: rgba(255,255,255,.58);
-      font-size: 11px;
+      font-size: 9.5px;
       font-weight: 900;
       letter-spacing: .04em;
     }
@@ -1173,6 +1173,14 @@ function page(
     .activity-compact-state span { max-width: 62px; color: rgba(255,255,255,.48); font-size: 7px; line-height: 1.15; }
     .activity-history-row { min-height: 62px; grid-template-columns: 42px minmax(0, 1fr) auto; }
     .activity-history-row .activity-compact-icon { width: 42px; height: 42px; }
+    .activity-public-view { max-height: 372px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+    .activity-public-row { min-height: 72px; grid-template-columns: 42px minmax(0, 1fr) auto; }
+    .activity-public-row .activity-compact-icon { width: 42px; height: 42px; }
+    .activity-public-winners { display: grid; gap: 2px; }
+    .activity-public-winner { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; color: rgba(255,255,255,.72); font-size: 8px; line-height: 1.2; }
+    .activity-public-winner strong { color: #fff18a; font-size: 8.5px; }
+    .activity-public-proof { display: inline-flex; align-items: center; gap: 3px; color: #b9ffae !important; }
+    .activity-public-proof svg { width: 10px; height: 10px; }
     .activity-result-won { color: #fff18a !important; }
     .activity-result-refund { color: #8fffd1 !important; }
     .activity-empty {
@@ -1503,6 +1511,67 @@ function page(
     .pool-process-trust svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--accent); }
     .pool-process-page > .primary-button, .pool-process-page > .secondary-button { min-height: 50px; }
     .pool-process-page > .primary-button { background: linear-gradient(135deg, #a8ff62, #32d89a); color: #062117; box-shadow: 0 8px 25px rgba(104,255,87,.23); }
+
+    .mainnet-loading-page { display: grid; gap: 11px; }
+    .mainnet-loading-card {
+      position: relative;
+      isolation: isolate;
+      min-height: min(560px, calc(100dvh - 194px));
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      gap: 15px;
+      overflow: hidden;
+      padding: 28px 18px;
+      border: 1px solid rgba(142,255,109,.34);
+      border-radius: 22px;
+      background: linear-gradient(160deg, rgba(17,83,44,.70), rgba(2,34,24,.90));
+      box-shadow: inset 0 0 0 5px rgba(110,255,90,.06), 0 14px 35px rgba(0,0,0,.30);
+      text-align: center;
+    }
+    .mainnet-loading-card::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: 7px;
+      border: 1px solid rgba(163,255,126,.25);
+      border-radius: 17px;
+      pointer-events: none;
+    }
+    .mainnet-loading-art {
+      width: min(48vw, 190px);
+      height: min(48vw, 190px);
+      object-fit: contain;
+      filter: drop-shadow(0 10px 22px rgba(0,0,0,.50));
+    }
+    .mainnet-loading-copy { display: grid; justify-items: center; gap: 8px; max-width: 340px; text-shadow: 0 2px 8px rgba(0,0,0,.82); }
+    .mainnet-loading-copy h1 { font-size: 30px; }
+    .mainnet-loading-copy p { color: rgba(255,255,255,.70); font-size: 13px; }
+    .mainnet-loading-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 10px 14px;
+      border: 1px solid rgba(151,255,112,.24);
+      border-radius: 999px;
+      background: rgba(1,31,21,.65);
+      color: #d8ffbf;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .075em;
+      text-transform: uppercase;
+    }
+    .mainnet-loading-status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #9dff6b;
+      box-shadow: 0 0 12px rgba(157,255,107,.82);
+    }
+    .mainnet-loading-note { display: flex; align-items: center; gap: 8px; max-width: 330px; color: rgba(255,255,255,.55); font-size: 9px; line-height: 1.35; }
+    .mainnet-loading-note svg { width: 17px; height: 17px; flex: 0 0 auto; color: #a7ff78; }
+    .mainnet-loading-page > .secondary-button { min-height: 48px; }
 
     .pool-card {
       position: relative;
@@ -2799,7 +2868,18 @@ function activityBody(options: StitchRenderOptions = {}) {
     const bTime = b.round.archivedAt ? new Date(b.round.archivedAt).getTime() : numberValue(b.round.endTs) * 1_000;
     return bTime - aTime;
   });
-  const activeTicketTotal = activeEntries.reduce((total, entry) => total + entry.tickets, 0);
+  const publicRounds = POOLS.flatMap((pool) => {
+    const live = livePool(pool.id, options);
+    return (live?.recentRounds ?? []).flatMap((round) => {
+      const settled = round.settled || round.status === "settled" || round.roundOutcome === "settled";
+      const refunded = round.refundStatus === "completed" || round.roundOutcome === "cancelled_below_minimum";
+      return settled || refunded ? [{ pool, live, round, settled, refunded }] : [];
+    });
+  }).sort((a, b) => {
+    const aTime = a.round.archivedAt ? new Date(a.round.archivedAt).getTime() : numberValue(a.round.endTs) * 1_000;
+    const bTime = b.round.archivedAt ? new Date(b.round.archivedAt).getTime() : numberValue(b.round.endTs) * 1_000;
+    return bTime - aTime || numberValue(b.round.roundId ?? b.round.id) - numberValue(a.round.roundId ?? a.round.id);
+  });
   const walletLabel = options.walletAddress ? shortAddress(options.walletAddress) : "Wallet not connected";
   const activeRows = activeEntries.slice(0, 4).map(({ pool, live, round, tickets }) => {
     const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
@@ -2827,6 +2907,29 @@ function activityBody(options: StitchRenderOptions = {}) {
       <span class="activity-compact-state"><strong class="${resultClass}">${escapeHtml(result)}</strong><span>On-chain</span></span>
     </article>`;
   }).join("\n      ");
+  const publicRoundRows = publicRounds.map(({ pool, live, round, refunded }) => {
+    const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
+    const solscanUrl = settlementSolscanUrl(round);
+    const winners = (round.winners ?? []).filter((winner) => String(winner.wallet ?? winner.winner ?? ""));
+    const winnerRows = winners.map((winner, index) => {
+      const wallet = String(winner.wallet ?? winner.winner ?? "");
+      return String.raw`<span class="activity-public-winner"><span>#${escapeHtml(winner.rank ?? index + 1)} ${escapeHtml(shortAddress(wallet))}</span><strong>${escapeHtml(winnerPrizeSol(winner, live, round))} SOL</strong></span>`;
+    }).join("");
+    const tag = solscanUrl ? "button" : "article";
+    const route = solscanUrl
+      ? ` type="button" data-route="external" data-url="${escapeHtml(solscanUrl)}" aria-label="Verify ${escapeHtml(pool.name)} round ${escapeHtml(round.roundId ?? round.id ?? "-")} on Solscan"`
+      : "";
+    const state = refunded && winners.length === 0 ? "Refunded" : "Settled";
+    return String.raw`<${tag} class="activity-compact-row activity-public-row tone-${pool.tone}"${route}>
+      ${poolIcon ? `<img class="activity-compact-icon" src="${escapeHtml(poolIcon)}" alt="" />` : `<span></span>`}
+      <span class="activity-compact-copy">
+        <span class="activity-compact-title"><strong>${pool.name}</strong><small>Round #${escapeHtml(round.roundId ?? round.id ?? "-")}</small></span>
+        <span class="activity-public-winners">${winnerRows || `<span class="activity-public-winner"><span>No winner</span><strong>Automatic refund</strong></span>`}</span>
+        <span class="activity-compact-sub">${escapeHtml(activityDate(round))} · ${escapeHtml(numberValue(round.totalTickets))} tickets · ${escapeHtml(numberValue(round.entrantCount))} players</span>
+      </span>
+      <span class="activity-compact-state"><strong>${state}</strong><span class="${solscanUrl ? "activity-public-proof" : ""}">${solscanUrl ? `${ICONS.external} Solscan` : "On-chain"}</span></span>
+    </${tag}>`;
+  }).join("\n      ");
   const emptyState = (title: string, copy: string) => String.raw`<div class="activity-empty">
     ${activityIcon ? `<img src="${escapeHtml(activityIcon)}" alt="" />` : ICONS.activity}
     <h2>${escapeHtml(title)}</h2><p>${escapeHtml(copy)}</p>
@@ -2835,23 +2938,27 @@ function activityBody(options: StitchRenderOptions = {}) {
 
   return String.raw`<main class="activity-page activity-page-v2">
   <section class="activity-hero">
-    <span class="activity-hero-copy"><span class="eyebrow">Your wallet</span><h1>Activity</h1><p>Only your entries and results.</p></span>
+    <span class="activity-hero-copy"><span class="eyebrow">Live and transparent</span><h1>Activity</h1><p>Your entries plus public round history.</p></span>
     <span class="activity-wallet-state"><span>Wallet</span><strong class="mono">${escapeHtml(walletLabel)}</strong></span>
   </section>
   <section class="activity-summary" aria-label="Activity summary">
-    <span class="activity-summary-item"><span>Active entries</span><strong>${activeEntries.length}</strong></span>
-    <span class="activity-summary-item"><span>Live tickets</span><strong>${activeTicketTotal}</strong></span>
-    <span class="activity-summary-item"><span>Results</span><strong>${historyEntries.length}</strong></span>
+    <span class="activity-summary-item"><span>My active</span><strong>${activeEntries.length}</strong></span>
+    <span class="activity-summary-item"><span>My results</span><strong>${historyEntries.length}</strong></span>
+    <span class="activity-summary-item"><span>All rounds</span><strong>${publicRounds.length}</strong></span>
   </section>
   <section class="activity-switcher" aria-label="Activity view">
     <button type="button" class="activity-switch" data-activity-tab="active" aria-selected="true">Active</button>
-    <button type="button" class="activity-switch" data-activity-tab="history" aria-selected="false">History</button>
+    <button type="button" class="activity-switch" data-activity-tab="history" aria-selected="false">My History</button>
+    <button type="button" class="activity-switch" data-activity-tab="all-rounds" aria-selected="false">All Rounds</button>
   </section>
   <section class="activity-view" data-activity-view="active">
     ${activeRows || emptyState("No active entries", options.walletAddress ? "This wallet has no ticket in a live round." : "Connect your wallet to load its live entries.")}
   </section>
   <section class="activity-view" data-activity-view="history" hidden>
     ${historyRows || emptyState("No history yet", options.walletAddress ? "Completed rounds and automatic refunds will appear here." : "Connect your wallet to load its verified results.")}
+  </section>
+  <section class="activity-view activity-public-view" data-activity-view="all-rounds" hidden>
+    ${publicRoundRows || emptyState("No public rounds yet", "Completed rounds from all four pools will appear here for everyone.")}
   </section>
   <section class="activity-safety-note">${ICONS.shield}<span>Refunds are automatic when a round expires below target. Network fees are not refundable.</span></section>
 </main>`;
@@ -3357,6 +3464,8 @@ function syncingBody(options: StitchRenderOptions = {}) {
     ? "Preparing transaction"
     : tx.state === "confirming"
       ? "Confirming on Solana"
+      : tx.state === "confirmed"
+        ? "Entry confirmed"
       : tx.state === "error"
         ? "Request not submitted"
         : "Waiting for wallet approval";
@@ -3406,70 +3515,30 @@ function syncingBody(options: StitchRenderOptions = {}) {
 
 function successBody(options: StitchRenderOptions = {}) {
   const tx = options.transaction;
-  return String.raw`<main class="stack">
-  <section class="section-header">
-    <div>
-      <span class="label">Status</span>
-      <h2>${tx?.signature ? "Entry sent" : "Entry status"}</h2>
-    </div>
-    <span class="status-pill emerald">Confirmed</span>
-  </section>
-  <p style="margin-top: -4px;">Pool state refreshes from confirmed chain data after wallet approval.</p>
-  <section class="panel glow-amber">
-    <div class="row">
-      <div>
-        <span class="label">Confirmation</span>
-        <h2>${tx?.signature ? escapeHtml(shortAddress(tx.signature)) : "Confirmed"}</h2>
-        <p class="muted" style="margin-top: 4px;">Open Activity to verify tickets and round state.</p>
-      </div>
-    </div>
-  </section>
-  <button class="primary-button" data-route="activity">Done</button>
-</main>`;
+  return syncingBody({
+    ...options,
+    transaction: {
+      state: "confirmed",
+      message: tx?.message ?? "Your ticket entry is confirmed. Open Activity to follow the live round.",
+      signature: tx?.signature,
+    },
+  });
 }
 
-function unavailableBody() {
-  return String.raw`<main class="stack">
-  <section class="hero-card">
-    <img class="hero-art small" src="${LOGO_HERO}" alt="LuckyMe" />
-    <div class="hero-copy">
-      <div class="row">
-        <span class="label">Solana mainnet status</span>
-        <span class="status-pill amber">Syncing</span>
-      </div>
-      <h1>Waiting for verified chain state</h1>
-      <p>LuckyMe only displays pools after the production program and backend state are confirmed.</p>
+function unavailableBody(options: StitchRenderOptions = {}) {
+  const loadingArt = options.navigationIcons?.pools ?? options.homeIcons?.pools;
+  return String.raw`<main class="mainnet-loading-page">
+  <section class="mainnet-loading-card">
+    ${loadingArt ? `<img class="mainnet-loading-art" src="${escapeHtml(loadingArt)}" alt="" />` : ""}
+    <div class="mainnet-loading-copy">
+      <span class="eyebrow">LuckyMe on Solana</span>
+      <h1>Preparing LuckyMe</h1>
+      <p>Loading verified mainnet pools and your latest round state.</p>
     </div>
-    <div class="timeline" role="list">
-      <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot now"></span><span class="step-line"></span></div>
-        <div class="step-body"><span class="step-title">Program deploy</span><span class="step-state warning">In progress</span></div>
-      </div>
-      <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot"></span><span class="step-line"></span></div>
-        <div class="step-body"><span class="step-title">Backend confirmation</span><span class="step-state soft">Waiting</span></div>
-      </div>
-      <div class="step" role="listitem">
-        <div class="step-rail"><span class="step-dot"></span></div>
-        <div class="step-body"><span class="step-title">Pools live</span><span class="step-state soft">Waiting</span></div>
-      </div>
-    </div>
-    <div class="cta-row">
-      <button class="primary-button" data-route="refresh">Retry connection</button>
-      <button class="secondary-button" data-route="links">Links</button>
-    </div>
+    <span class="mainnet-loading-status">Syncing verified data</span>
+    <div class="mainnet-loading-note">${ICONS.shield}<span>Only confirmed chain data is displayed. No wallet action is requested while this page loads.</span></div>
   </section>
-  <section class="panel">
-    <div class="row-left">
-      <span class="icon-chip chip-emeraldbox">${ICONS.shield}</span>
-      <div>
-        <span class="label">Safety</span>
-        <h3 style="margin-top: 3px;">Nothing simulated</h3>
-        <p class="muted" style="font-size: 14px; margin-top: 3px;">LuckyMe never displays pool data that is not confirmed on-chain.</p>
-      </div>
-    </div>
-  </section>
-  ${trustBadges()}
+  <button class="secondary-button" data-route="refresh">Retry connection</button>
 </main>`;
 }
 
@@ -3541,7 +3610,7 @@ export function renderStitchScreen(
   const onchainAvailable = options.onchainAvailable ?? screen !== "unavailable";
   const active = options.activeTab ?? DEFAULT_TAB[screen];
   const body = screen === "winner" ? winnerBody(options.winner) : BODIES[screen](options);
-  const homeTheme = screen === "home" || screen === "welcome" || screen === "pools" || screen === "activity" || screen === "wallet" || screen === "how-to-play" || screen === "social" || screen === "latest-winners" || screen === "review" || screen === "syncing";
+  const homeTheme = screen === "home" || screen === "welcome" || screen === "pools" || screen === "activity" || screen === "wallet" || screen === "how-to-play" || screen === "social" || screen === "latest-winners" || screen === "review" || screen === "syncing" || screen === "success" || screen === "unavailable";
   return page(TITLES[screen], active, body, onchainAvailable, screen !== "winner", homeTheme, options);
 }
 

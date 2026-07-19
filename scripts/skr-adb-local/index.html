@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>LuckyMe SKR Collector</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div><span class="eyebrow">LUCKYME LOCAL TOOL</span><h1>SKR Collector</h1></div>
+        <span class="status offline" id="bridge-status">Bridge offline</span>
+      </header>
+
+      <section class="panel">
+        <h2>1. Connect Seeker</h2>
+        <p>Wireless debugging stays entirely on this Mac. Generate a fresh pairing code on Seeker whenever you pair again.</p>
+        <div class="connect-grid">
+          <label>Pairing IP:PORT<input id="pair-address" placeholder="192.168.1.25:37123" /></label>
+          <label>6-digit code<input id="pair-code" type="password" inputmode="numeric" maxlength="6" placeholder="123456" /></label>
+          <button id="pair">Pair Seeker</button>
+          <label class="wide">Connection IP:PORT<input id="connect-address" placeholder="192.168.1.25:40555" /></label>
+          <button id="connect">Connect ADB</button>
+        </div>
+        <div class="device-row">
+          <select id="device"><option value="">No device detected</option></select>
+          <button class="secondary" id="refresh">Refresh devices</button>
+        </div>
+        <div class="message" id="message" hidden></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div><h2>2. Capture usernames</h2><p>Open the review list and press Start. Local OCR reads visible .skr names and scrolls automatically until the end or Stop; screenshots are deleted immediately.</p></div>
+          <div class="actions"><button id="start" disabled>Start capture</button><button class="danger" id="stop" disabled>Stop</button></div>
+        </div>
+        <div class="stats">
+          <article><span>Captured</span><strong id="captured-count">0</strong></article>
+          <article><span>Not copied</span><strong id="remaining-count">0</strong></article>
+          <article><span>Copied</span><strong id="copied-count">0</strong></article>
+        </div>
+        <div class="username-list" id="username-list"><p>No .skr usernames captured yet.</p></div>
+      </section>
+
+      <section class="panel export-panel">
+        <div><h2>3. Copy into LuckyMe Admin</h2><p>Choose the batch size, copy it, then paste it into Send NFT. The next click automatically advances to the next uncopied usernames.</p></div>
+        <div class="export-row">
+          <label>Batch size<select id="batch-size"><option>10</option><option>20</option><option>50</option><option>100</option></select></label>
+          <button id="copy-batch" disabled>Copy next batch</button>
+          <button class="secondary" id="copy-all" disabled>Copy all remaining</button>
+          <button class="secondary" id="reset-copied" disabled>Reset copied marks</button>
+          <button class="danger" id="clear" disabled>Clear list</button>
+        </div>
+        <textarea id="export-output" readonly placeholder="The copied batch will also appear here."></textarea>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

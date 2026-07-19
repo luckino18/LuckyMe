@@ -7,30 +7,24 @@
     <meta name="description" content="LuckyMe terms of use." />
     <link rel="icon" type="image/png" href="/assets/brand/favicon.png" />
     <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/styles.css?v=20260712-pool-walletconnect-fix2" />
+    <link rel="stylesheet" href="/styles.css?v=20260718-site-final-polish-v4" />
   </head>
-  <body>
+  <body class="luckyme-apk-site static-page">
     <div class="shell">
-      <header class="site-nav">
-        <a class="brand" href="/" aria-label="LuckyMe home">
-          <img src="/assets/brand/luckyme-mark-small.webp" alt="" aria-hidden="true" />
-          <span>LuckyMe</span>
+      <header class="apk-site-topbar">
+        <a class="apk-site-logo" href="/" aria-label="LuckyMe home">
+          <img src="/assets/app-theme/home/luckyme-wordmark-v2.png" alt="LuckyMe" />
         </a>
-        <nav class="navlinks" aria-label="Main navigation">
-          <a href="/terms/">Terms</a>
-          <a href="/privacy/">Privacy</a>
-          <a href="/support/">Support</a>
-          <a class="button" href="/play/">Play</a>
-        </nav>
+        <div class="apk-site-top-actions"><span class="apk-mainnet"><i></i>Mainnet</span><a class="apk-wallet-link" href="/play/?screen=pools">Play</a></div>
       </header>
 
-      <main class="legal-main">
+      <main class="legal-main static-content">
         <h1>Terms of Use</h1>
         <p>Last updated: July 17, 2026</p>
 
         <h2>Service</h2>
         <p>
-          LuckyMe is a Solana mobile application for fixed-entry pool rounds.
+          LuckyMe is a Solana web and mobile application for fixed-entry pool rounds.
           Users connect a compatible Solana wallet, review transaction details,
           and decide whether to sign transactions in their own wallet.
         </p>
@@ -59,8 +53,8 @@
         <h2>LuckyMe Seeker Pass Promotion</h2>
         <p>
           Entry is free and requires one authentication signature from a
-          wallet that holds an eligible LuckyMe Seeker Pass cNFT. One wallet
-          and one cNFT asset may each create only one entry. No purchase or
+          wallet that holds an eligible LuckyMe Seeker Pass NFT. One wallet
+          and one NFT asset may each create only one entry. No purchase or
           Solana transaction is required to enter.
         </p>
         <p>
@@ -81,7 +75,7 @@
         </p>
       </main>
 
-      <footer class="footer">
+      <footer class="footer static-footer">
         <span>LuckyMe</span>
         <span>
           <a href="/play/">Play</a>
@@ -92,5 +86,12 @@
         </span>
       </footer>
     </div>
+    <nav class="apk-site-bottom" aria-label="Website navigation">
+      <a href="/"><img src="/assets/app-theme/navigation/home-v1.png" alt="" /><span>Home</span></a>
+      <a href="/play/?screen=pools"><img src="/assets/app-theme/navigation/pools-v1.png" alt="" /><span>Pools</span></a>
+      <a href="/play/?screen=activity"><img src="/assets/app-theme/navigation/activity-v1.png" alt="" /><span>Activity</span></a>
+      <a href="/how-to-play/"><img src="/assets/app-theme/navigation/how-to-v1.png" alt="" /><span>How To</span></a>
+      <a href="/play/?screen=social"><img src="/assets/app-theme/navigation/social-v1.png" alt="" /><span>Social</span></a>
+    </nav>
   </body>
 </html>

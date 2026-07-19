@@ -9,14 +9,13 @@ Pool math is transparent: fixed ticket price, total tickets, winner chance,
 prize, jackpot contribution, and treasury fee. Results and payouts are executed
 by the Solana program.
 
-> Production status (verified read-only on 2026-07-14): the minimum-ticket and
-> automatic-refund program, backend, web release, settlement keeper, push
-> alerts, operations monitor, and protected admin control are live. Mini 7,
-> Normal 6, High 6, and Premium 7 are open and waiting for their first ticket;
-> all have `startTs=0` and `endTs=0`. The Seeker `1.1.7` / code `10` APK was
-> submitted through the Solana dApp Store Publisher Portal. The signed Seeker
-> `1.1.9` / code `12` APK is the verified update candidate prepared on
-> 2026-07-15.
+> Production status (verified on 2026-07-20): the Solana program, backend,
+> redesigned public web app, settlement keeper, operations monitor, protected
+> Admin, Seeker referral backend and manual Seeker Pass distribution service
+> are live. The current verified Android release candidate is `1.2.2` / code
+> `15`, package `com.luckyme.seeker`; publication remains a separate operator
+> action. The authenticated SKR Database prepares at most 50 recipients per
+> wallet approval and never stores an authority private key.
 
 ## Funded-round rules
 

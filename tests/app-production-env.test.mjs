@@ -123,9 +123,9 @@ test("Seeker publishes the approved ticket targets and automatic-refund copy", (
 test("Seeker release metadata advances without changing the Android package", () => {
   const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
 
-  assert.equal(app.version, "1.2.1");
+  assert.equal(app.version, "1.2.2");
   assert.equal(app.android.package, "com.luckyme.seeker");
-  assert.equal(app.android.versionCode, 14);
+  assert.equal(app.android.versionCode, 15);
   assert.ok(app.plugins.includes("./plugins/with-solana-dapp-store-query"));
   assert.equal(app.icon, "./assets/icon.png");
   assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
