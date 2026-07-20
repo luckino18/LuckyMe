@@ -6,7 +6,7 @@ Target: `/volumeUSB1/usbshare/CODEX/Proiecte/LuckyMe` on `nasvictor.local`.
 
 - GitHub: `https://github.com/luckino18/LuckyMe`
 - Branch: `main`
-- Commit after recovery-documentation push: `e6adcad198c5d302922b672e4c9cb053af8a5b1b`
+- Verified source-code baseline: `62d1e6a1de3f8434e4f41512dc7cfe78fae5cd87`; recovery documentation is tracked by later `main` commits, so restore the current `origin/main` head when GitHub is available.
 - Repository status after push: clean and synchronized with `origin/main`.
 
 ## Android release candidate
