@@ -6,7 +6,7 @@ Target: `/volumeUSB1/usbshare/CODEX/Proiecte/LuckyMe` on `nasvictor.local`.
 
 - GitHub: `https://github.com/luckino18/LuckyMe`
 - Branch: `main`
-- Commit: `62d1e6a1de3f8434e4f41512dc7cfe78fae5cd87`
+- Commit after recovery-documentation push: `e6adcad198c5d302922b672e4c9cb053af8a5b1b`
 - Repository status after push: clean and synchronized with `origin/main`.
 
 ## Android release candidate
@@ -28,7 +28,7 @@ Target: `/volumeUSB1/usbshare/CODEX/Proiecte/LuckyMe` on `nasvictor.local`.
 - `web/current/` — current public static web tree.
 - `admin/current/` — current Admin UI plus server/service source.
 - `admin/runtime-snapshot/2026-07-20/` — safe runtime recovery archive.
-- `brain/current/` — LuckyMe Obsidian Brain; 1,087 files at snapshot time.
+- `brain/current/` — LuckyMe Obsidian Brain; 1,228 files verified on NAS.
 - `source/current/` — repository source without dependency/build caches or secrets.
 - `source/snapshots/` — dated source snapshots.
 - `handoff/` — mega handoff and this manifest.
@@ -41,3 +41,15 @@ Target: `/volumeUSB1/usbshare/CODEX/Proiecte/LuckyMe` on `nasvictor.local`.
 3. Restore `brain/current/` before making product/release decisions.
 4. Restore runtime data only to `/var/lib/luckyme`, with the service-specific ownership and permissions documented in the handoff.
 5. Never overwrite a newer live registry blindly; compare the snapshot timestamp and on-chain evidence first.
+
+## Verified NAS snapshot
+
+- Verification date: `2026-07-20`.
+- APK SHA-256 on NAS: `a4ffe50842ebd93383aedc5d2add6764abfd4bba549276b1bdae725673fe6267`.
+- Runtime snapshot SHA-256 on NAS: `12aafa9a6b16b2cd4120c3261b8f4926082fc32dda6ee5182faa9bbe8dfa8ca3`.
+- Source snapshot: `source/snapshots/luckyme-source-current-v2-2026-07-20.tar`, SHA-256 `8b3fd156e60ebb82e9c95a99e35897cf1da1ef0e121ff40ec3ff406edd9fb0d4`.
+- Web snapshot SHA-256: `be52cea739a2298d638964c20461f32fa5f4c498446454a74044416d0552d428`.
+- Admin snapshot SHA-256: `a6f06e998de1c2f6bca192840f480fee4d22aed8dd5fbdf167e4e58e44cf53a4`.
+- Brain snapshot SHA-256: `3164bd8be2e58b8dbd413a2a47ed171a40af9532f3b415cdd67029dd5981f3bc`.
+- Historical Desktop archive: `desktop-old-files-archive/luckyme-desktop-old-files-filtered-v2-2026-07-20.tar`, SHA-256 `8a4133485b987163736d31e64be4f031130419ff325a4d293d9b2bfbb182ed7b`; full archive listing passed with `TAR_OK`.
+- The interrupted first historical transfer is retained as `INVALID-PARTIAL-luckyme-desktop-old-files-2026-07-20.tar` and must never be used for restoration.

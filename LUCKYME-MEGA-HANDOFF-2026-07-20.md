@@ -138,6 +138,8 @@ The source copy excludes rebuildable dependency/build folders and excludes secre
 
 GitHub is the canonical versioned source. NAS is the disaster-recovery mirror. The live VPS is runtime state, not the only copy of source.
 
+The `2026-07-20` NAS mirror was completed and verified under `/volumeUSB1/usbshare/CODEX/Proiecte/LuckyMe`. APK, runtime, source, web, admin and Brain hashes match their local snapshots. The filtered historical Desktop archive passed a complete `tar` listing and has SHA-256 `8a4133485b987163736d31e64be4f031130419ff325a4d293d9b2bfbb182ed7b`. An interrupted earlier archive is marked `INVALID-PARTIAL` and must not be used.
+
 ## Desktop cleanup boundary
 
 Old files are never deleted automatically. Clearly historical APKs, superseded worktrees and earlier backup folders are moved into a dated `LuckyMe_OLD_FILES_TO_REVIEW_*` folder on Desktop. The current code-15 APK, current workspace, source assets and anything ambiguous remain in place until Victor reviews the holding folder.
