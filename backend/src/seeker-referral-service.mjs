@@ -67,7 +67,7 @@ export const SEEKER_PASS_PRIZES_LAMPORTS = Object.freeze([
 const DEFAULT_DOMAIN = "www.lucky-me.app";
 const DEFAULT_URI = "https://www.lucky-me.app";
 const NONCE_TTL_MS = 5 * 60_000;
-const SESSION_TTL_MS = 15 * 60_000;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60_000;
 const RPC_TIMEOUT_MS = 12_000;
 const MAX_STRING = 512;
 const CODE_RE = /^LM-[A-HJ-NP-Z2-9]{6}$/;
@@ -1392,8 +1392,12 @@ export function createSeekerReferralService({
     if (!row || row.revoked_at || Date.parse(row.expires_at) <= clock() || row.identity_status !== "verified") {
       fail(401, "invalid_session", "Session is missing, expired, or revoked");
     }
-    db.prepare("UPDATE referral_sessions SET last_seen_at = ? WHERE token_hash = ?")
-      .run(nowIso(clock), sha256(token));
+    const seenAt = nowIso(clock);
+    db.prepare(`
+      UPDATE referral_sessions
+      SET last_seen_at = ?, expires_at = ?
+      WHERE token_hash = ?
+    `).run(seenAt, new Date(clock() + sessionTtlMs).toISOString(), sha256(token));
     return row;
   }
 

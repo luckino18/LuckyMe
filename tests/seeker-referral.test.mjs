@@ -101,7 +101,7 @@ test("referral qualification requires three winning rounds on three days and sev
   assert.equal(sameDay.winningRounds, 3);
 });
 
-function fixture({ testMode = true } = {}) {
+function fixture({ testMode = true, sessionTtlMs } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "luckyme-referral-"));
   let currentTime = Date.parse("2026-07-14T12:00:00.000Z");
   const sgtByWallet = new Map();
@@ -114,6 +114,7 @@ function fixture({ testMode = true } = {}) {
     logger: () => undefined,
     sgtVerifier: async (wallet) => sgtByWallet.get(wallet) ?? null,
     settlementArchivePath,
+    ...(sessionTtlMs == null ? {} : { sessionTtlMs }),
   });
   return {
     service,
@@ -460,6 +461,31 @@ test("LuckyMe Seeker referral security and idempotency suite", async (t) => {
     try {
       const user = await verifyWallet(f, Keypair.generate());
       assert.equal(f.service.logout(user.sessionToken).loggedOut, true);
+      assert.throws(() => f.service.getProfile(user.sessionToken), expectCode("invalid_session"));
+    } finally { f.close(); }
+  });
+
+  await t.test("18a. active sessions extend on use and expire after the rolling window", async () => {
+    const f = fixture({ sessionTtlMs: 1_000 });
+    try {
+      const wallet = Keypair.generate();
+      const user = await verifyWallet(f, wallet);
+      const tokenHash = f.service.db.prepare(`
+        SELECT token_hash FROM referral_sessions WHERE wallet = ?
+      `).get(wallet.publicKey.toBase58()).token_hash;
+      const expiry = () => Date.parse(f.service.db.prepare(`
+        SELECT expires_at FROM referral_sessions WHERE token_hash = ?
+      `).get(tokenHash).expires_at);
+
+      const firstExpiry = expiry();
+      f.advance(600);
+      assert.equal(f.service.getProfile(user.sessionToken).state, "VERIFIED");
+      assert.equal(expiry(), firstExpiry + 600);
+
+      f.advance(700);
+      assert.equal(f.service.getProfile(user.sessionToken).state, "VERIFIED");
+
+      f.advance(1_001);
       assert.throws(() => f.service.getProfile(user.sessionToken), expectCode("invalid_session"));
     } finally { f.close(); }
   });
