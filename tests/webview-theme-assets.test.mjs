@@ -18,7 +18,7 @@ test("all approved APK artwork is embedded for the offline WebView", () => {
   assert.equal(result.status, 0, result.stderr || result.stdout);
 
   const generated = readFileSync(generatedPath, "utf8");
-  assert.equal((generated.match(/data:image\/webp;base64,/g) ?? []).length, 19);
+  assert.equal((generated.match(/data:image\/webp;base64,/g) ?? []).length, 20);
   assert.ok(generated.length > 500_000, "embedded artwork payload is unexpectedly small");
   assert.ok(generated.length < 2_000_000, "embedded artwork payload is too large for fluid navigation");
 
@@ -84,10 +84,12 @@ test("native feature pages stay immersive and return without remounting the rede
   const app = readFileSync(appPath, "utf8");
   assert.match(app, /<StatusBar hidden translucent/);
   assert.match(app, /<LuckyMeScreen/);
-  assert.match(app, /\{referralVisible \? \(/);
-  assert.match(app, /\{seekerPassDrawVisible && seekerPassPromotionEnabled \? \(/);
+  assert.match(app, /\{seekerPassDrawVisible \? \(/);
+  assert.match(app, /\{communitySection \? \(/);
+  assert.match(app, /<PromotionsScreen/);
+  assert.match(app, /<CommunityScreen/);
   assert.match(app, /BackHandler\.addEventListener\("hardwareBackPress"/);
-  assert.doesNotMatch(app, /if \(referralVisible\) \{\s*return/);
+  assert.doesNotMatch(app, /ReferralScreen|referralVisible/);
 });
 
 test("Android Back navigates inside the app and long press cannot select WebView copy", () => {

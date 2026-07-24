@@ -1,0 +1,24 @@
+[Unit]
+Description=LuckyMe protected promotional pools Admin service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luckyme
+Group=luckyme
+WorkingDirectory=/opt/luckyme
+EnvironmentFile=/etc/luckyme/admin-promotions.env
+ExecStart=/usr/bin/node /opt/luckyme/scripts/admin-promotions-server.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StateDirectory=luckyme-promotions
+StateDirectoryMode=0750
+ReadWritePaths=/var/lib/luckyme-promotions
+
+[Install]
+WantedBy=multi-user.target

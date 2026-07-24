@@ -38,6 +38,20 @@ export async function registerPushToken(payload, options = {}) {
   const wallet = parseOptionalString(payload?.wallet, 64);
   const projectId = parseOptionalString(payload?.projectId, 128);
   const store = await readStore(storePath);
+  if (deviceId) {
+    store.tokens = store.tokens.filter((item) => (
+      item.tokenHash === tokenHash ||
+      item.deviceId !== deviceId
+    ));
+    if (wallet) {
+      store.tokens = store.tokens.filter((item) => (
+        item.tokenHash === tokenHash ||
+        item.deviceId ||
+        item.wallet !== wallet ||
+        (projectId && item.projectId && item.projectId !== projectId)
+      ));
+    }
+  }
   const existing = store.tokens.find((item) => item.tokenHash === tokenHash);
 
   if (existing) {

@@ -115,7 +115,8 @@ test("Activity exposes public results from all pools without requiring a connect
     livePools,
   });
 
-  assert.match(html, /Your entries plus public round history/);
+  assert.match(html, /Your entries, mission rewards and public round history/);
+  assert.match(html, /data-activity-tab="missions"/);
   assert.match(html, /data-activity-tab="all-rounds"/);
   assert.match(html, />All Rounds</);
   for (const pool of ["Mini", "Normal", "High", "Premium"]) {

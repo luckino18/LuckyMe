@@ -8,15 +8,19 @@ This document is the recovery and continuation entry point for the complete Luck
 - GitHub: `https://github.com/luckino18/LuckyMe`
 - Branch: `main`.
 - Recovery baseline commit: `62d1e6a1de3f8434e4f41512dc7cfe78fae5cd87` (pushed on 2026-07-20).
-- Local project root: `/Users/victor/Desktop/LuckyMe_CURRENT`.
-- Obsidian project brain: `/Users/victor/Desktop/LuckyMe_CURRENT/LuckyMe_Brain`.
+- Active workspace root: `/Users/victor/Desktop/Luckyme Work`.
+- Authoritative repository: `/Users/victor/Desktop/Luckyme Work/Project/LuckyMe`.
+- Obsidian project brain: `/Users/victor/Desktop/Luckyme Work/Brain/LuckyMe Brain`.
+- Retired and historical material: `/Users/victor/Desktop/Luckyme Old`.
 - Public site: `https://lucky-me.app/` and `https://www.lucky-me.app/`.
 - Public game: `https://lucky-me.app/play/`.
 - Protected Admin: `https://lucky-me.app/admin/`.
 - Production VPS: `167.233.117.25`.
 - NAS recovery root: `/volumeUSB1/usbshare/CODEX/Proiecte/LuckyMe` on `nasvictor.local`.
 
-Read `LuckyMe_Brain/wiki/hot.md`, then `LuckyMe_Brain/wiki/index.md`, before changing product or production behavior.
+Read `/Users/victor/Desktop/Luckyme Work/Brain/LuckyMe Brain/wiki/hot.md`, then `wiki/index.md`, before changing product or production behavior.
+
+Desktop organization is permanent: active APK work lives under `Luckyme Work/Apk`, active web work under `Luckyme Work/Web`, and each operator tool under its own folder in `Luckyme Work/Tools`. Superseded versions move to `Luckyme Old`. The NAS is touched only when Victor explicitly requests it.
 
 ## Current release lanes
 

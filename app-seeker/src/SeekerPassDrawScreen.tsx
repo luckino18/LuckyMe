@@ -69,7 +69,7 @@ async function request(path: string, options: RequestInit = {}) {
       },
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.message ?? `LuckyMe request failed (HTTP ${response.status})`);
+    if (!response.ok) throw new Error(payload.message ?? "LuckyMe is temporarily unavailable");
     return payload;
   } finally {
     clearTimeout(timer);

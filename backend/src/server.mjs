@@ -72,6 +72,9 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN ?? (ALLOW_WILDCARD_CORS ? "*" : "");
 const CORS_ORIGINS = parseCorsOrigins(CORS_ORIGIN);
 const ANCHOR_PROVIDER_URL =
   process.env.ANCHOR_PROVIDER_URL ?? (IS_LOCAL_DEVELOPMENT ? "http://127.0.0.1:8899" : "");
+const PUBLIC_WALLET_RPC_URL =
+  process.env.LUCKYME_PUBLIC_WALLET_RPC_URL ??
+  (IS_LOCAL_DEVELOPMENT ? ANCHOR_PROVIDER_URL : "https://api.mainnet-beta.solana.com");
 const DEV_CLUSTER_NAME = ["dev", "net"].join("");
 const TEST_CLUSTER_NAME = ["test", "net"].join("");
 const LOCAL_CLUSTER_NAME = ["local", "net"].join("");
@@ -3167,7 +3170,7 @@ function isHttpsUrl(url) {
 
 function publicRpcUrl(url) {
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(IS_RELEASE_SURFACE ? PUBLIC_WALLET_RPC_URL : url);
     parsed.username = "";
     parsed.password = "";
     parsed.search = "";

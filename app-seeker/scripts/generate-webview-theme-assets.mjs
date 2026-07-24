@@ -10,14 +10,18 @@ const assetPaths = {
   homeBackground: "assets/webview-optimized/webp/home/luckyme-home-background-v2.webp",
   homeLogo: "assets/webview-optimized/webp/home/luckyme-wordmark-v2.webp",
   homeIcons: {
-    pools: "assets/webview-optimized/webp/home/pools-rocket-v1.webp",
+    pools: "assets/webview-optimized/webp/navigation/pools-v2.webp",
     referral: "assets/webview-optimized/webp/home/referral-handshake-v1.webp",
     nft: "assets/webview-optimized/webp/home/nft-medallion-v1.webp",
     winners: "assets/webview-optimized/webp/home/winner-trophy-v1.webp",
+    luckyRewards: "assets/webview-optimized/home/lucky-rewards-medallion-v1.png",
+    missions: "assets/webview-optimized/home/missions-medallion-v1.png",
+    profile: "assets/webview-optimized/home/profile-medallion-v1.png",
+    jackpot: "assets/webview-optimized/webp/home/jackpot-medallion-v1.webp",
   },
   navigationIcons: {
     home: "assets/webview-optimized/webp/navigation/home-v1.webp",
-    pools: "assets/webview-optimized/webp/navigation/pools-v1.webp",
+    pools: "assets/webview-optimized/webp/navigation/pools-v2.webp",
     activity: "assets/webview-optimized/webp/navigation/activity-v1.webp",
     howTo: "assets/webview-optimized/webp/navigation/how-to-v1.webp",
     social: "assets/webview-optimized/webp/navigation/social-v1.webp",
@@ -29,10 +33,10 @@ const assetPaths = {
     premium: "assets/webview-optimized/webp/pools/premium-watermark-v1.webp",
   },
   socialIcons: {
-    x: "assets/webview-optimized/webp/social/x-medallion-v3.webp",
-    discord: "assets/webview-optimized/webp/social/discord-medallion-v3.webp",
-    website: "assets/webview-optimized/webp/social/website-card-v2.webp",
-    support: "assets/webview-optimized/webp/social/support-medallion-v3.webp",
+    x: "assets/webview-optimized/webp/social/x-medallion-v4.webp",
+    discord: "assets/webview-optimized/webp/social/discord-medallion-v4.webp",
+    website: "assets/webview-optimized/webp/social/website-medallion-v4.webp",
+    support: "assets/webview-optimized/webp/social/support-medallion-v4.webp",
   },
 };
 

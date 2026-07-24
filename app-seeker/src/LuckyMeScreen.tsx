@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import { WebView } from "react-native-webview";
@@ -36,11 +37,13 @@ import {
 } from "./stitchScreens";
 import type {
   LivePool,
+  MissionHistoryItem,
   StitchScreenId,
   TransactionStatus,
   WinnerShareData,
 } from "./stitchScreens";
 import { WEBVIEW_THEME_ASSETS } from "./generatedWebViewThemeAssets";
+import { userFacingError } from "./user-facing-error";
 
 type LegalLinkKey = "terms" | "privacy" | "support";
 type NotificationOptInState =
@@ -55,7 +58,7 @@ type NotificationOptInState =
 type StitchMessage =
   | { type: "render-ready" }
   | { type: "navigate"; screen: StitchScreenId; pool?: string }
-  | { type: "referral" }
+  | { type: "community"; section: "missions" | "profile" }
   | { type: "seeker-pass" }
   | { type: "refresh" }
   | { type: "action"; action: "ticket-dec" | "ticket-inc" | "buy-entry" | "connect-wallet" | "disconnect-wallet"; pool?: string; ticketCount?: number }
@@ -95,6 +98,25 @@ async function recordVerifiedReferralActivity() {
   if (response?.status === 401) {
     await SecureStore.deleteItemAsync(REFERRAL_SESSION_KEY).catch(() => undefined);
   }
+}
+
+async function loadMissionHistory(): Promise<MissionHistoryItem[]> {
+  const token = await SecureStore.getItemAsync(REFERRAL_SESSION_KEY).catch(() => null);
+  if (!token) return [];
+  const response = await fetch(`${REFERRAL_API_URL}/api/promotions/activity`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  }).catch(() => null);
+  if (!response) return [];
+  if (response.status === 401) {
+    await SecureStore.deleteItemAsync(REFERRAL_SESSION_KEY).catch(() => undefined);
+    return [];
+  }
+  if (!response.ok) return [];
+  const payload = await response.json().catch(() => ({}));
+  return Array.isArray(payload?.missions) ? payload.missions : [];
 }
 
 type ReviewHistory = {
@@ -167,7 +189,7 @@ const UNAVAILABLE_ALLOWED_SCREENS = new Set<StitchScreenId>([
   "wallet",
   "winner",
 ]);
-const NAV_ITEMS: StitchScreenId[] = ["home", "pools", "activity", "how-to-play", "social"];
+const NAV_ITEMS: StitchScreenId[] = ["home", "activity", "how-to-play", "social"];
 const NAV_TABS = new Set<StitchScreenId>(NAV_ITEMS);
 
 function isLegalLinkKey(value: unknown): value is LegalLinkKey {
@@ -181,6 +203,7 @@ function parseStitchMessage(data: string): StitchMessage {
       pool?: string;
       type?: string;
       screen?: StitchScreenId;
+      section?: string;
       ticketCount?: number;
       link?: string;
       url?: string;
@@ -194,8 +217,11 @@ function parseStitchMessage(data: string): StitchMessage {
       return { type: "refresh" };
     }
 
-    if (message?.type === "referral") {
-      return { type: "referral" };
+    if (
+      message?.type === "community" &&
+      (message.section === "missions" || message.section === "profile")
+    ) {
+      return { type: "community", section: message.section };
     }
 
     if (message?.type === "seeker-pass") {
@@ -308,8 +334,13 @@ function injectedNavigation(screen: StitchScreenId, onchainAvailable: boolean) {
           return null;
         }
 
-        if (dataRoute === 'referral') {
-          post({ type: 'referral' });
+        if (dataRoute === 'missions' || dataRoute === 'devnet-missions') {
+          post({ type: 'community', section: 'missions' });
+          return null;
+        }
+
+        if (dataRoute === 'profile' || dataRoute === 'devnet-profile') {
+          post({ type: 'community', section: 'profile' });
           return null;
         }
 
@@ -763,6 +794,9 @@ async function getExpoPushToken() {
 }
 
 async function registerExpoPushToken(token: string, wallet?: string) {
+  const deviceId = Platform.OS === "android"
+    ? Application.getAndroidId()
+    : await Application.getIosIdForVendorAsync();
   const response = await fetch(`${API_URL}/notifications/register`, {
     method: "POST",
     headers: {
@@ -773,6 +807,7 @@ async function registerExpoPushToken(token: string, wallet?: string) {
       token,
       platform: Platform.OS,
       projectId: expoProjectId(),
+      deviceId: deviceId ?? undefined,
       wallet,
     }),
   });
@@ -844,12 +879,12 @@ function parseAppRoute(value: string): AppRoute {
 
 export function LuckyMeScreen({
   disablePayments = false,
-  onOpenReferral,
+  onOpenCommunity,
   onOpenSeekerPassDraw,
 }: {
   disablePayments?: boolean;
-  onOpenReferral?: () => void;
-  onOpenSeekerPassDraw?: () => void;
+  onOpenCommunity?: (section: "missions" | "profile") => void;
+  onOpenSeekerPassDraw?: (promotionId?: string) => void;
 } = {}) {
   const [onchainAvailable, setOnchainAvailable] = useState(false);
   const [screen, setScreen] = useState<StitchScreenId>(UNAVAILABLE_SCREEN);
@@ -862,6 +897,7 @@ export function LuckyMeScreen({
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
   const [livePools, setLivePools] = useState<LivePool[]>([]);
+  const [missionHistory, setMissionHistory] = useState<MissionHistoryItem[]>([]);
   const [selectedPool, setSelectedPool] = useState("mini");
   const [ticketCount, setTicketCount] = useState(1);
   const [transactionStatus, setTransactionStatus] = useState<TransactionStatus>({
@@ -882,6 +918,7 @@ export function LuckyMeScreen({
         onchainAvailable: mainnetReady,
         activeTab: screen === UNAVAILABLE_SCREEN ? requestedTab : undefined,
         livePools,
+        missionHistory,
         selectedPool,
         ticketCount,
         transaction: transactionStatus,
@@ -891,6 +928,7 @@ export function LuckyMeScreen({
       }),
     [
       livePools,
+      missionHistory,
       mainnetReady,
       requestedTab,
       screen,
@@ -1008,6 +1046,12 @@ export function LuckyMeScreen({
     }
   }, [requestedTab, walletAddress]);
 
+  const refreshMissionHistory = useCallback(async () => {
+    const missions = await loadMissionHistory();
+    if (mountedRef.current) setMissionHistory(missions);
+    return missions;
+  }, []);
+
   useEffect(() => {
     void refreshFromBackend();
 
@@ -1026,13 +1070,14 @@ export function LuckyMeScreen({
       if (state === "active") {
         void refreshFromBackend({ allowScreenChange: false });
         void recordVerifiedReferralActivity();
+        if (screenRef.current === "activity") void refreshMissionHistory();
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [refreshFromBackend]);
+  }, [refreshFromBackend, refreshMissionHistory]);
 
   useEffect(() => {
     let active = true;
@@ -1108,6 +1153,9 @@ export function LuckyMeScreen({
     if (nextScreen === "home" || nextScreen === "pools" || nextScreen === "activity" || nextScreen === "latest-winners") {
       void refreshFromBackend({ allowScreenChange: true, targetScreen: nextScreen });
     }
+    if (nextScreen === "activity") {
+      void refreshMissionHistory();
+    }
 
     if (nextScreen !== screenRef.current) {
       screenHistoryRef.current = [...screenHistoryRef.current.slice(-11), screenRef.current];
@@ -1118,7 +1166,7 @@ export function LuckyMeScreen({
     } else {
       setScreen(UNAVAILABLE_SCREEN);
     }
-  }, [mainnetReady, refreshFromBackend]);
+  }, [mainnetReady, refreshFromBackend, refreshMissionHistory]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -1138,6 +1186,24 @@ export function LuckyMeScreen({
   }, []);
 
   const handleAppUrl = useCallback((url: string) => {
+    try {
+      const parsed = new URL(url);
+      const pathScreen = parsed.pathname.split("/").filter(Boolean)[0];
+      const screenName = parsed.protocol === "luckyme:"
+        ? parsed.hostname || pathScreen
+        : pathScreen;
+      if (screenName === "promotions" || screenName === "promotion") {
+        onOpenSeekerPassDraw?.(parsed.searchParams.get("promotion") ?? undefined);
+        return;
+      }
+      if (screenName === "missions" || screenName === "profile") {
+        onOpenCommunity?.(screenName);
+        return;
+      }
+    } catch {
+      return;
+    }
+
     const route = parseAppRoute(url);
 
     if (!route) {
@@ -1152,7 +1218,7 @@ export function LuckyMeScreen({
     }
 
     navigateTo(route.screen, route.pool);
-  }, [navigateTo]);
+  }, [navigateTo, onOpenCommunity, onOpenSeekerPassDraw]);
 
   useEffect(() => {
     let active = true;
@@ -1370,7 +1436,7 @@ export function LuckyMeScreen({
         await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
         await registerExpoPushToken(token, walletAddress);
       } catch {
-        setNotificationError("Notifications are enabled, but backend registration is not available yet.");
+        setNotificationError("Notifications are enabled, but setup could not be completed yet.");
       }
       await refreshFromBackend({
         allowScreenChange: true,
@@ -1379,9 +1445,7 @@ export function LuckyMeScreen({
       setNotificationPromptVisible(false);
     } catch (error) {
       setNotificationOptInState("error");
-      setNotificationError(
-        error instanceof Error ? error.message : "Notification permission failed",
-      );
+      setNotificationError(userFacingError(error, "Notification permission could not be completed."));
       setNotificationPromptVisible(true);
     } finally {
       setNotificationBusy(false);
@@ -1450,8 +1514,8 @@ export function LuckyMeScreen({
     }
 
 
-    if (message?.type === "referral") {
-      onOpenReferral?.();
+    if (message?.type === "community") {
+      onOpenCommunity?.(message.section);
       return;
     }
 
@@ -1463,7 +1527,7 @@ export function LuckyMeScreen({
     if (message?.type === "navigate") {
       navigateTo(message.screen, message.pool);
     }
-  }, [buyEntry, navigateTo, onOpenReferral, onOpenSeekerPassDraw, openLegalLink, refreshFromBackend, selectedPool, wallet]);
+  }, [buyEntry, navigateTo, onOpenCommunity, onOpenSeekerPassDraw, openLegalLink, refreshFromBackend, selectedPool, wallet]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1530,7 +1594,6 @@ export function LuckyMeScreen({
 }
 
 type WalletPreflightPanelProps = {
-  onOpenReferral?: () => void;
   onOpenSeekerPassDraw?: () => void;
   wallet: ReturnType<typeof useMobileWallet>;
 };
@@ -1607,13 +1670,14 @@ function NotificationOptInModal({
         <ImageBackground source={require("../assets/home/luckyme-home-background-v2.png")} imageStyle={styles.notificationPanelImage} style={styles.notificationPanel}>
           <Image source={require("../assets/home/luckyme-wordmark-v2.png")} resizeMode="contain" style={styles.notificationLogo} />
           <Text style={styles.notificationKicker}>LUCKYME ALERTS</Text>
-          <Text style={styles.notificationTitle}>Round notifications</Text>
+          <Text style={styles.notificationTitle}>LuckyMe notifications</Text>
           <Text style={styles.notificationBody}>
-            LuckyMe can notify you only when a pool countdown starts and when the
-            last 10 minutes remain. No seed phrases, no wallet approvals, no spam.
+            LuckyMe can notify you when a new promotion launches, when a pool countdown
+            starts and when the last 10 minutes remain. No seed phrases or wallet approvals.
           </Text>
           <View style={styles.notificationRules}>
             <Text style={styles.notificationRule}>Max 2 alerts per active round</Text>
+            <Text style={styles.notificationRule}>One alert for each new promotion</Text>
             <Text style={styles.notificationRule}>Tap opens the relevant pool</Text>
             <Text style={styles.notificationRule}>You can keep playing without alerts</Text>
           </View>
@@ -1657,7 +1721,7 @@ function NotificationOptInModal({
   );
 }
 
-function WalletPreflightPanel({ onOpenReferral, onOpenSeekerPassDraw, wallet }: WalletPreflightPanelProps) {
+function WalletPreflightPanel({ onOpenSeekerPassDraw, wallet }: WalletPreflightPanelProps) {
   const [pending, setPending] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const address = walletAddressToString(wallet.account?.address);
@@ -1670,11 +1734,7 @@ function WalletPreflightPanel({ onOpenReferral, onOpenSeekerPassDraw, wallet }: 
     try {
       await wallet.connect();
     } catch (error) {
-      setLastError(
-        error instanceof Error
-          ? error.message
-          : "Wallet request was rejected or unavailable",
-      );
+      setLastError(userFacingError(error, "Wallet request is temporarily unavailable."));
     } finally {
       setPending(false);
     }
@@ -1687,7 +1747,7 @@ function WalletPreflightPanel({ onOpenReferral, onOpenSeekerPassDraw, wallet }: 
     try {
       await wallet.disconnect();
     } catch (error) {
-      setLastError(error instanceof Error ? error.message : "Wallet disconnect failed");
+      setLastError(userFacingError(error, "Wallet could not be disconnected."));
     } finally {
       setPending(false);
     }
@@ -1730,28 +1790,6 @@ function WalletPreflightPanel({ onOpenReferral, onOpenSeekerPassDraw, wallet }: 
         </Text>
       </Pressable>
 
-      {onOpenReferral ? (
-        <View style={styles.referralEntry}>
-          <View style={styles.referralEntryCopy}>
-            <Text style={styles.referralEntryKicker}>SEEKER EXCLUSIVE</Text>
-            <Text style={styles.referralEntryTitle}>Seeker Referral</Text>
-            <Text style={styles.referralEntryText}>
-              Verify your Genesis Token and invite other verified Seeker owners.
-            </Text>
-          </View>
-          <Pressable
-            accessibilityLabel="Open Seeker Referral"
-            accessibilityRole="button"
-            onPress={onOpenReferral}
-            style={({ pressed }) => [
-              styles.referralEntryButton,
-              pressed ? styles.walletButtonPressed : null,
-            ]}
-          >
-            <Text style={styles.referralEntryButtonText}>Open</Text>
-          </Pressable>
-        </View>
-      ) : null}
       {onOpenSeekerPassDraw ? (
         <View style={[styles.referralEntry, styles.seekerPassEntry]}>
           <View style={styles.referralEntryCopy}>

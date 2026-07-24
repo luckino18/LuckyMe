@@ -50,6 +50,71 @@ test("push token registration persists one deduplicated Expo token", async () =>
   }
 });
 
+test("push registration replaces a rotated token for the same device", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "luckyme-push-device-test-"));
+  const storePath = path.join(dir, "tokens.json");
+  const oldToken = "ExponentPushToken[luckyme_old_device_token]";
+  const newToken = "ExponentPushToken[luckyme_new_device_token]";
+
+  try {
+    await registerPushToken({
+      token: oldToken,
+      platform: "android",
+      deviceId: "seeker-device-1",
+      wallet: "4i7qYXgcFCs8V57zSipbj9iG86PY29GpVF6gWHCXVKL3",
+    }, { storePath, now: "2026-07-23T12:00:00.000Z" });
+    const rotated = await registerPushToken({
+      token: newToken,
+      platform: "android",
+      deviceId: "seeker-device-1",
+      wallet: "4i7qYXgcFCs8V57zSipbj9iG86PY29GpVF6gWHCXVKL3",
+    }, { storePath, now: "2026-07-24T12:00:00.000Z" });
+    const registrations = await loadPushRegistrations({ storePath });
+
+    assert.equal(rotated.registrations, 1);
+    assert.equal(registrations.length, 1);
+    assert.equal(registrations[0].token, newToken);
+    assert.equal(registrations[0].deviceId, "seeker-device-1");
+  } finally {
+    await rm(dir, { force: true, recursive: true });
+  }
+});
+
+test("device-aware registration removes legacy wallet duplicates without dropping another device", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "luckyme-push-legacy-test-"));
+  const storePath = path.join(dir, "tokens.json");
+  const wallet = "4i7qYXgcFCs8V57zSipbj9iG86PY29GpVF6gWHCXVKL3";
+
+  try {
+    await registerPushToken({
+      token: "ExponentPushToken[luckyme_legacy_token]",
+      platform: "android",
+      wallet,
+    }, { storePath, now: "2026-07-20T12:00:00.000Z" });
+    await registerPushToken({
+      token: "ExponentPushToken[luckyme_second_device]",
+      platform: "android",
+      deviceId: "seeker-device-2",
+      wallet,
+    }, { storePath, now: "2026-07-21T12:00:00.000Z" });
+    await registerPushToken({
+      token: "ExponentPushToken[luckyme_current_device]",
+      platform: "android",
+      deviceId: "seeker-device-1",
+      wallet,
+    }, { storePath, now: "2026-07-24T12:00:00.000Z" });
+    const registrations = await loadPushRegistrations({ storePath });
+
+    assert.deepEqual(
+      new Set(registrations.map((item) => item.deviceId)),
+      new Set(["seeker-device-1", "seeker-device-2"]),
+    );
+    assert.equal(registrations.some((item) => item.deviceId === null), false);
+  } finally {
+    await rm(dir, { force: true, recursive: true });
+  }
+});
+
 test("push notification sender defaults to dry-run planning", async () => {
   const result = await sendExpoPushNotifications([
     {

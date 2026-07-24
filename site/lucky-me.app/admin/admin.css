@@ -128,6 +128,67 @@ h1,h2,h3,p { margin:0; } h1 { font-size:clamp(28px,5vw,44px); } h2 { font-size:2
 .skr-database-id { color:var(--cyan); font:800 12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
 .skr-registry-row.reserved { border-color:rgba(255,191,71,.42); }.skr-registry-row.sent,.skr-registry-row.minted { border-color:rgba(153,69,255,.36); }.skr-registry-row>div { min-width:0; display:grid; gap:2px; }.skr-registry-row span { color:var(--muted); font-size:10px; }.skr-registry-row code { color:var(--cyan); font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }.skr-registry-row a { color:var(--green); font-size:11px; text-decoration:none; }
 .skr-registry-actions{display:flex!important;align-items:center;justify-content:flex-end;gap:8px}.skr-remove-button{min-height:34px!important;padding:7px 11px!important;font-size:11px!important}
+.promotion-launcher { border-color:rgba(20,241,149,.34); background:linear-gradient(145deg,rgba(20,241,149,.07),rgba(17,23,34,.94)); }
+.promotion-treasury { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:16px; }
+.promotion-treasury-card { min-width:0; padding:14px; border:1px solid rgba(20,241,149,.28); border-radius:13px; background:rgba(5,8,14,.55); }
+.promotion-treasury-card>strong { display:block; margin:7px 0 10px; color:var(--green); font-size:21px; overflow-wrap:anywhere; }
+.promotion-treasury-card>div { display:flex; justify-content:space-between; gap:12px; margin-top:5px; color:var(--muted); font-size:12px; }
+.promotion-treasury-card b { color:var(--text); }
+.promotion-treasury-card code { display:block; margin-top:10px; color:var(--cyan); font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; user-select:all; }
+.promotion-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:16px; }
+.promotion-form>label { display:grid; gap:6px; color:var(--muted); font-size:11px; font-weight:800; }
+.promotion-form>[hidden] { display:none!important; }
+.promotion-form input,.promotion-form select,.promotion-form textarea { width:100%; min-height:44px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; outline:none; resize:vertical; background:#080d15; color:var(--text); font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif; }
+.promotion-form input:focus,.promotion-form select:focus,.promotion-form textarea:focus { border-color:rgba(20,241,149,.58); box-shadow:0 0 0 3px rgba(20,241,149,.08); }
+.promotion-form input:disabled { opacity:.45; cursor:not-allowed; }
+.promotion-field-wide { grid-column:1/-1; }
+.promotion-live-value { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.promotion-live-value>div { min-width:0; display:grid; gap:5px; padding:13px; border:1px solid rgba(0,209,255,.23); border-radius:11px; background:rgba(0,209,255,.035); }
+.promotion-live-value span { color:var(--muted); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.promotion-live-value strong { color:var(--cyan); font-size:16px; overflow-wrap:anywhere; }
+.promotion-toggle { grid-template-columns:auto 1fr!important; align-items:center; padding:12px 13px; border:1px solid var(--line); border-radius:11px; background:rgba(5,8,14,.45); cursor:pointer; }
+.promotion-toggle input { width:20px!important; min-height:20px!important; margin:0; accent-color:var(--green); }
+.promotion-toggle span { color:var(--text); font-size:13px; }
+.promotion-toggle small { grid-column:2; color:var(--muted); font-size:10px; font-weight:500; line-height:1.45; }
+.economy-terminal { min-width:0; border:1px solid rgba(20,241,149,.34); border-radius:13px; overflow:hidden; background:#030b09; }
+.economy-terminal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 13px; border-bottom:1px solid rgba(20,241,149,.2); background:rgba(20,241,149,.07); }
+.economy-terminal-head span { color:var(--green); font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+.economy-terminal-head strong { color:var(--amber); font-size:10px; }
+.economy-terminal pre { max-height:330px; margin:0; padding:14px; overflow:auto; white-space:pre-wrap; color:#b9ffd9; font:11px/1.62 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.ultra-launcher { border-color:rgba(175,91,255,.48); background:linear-gradient(145deg,rgba(175,91,255,.09),rgba(17,23,34,.96)); }
+.ultra-launcher .economy-terminal { border-color:rgba(175,91,255,.48); }
+.ultra-launcher .economy-terminal-head { border-color:rgba(175,91,255,.28); background:rgba(175,91,255,.1); }
+.ultra-launcher .economy-terminal-head span { color:#d6adff; }
+.ultra-approval { border-color:rgba(255,184,77,.42); background:rgba(255,184,77,.06); }
+.promotion-wallet { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:13px; border:1px solid var(--line); border-radius:11px; background:rgba(5,8,14,.45); }
+.promotion-wallet>div { min-width:0; display:grid; gap:4px; }
+.promotion-wallet span { color:var(--muted); font-size:10px; font-weight:800; text-transform:uppercase; }
+.promotion-wallet code { color:var(--cyan); font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; user-select:all; }
+.promotion-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:9px; }
+.platform-panel { border-color:rgba(0,209,255,.24); background:linear-gradient(145deg,rgba(0,209,255,.045),rgba(17,23,34,.94)); }
+.platform-user-list,.platform-task-list,.platform-submission-list { display:grid; gap:10px; margin-top:15px; }
+.platform-user-row { min-width:0; border:1px solid var(--line); border-radius:13px; overflow:hidden; background:rgba(5,8,14,.48); }
+.platform-user-row>button { width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:14px; padding:13px; border:0; background:transparent; color:var(--text); text-align:left; cursor:pointer; }
+.platform-user-row>button:hover { background:rgba(0,209,255,.045); }
+.platform-user-row span { min-width:0; display:grid; gap:3px; }
+.platform-user-row code { color:var(--cyan); font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
+.platform-user-metrics { text-align:right; }.platform-user-metrics b { color:var(--green); }.platform-user-metrics small { color:var(--muted); font-size:10px; }
+.platform-user-detail { margin-top:16px; padding:16px; border:1px solid rgba(20,241,149,.28); border-radius:14px; background:rgba(3,17,14,.76); }
+.platform-user-summary { display:grid; grid-template-columns:2fr repeat(3,minmax(0,1fr)); gap:9px; margin-top:13px; }
+.platform-user-summary article { min-width:0; display:grid; align-content:start; gap:5px; padding:12px; border:1px solid var(--line); border-radius:11px; background:rgba(255,255,255,.025); }
+.platform-user-summary span,.platform-user-summary small { color:var(--muted); font-size:10px; }.platform-user-summary code { color:var(--cyan); font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
+.platform-user-summary .nft-button { justify-self:start; min-height:32px; padding:5px 9px; font-size:10px; }
+.platform-identity { display:block!important; color:var(--green)!important; }.platform-identity.muted { color:var(--muted)!important; }
+.platform-detail-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.platform-detail-grid section { min-width:0; padding:12px; border:1px solid var(--line); border-radius:11px; }.platform-detail-grid h4 { margin:0 0 8px; }
+.platform-ledger-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 8px; padding:7px 0; border-top:1px solid rgba(38,49,66,.55); font-size:11px; }
+.platform-ledger-row:first-of-type { border-top:0; }.platform-ledger-row small { grid-column:1/-1; color:var(--muted); }.platform-ledger-row .positive { color:var(--green); }.platform-ledger-row .negative { color:var(--red); }
+.platform-task-row,.platform-submission-row { min-width:0; display:grid; grid-template-columns:minmax(0,1.5fr) minmax(130px,.4fr) auto auto; align-items:center; gap:12px; padding:14px; border:1px solid var(--line); border-radius:13px; background:rgba(5,8,14,.5); }
+.platform-task-row h3,.platform-submission-row h3 { margin:4px 0; }.platform-task-row p,.platform-submission-row p,.platform-submission-row small { margin:0; color:var(--muted); font-size:11px; line-height:1.45; overflow-wrap:anywhere; }
+.platform-task-row label { display:grid; gap:5px; color:var(--muted); font-size:10px; font-weight:800; }.platform-task-row input { width:100%; padding:9px; border:1px solid var(--line); border-radius:9px; background:#080d15; color:var(--text); }
+.platform-fixed-reward { display:grid; gap:3px; min-width:140px; }.platform-fixed-reward strong { color:var(--green); }.platform-fixed-reward strong:nth-child(2){color:var(--cyan)}.platform-fixed-reward small{color:var(--muted);font-size:9px;line-height:1.4}
+.platform-task-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }.platform-task-actions .nft-button { min-height:36px; padding:7px 10px; font-size:11px; }
+.platform-submission-row>div:nth-child(2) { display:grid; gap:4px; min-width:0; }.platform-submission-row a { color:var(--green); font-size:11px; }
 @media(max-width:820px){.grid,.rounds,.services,.entry-pools,.treasury-pools,.winner-history{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:820px){.referral-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:820px){.promotion-prizes{grid-template-columns:repeat(4,minmax(0,1fr));}}
@@ -139,3 +200,6 @@ h1,h2,h3,p { margin:0; } h1 { font-size:clamp(28px,5vw,44px); } h2 { font-size:2
 @media(max-width:620px){.referral-identities{grid-template-columns:1fr}.referral-progress{grid-template-columns:1fr 1fr 1fr}.referral-card-head{display:grid}.referral-status{justify-self:start}.admin-tabs{margin-top:18px}}
 @media(max-width:620px){.nft-entry-composer{grid-template-columns:1fr}.nft-entry-composer .nft-button{justify-self:end}.nft-recipient-row{grid-template-columns:30px minmax(0,1fr) 30px}.nft-row-status{grid-column:2}.nft-recipient-row>button{grid-column:3;grid-row:1/3}.nft-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.nft-confirmed-list>div{grid-template-columns:1fr}.nft-authority{grid-template-columns:1fr}.nft-actions .nft-button{flex:1 1 180px}}
 @media(max-width:620px){.skr-connect-grid,.skr-capture-toolbar{grid-template-columns:1fr}.skr-connect-grid label:first-child,.skr-connect-grid label:nth-of-type(4){grid-column:auto}.skr-capture-list{grid-template-columns:1fr}.skr-export-bar{display:grid}.skr-export-bar label{min-width:0}.skr-registry-row{grid-template-columns:48px 1fr}.skr-registry-row>div:nth-child(2),.skr-registry-row>div:nth-child(6){grid-column:2}.skr-database-actions .nft-button{flex:1 1 220px}}
+@media(max-width:620px){.promotion-treasury,.promotion-form,.promotion-wallet,.promotion-live-value{grid-template-columns:1fr}.promotion-field-wide{grid-column:auto}.promotion-actions .nft-button{flex:1 1 220px}}
+@media(max-width:900px){.platform-user-summary,.platform-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.platform-task-row,.platform-submission-row{grid-template-columns:1fr auto}.platform-task-row>div:first-child,.platform-submission-row>div:first-child{grid-column:1/-1}}
+@media(max-width:620px){.platform-user-row>button{grid-template-columns:1fr}.platform-user-metrics{text-align:left}.platform-user-summary,.platform-detail-grid,.platform-task-row,.platform-submission-row{grid-template-columns:1fr}.platform-task-row>div:first-child,.platform-submission-row>div:first-child{grid-column:auto}.platform-task-actions{justify-content:flex-start}}

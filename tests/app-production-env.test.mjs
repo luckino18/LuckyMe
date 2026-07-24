@@ -9,7 +9,8 @@ const STITCH_SCREENS = "app-seeker/src/stitchScreens.ts";
 const APP_JSON = "app-seeker/app.json";
 const APP_CONFIG = "app-seeker/app.config.js";
 const APP_ROOT = "app-seeker/src/LuckyMeReferralTestApp.tsx";
-const SEEKER_PASS_SCREEN = "app-seeker/src/SeekerPassDrawScreen.tsx";
+const PROMOTIONS_SCREEN = "app-seeker/src/PromotionsScreen.tsx";
+const COMMUNITY_SCREEN = "app-seeker/src/CommunityScreen.tsx";
 const ACTIVATION_ANALYTICS = "app-seeker/src/appActivationAnalytics.ts";
 
 test("Seeker app config resolves the EAS profile before profile env injection", () => {
@@ -123,9 +124,9 @@ test("Seeker publishes the approved ticket targets and automatic-refund copy", (
 test("Seeker release metadata advances without changing the Android package", () => {
   const app = JSON.parse(readFileSync(APP_JSON, "utf8")).expo;
 
-  assert.equal(app.version, "1.2.2");
+  assert.equal(app.version, "1.2.6");
+  assert.equal(app.android.versionCode, 19);
   assert.equal(app.android.package, "com.luckyme.seeker");
-  assert.equal(app.android.versionCode, 15);
   assert.ok(app.plugins.includes("./plugins/with-solana-dapp-store-query"));
   assert.equal(app.icon, "./assets/icon.png");
   assert.equal(app.android.adaptiveIcon.foregroundImage, "./assets/adaptive-icon.png");
@@ -136,30 +137,29 @@ test("Seeker release metadata advances without changing the Android package", ()
   ]);
 });
 
-test("official Seeker build enables the NFT promotion and private activation estimate", () => {
+test("official Seeker build enables dynamic Mainnet promotions and private activation estimate", () => {
   const config = readFileSync(APP_CONFIG, "utf8");
   const appRoot = readFileSync(APP_ROOT, "utf8");
   const stitch = readFileSync(STITCH_SCREENS, "utf8");
-  const promotion = readFileSync(SEEKER_PASS_SCREEN, "utf8");
+  const promotion = readFileSync(PROMOTIONS_SCREEN, "utf8");
   const analytics = readFileSync(ACTIVATION_ANALYTICS, "utf8");
 
-  assert.match(config, /seekerPassPromotionEnabled/);
   assert.match(appRoot, /recordDappStoreActivation/);
-  assert.match(appRoot, /SeekerPassDrawScreen/);
+  assert.match(appRoot, /PromotionsScreen/);
   assert.match(stitch, /data-route="seeker-pass"/);
-  assert.match(stitch, /<h2>NFT Holders<\/h2>/);
+  assert.match(stitch, /<h2>Promotions<\/h2>/);
   assert.match(readFileSync(LUCKYME_SCREEN, "utf8"), /return \{ type: "seeker-pass" \}/);
   assert.match(readFileSync(LUCKYME_SCREEN, "utf8"), /message\?\.type === "seeker-pass"/);
-  assert.match(promotion, /3 SOL/);
-  assert.match(promotion, /20 winning NFT entries/);
-  assert.match(promotion, /1,000 unique verified NFT entries/);
-  assert.match(promotion, /one wallet authentication signature/i);
-  assert.match(promotion, /Payouts activate after prize funding is confirmed/);
+  assert.match(promotion, /\/api\/promotions/);
+  assert.match(promotion, /Lucky Points/);
+  assert.match(promotion, /signAndSendTransactions/);
+  assert.match(promotion, /result\.promotion\.status === "locked"/);
+  assert.match(promotion, /Winner selection is starting/);
   assert.match(analytics, /SecureStore\.WHEN_UNLOCKED_THIS_DEVICE_ONLY/);
   assert.match(analytics, /\/api\/app\/activation/);
 });
 
-test("Seeker production Home exposes exactly the four approved product entrances", () => {
+test("Seeker production Home exposes four entrances without duplicating Pools in bottom navigation", () => {
   const screen = readFileSync(LUCKYME_SCREEN, "utf8");
   const stitch = readFileSync(STITCH_SCREENS, "utf8");
   const home = stitch.slice(stitch.indexOf("function homeBody"), stitch.indexOf("function winnerPrizeSol"));
@@ -168,23 +168,37 @@ test("Seeker production Home exposes exactly the four approved product entrances
 
   assert.equal((home.match(/class="home-action /g) ?? []).length, 4);
   assert.match(home, /<h2>Pools<\/h2>/);
-  assert.match(home, /<h2>Referral League<\/h2>/);
-  assert.match(home, /<h2>NFT Holders<\/h2>/);
-  assert.match(home, /<h2>Latest Winners<\/h2>/);
+  assert.match(home, /<h2>Promotions<\/h2>/);
+  assert.match(home, /<h2>Missions<\/h2>/);
+  assert.match(home, /<h2>Profile<\/h2>/);
   assert.match(home, /data-route="pools"/);
-  assert.match(home, /data-route="referral"/);
   assert.match(home, /data-route="seeker-pass"/);
-  assert.match(home, /data-route="latest-winners"/);
+  assert.match(home, /data-route="missions"/);
+  assert.match(home, /data-route="profile"/);
+  assert.doesNotMatch(home, /Referral League|data-route="referral"/);
   assert.match(winners, /round\.winners/);
   assert.match(stitch, /winner\.prizeLamports/);
   assert.doesNotMatch(home, /POOLS\.map|Valid draw targets|Reserve jackpot/);
-  assert.match(nav, /Home[\s\S]*Pools[\s\S]*Activity[\s\S]*How To[\s\S]*Social/);
+  assert.match(nav, /Home[\s\S]*Activity[\s\S]*How To[\s\S]*Social/);
+  assert.doesNotMatch(nav, /\["pools"/);
   assert.doesNotMatch(nav, /\["wallet"/);
   assert.match(stitch, /@LuckyMeSolana/);
   assert.match(stitch, /https:\/\/discord\.gg\/rZVjBJtMZ/);
   assert.match(stitch, /Join Discord/);
-  assert.match(screen, /\["home", "pools", "activity", "how-to-play", "social"\]/);
-  assert.match(screen, /message\?\.type === "referral"/);
+  assert.match(screen, /\["home", "activity", "how-to-play", "social"\]/);
+  assert.match(screen, /message\?\.type === "community"/);
+});
+
+test("Profile uses Profile, Referral and NFTs tabs without persistent synchronization bars", () => {
+  const community = readFileSync(COMMUNITY_SCREEN, "utf8");
+  const stitch = readFileSync(STITCH_SCREENS, "utf8");
+  assert.match(community, />PROFILE<\/Text>/);
+  assert.match(community, />REFERRAL<\/Text>/);
+  assert.match(community, />NFTs<\/Text>/);
+  assert.match(community, /\/api\/luckyme-nfts\/nonce/);
+  assert.match(community, /\/api\/luckyme-nfts\/verify/);
+  assert.doesNotMatch(community, /LuckyMe profile synchronized/);
+  assert.doesNotMatch(stitch, /Refunds are automatic when a round expires below target/);
 });
 
 test("Seeker APK includes opt-in notification and winner card surfaces", () => {
@@ -199,6 +213,8 @@ test("Seeker APK includes opt-in notification and winner card surfaces", () => {
   assert.doesNotMatch(screen, /Linking\.openSettings/);
   assert.match(screen, /Notifications\.getExpoPushTokenAsync/);
   assert.match(screen, /\/notifications\/register/);
+  assert.match(screen, /Application\.getAndroidId\(\)/);
+  assert.match(screen, /deviceId: deviceId \?\? undefined/);
   assert.match(screen, /if \(permissions\.granted\)[\s\S]*?registerExpoPushToken\(token, walletAddress\)/);
   assert.match(screen, /signAndSendTransactions/);
   assert.match(screen, /\/transactions\/buy-tickets/);

@@ -22,6 +22,20 @@ const nftState = {
   wallet: null,
   busy: false,
 };
+const promotionState = {
+  config: null,
+  wallet: null,
+  busy: false,
+  economy: { standard: null, ultra: null },
+  calculatorTimers: { standard: null, ultra: null },
+};
+const platformState = {
+  users: [],
+  tasks: [],
+  submissions: [],
+  selectedUser: null,
+  searchTimer: null,
+};
 const SKR_BRIDGE_URL = "http://127.0.0.1:8796";
 const skrState = {
   devices: [],
@@ -51,6 +65,27 @@ function nftApi(path, options = {}) {
       throw error;
     }
     return { response, payload };
+  });
+}
+
+function promotionApi(path, options = {}) {
+  return fetch(`/admin/api/promotions/${path}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+    ...options,
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json", "X-LuckyMe-Admin-Request": "1" } : {}),
+      ...(options.headers || {}),
+    },
+  }).then(async (response) => {
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.message || payload.error || `HTTP ${response.status}`);
+      error.payload = payload;
+      error.httpStatus = response.status;
+      throw error;
+    }
+    return payload;
   });
 }
 
@@ -730,29 +765,554 @@ function renderAcquisition() {
 
 function promotionStatusClass(status) {
   if (status === "paid") return "qualified";
-  if (status === "drawn_unfunded") return "ready";
-  if (["commitment_frozen", "randomness_pending"].includes(status)) return "pending";
+  if (["winner_ready", "prepared"].includes(status)) return "ready";
+  if (["locked", "randomness_pending"].includes(status)) return "pending";
   return status === "open" ? "qualified" : "invalid";
 }
 
+function baseUnits(value, decimals) {
+  const units = BigInt(String(value ?? "0"));
+  const scale = 10n ** BigInt(decimals);
+  const whole = units / scale;
+  const fraction = (units % scale).toString().padStart(decimals, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
+function showPromotionResult(kind, title, detail) {
+  const result = $("promotion-result");
+  result.hidden = false;
+  result.className = `nft-result ${kind}`;
+  result.innerHTML = `<strong>${safe(title)}</strong><span>${safe(detail)}</span>`;
+}
+
+function showUltraResult(kind, title, detail = "") {
+  const result = $("ultra-result");
+  result.hidden = false;
+  result.className = `nft-result ${kind}`;
+  result.innerHTML = `<strong>${safe(title)}</strong><span>${safe(detail)}</span>`;
+}
+
+function promotionEconomyFields(mode) {
+  const ultra = mode === "ultra";
+  return {
+    asset: $(ultra ? "ultra-asset" : "promotion-asset"),
+    prize: $(ultra ? "ultra-prize" : "promotion-prize"),
+    capacity: $(ultra ? "ultra-capacity" : "promotion-capacity"),
+    entryCost: $(ultra ? "ultra-entry-cost" : "promotion-entry-cost"),
+    minLevel: $(ultra ? "ultra-min-level" : "promotion-min-level"),
+    maxLevel: $(ultra ? "ultra-max-level" : "promotion-max-level"),
+    liveAudience: $(ultra ? "ultra-live-audience" : "promotion-live-audience"),
+    prizeUsd: $(ultra ? "ultra-prize-usd" : "promotion-prize-usd"),
+    priceStatus: $(ultra ? "ultra-price-status" : "promotion-price-status"),
+    status: $(ultra ? "ultra-economy-status" : "promotion-economy-status"),
+    terminal: $(ultra ? "ultra-economy-terminal" : "promotion-economy-terminal"),
+  };
+}
+
+function renderPromotionEconomy(mode, economy) {
+  const fields = promotionEconomyFields(mode);
+  promotionState.economy[mode] = economy;
+  if (!economy) {
+    fields.prizeUsd.textContent = "Enter a prize value";
+    fields.priceStatus.textContent = "Waiting for Jupiter";
+    fields.status.textContent = "WAITING";
+    return;
+  }
+  fields.prizeUsd.textContent = `$${Number(economy.prizeUsd).toFixed(2)} · ${economy.prizeAmount} ${economy.prizeAsset}`;
+  fields.priceStatus.textContent = `${economy.priceSource} · ${new Date(economy.priceFetchedAt).toLocaleTimeString()}`;
+  fields.status.textContent = String(economy.economicStatus).replaceAll("_", " ").toUpperCase();
+  fields.status.className = economy.intentionalSubsidy ? "bad" : economy.economicStatus === "warning" ? "neutral" : "good";
+  fields.terminal.textContent = (economy.terminal ?? []).join("\n");
+  renderPromotionTreasury();
+}
+
+async function calculatePromotionEconomy(mode, { includeOverrides = false } = {}) {
+  const fields = promotionEconomyFields(mode);
+  const amount = String(fields.prize.value || "").trim().replace(",", ".");
+  if (!amount || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+    renderPromotionEconomy(mode, null);
+    return;
+  }
+  fields.status.textContent = "CALCULATING";
+  try {
+    const payload = await promotionApi("economy/calculate", {
+      method: "POST",
+      body: JSON.stringify({
+        prizeAsset: fields.asset.value,
+        prizeAmount: amount,
+        economyMode: mode,
+        useLiveAudience: fields.liveAudience.checked,
+        minLevel: Number(fields.minLevel.value),
+        maxLevel: Number(fields.maxLevel.value),
+        ...(includeOverrides ? {
+          capacity: Number(fields.capacity.value),
+          entryCostPoints: Number(fields.entryCost.value),
+        } : {}),
+      }),
+    });
+    const economy = payload.economy;
+    if (!includeOverrides) {
+      fields.capacity.value = String(economy.recommendedCapacity);
+      fields.entryCost.value = String(economy.recommendedEntryCostPoints);
+    }
+    renderPromotionEconomy(mode, economy);
+  } catch (error) {
+    promotionState.economy[mode] = null;
+    fields.status.textContent = "UNAVAILABLE";
+    fields.priceStatus.textContent = error.message;
+    fields.terminal.textContent = `ECONOMY CALCULATION STOPPED\n${error.message}`;
+    renderPromotionTreasury();
+  }
+}
+
+function schedulePromotionEconomy(mode, includeOverrides = false) {
+  clearTimeout(promotionState.calculatorTimers[mode]);
+  promotionState.calculatorTimers[mode] = setTimeout(
+    () => calculatePromotionEconomy(mode, { includeOverrides }),
+    250,
+  );
+}
+
+function renderPromotionTreasury() {
+  const config = promotionState.config;
+  const assets = config?.treasury?.assets;
+  $("promotion-sponsor").textContent = config?.sponsor || "Not configured";
+  $("ultra-sponsor").textContent = config?.sponsor || "Not configured";
+  $("promotion-tool-status").textContent = config?.executionEnabled ? "Mainnet armed" : "Launch locked";
+  $("promotion-tool-status").className = `status ${config?.executionEnabled ? "bad" : "neutral"}`;
+  $("ultra-tool-status").textContent = config?.executionEnabled ? "Mainnet armed" : "Launch locked";
+  $("ultra-tool-status").className = `status ${config?.executionEnabled ? "bad" : "neutral"}`;
+  if (!assets) {
+    $("promotion-treasury").innerHTML = `<p class="entry-empty">Treasury unavailable${config?.treasuryError ? ` · ${safe(config.treasuryError)}` : ""}.</p>`;
+  } else {
+    $("promotion-treasury").innerHTML = ["SKR", "SOL"].map((asset) => {
+      const item = assets[asset];
+      return `<article class="promotion-treasury-card">
+        <span class="eyebrow">${safe(asset)} treasury</span>
+        <strong>${safe(baseUnits(item.totalBaseUnits, item.decimals))} ${safe(asset)}</strong>
+        <div><span>Available</span><b>${safe(baseUnits(item.availableBaseUnits, item.decimals))}</b></div>
+        <div><span>Reserved in pools</span><b>${safe(baseUnits(item.reservedBaseUnits, item.decimals))}</b></div>
+        ${item.walletTokenAddress ? `<code>${safe(item.walletTokenAddress)}</code>` : `<code>${safe(config.sponsor)}</code>`}
+      </article>`;
+    }).join("");
+  }
+  const baseReady = Boolean(config?.prepareEnabled && config?.executionEnabled && promotionState.wallet && !promotionState.busy);
+  const standardReady = baseReady && promotionState.economy.standard &&
+    !promotionState.economy.standard.intentionalSubsidy;
+  const ultraReady = baseReady && promotionState.economy.ultra &&
+    (!promotionState.economy.ultra.intentionalSubsidy || $("ultra-subsidy-approval").checked);
+  $("promotion-launch").disabled = !standardReady;
+  $("ultra-launch").disabled = !ultraReady;
+  $("promotion-connect-wallet").disabled = promotionState.busy || !config?.sponsor;
+  $("ultra-connect-wallet").disabled = promotionState.busy || !config?.sponsor;
+  $("promotion-connect-wallet").textContent = promotionState.wallet
+    ? `${promotionState.wallet.name} connected`
+    : "Connect funding wallet";
+  $("ultra-connect-wallet").textContent = promotionState.wallet
+    ? `${promotionState.wallet.name} connected`
+    : "Connect funding wallet";
+}
+
+async function loadPromotionConfig() {
+  try {
+    promotionState.config = await promotionApi("config");
+    renderPromotionTreasury();
+    renderPromotions();
+    if (!promotionState.config.executionEnabled) {
+      showPromotionResult("warning", "Mainnet launch is locked", "The service can inspect balances, but broadcasting remains disabled until the production execution switch is explicitly enabled.");
+    }
+  } catch (error) {
+    $("promotion-tool-status").textContent = "Unavailable";
+    $("promotion-tool-status").className = "status bad";
+    showPromotionResult("error", "Promotion service unavailable", error.message);
+  }
+}
+
+async function choosePromotionWallet(mode = "standard") {
+  const showResult = mode === "ultra" ? showUltraResult : showPromotionResult;
+  const options = compatibleWalletStandardOptions(nftWalletRegistry.get());
+  if (!options.length) {
+    showResult("warning", "No compatible Solana wallet detected", "Open Admin in the browser that contains the LuckyMe funding wallet.");
+    return;
+  }
+  showResult("wallets", "Choose the funding wallet", "");
+  const result = $(mode === "ultra" ? "ultra-result" : "promotion-result");
+  result.innerHTML += `<div class="nft-wallet-options">${options.map((option, index) => `<button type="button" data-promotion-wallet="${index}">${option.icon ? `<img src="${safe(option.icon)}" alt="" />` : ""}<span>${safe(option.name)}</span></button>`).join("")}</div>`;
+  result.querySelectorAll("[data-promotion-wallet]").forEach((button) => button.addEventListener("click", async () => {
+    try {
+      const option = options[Number(button.dataset.promotionWallet)];
+      const connected = await connectWalletStandardOption(option);
+      if (connected.account.address !== promotionState.config?.sponsor) {
+        throw new Error(`This wallet opened ${connected.account.address}. Select funding wallet ${promotionState.config?.sponsor}.`);
+      }
+      promotionState.wallet = { ...connected, name: option.name };
+      showResult("success", `${option.name} connected`, "The funding address matches. Nothing has been signed.");
+      renderPromotionTreasury();
+    } catch (error) {
+      showResult("error", "Wallet not connected", error.message);
+    }
+  }));
+}
+
+function base64FromBytes(value) {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+async function signPromotionTransaction(transactionBase64) {
+  const wallet = promotionState.wallet?.standardWallet;
+  const account = promotionState.wallet?.account;
+  const feature = wallet?.features?.[SOLANA_SIGN_TRANSACTION];
+  if (!wallet || !account || typeof feature?.signTransaction !== "function") {
+    throw new Error("The funding wallet cannot sign this Solana transaction");
+  }
+  const results = await feature.signTransaction({
+    account,
+    transaction: bytesFromBase64(transactionBase64),
+    chain: SOLANA_MAINNET_CHAIN,
+    options: { preflightCommitment: "confirmed", skipPreflight: false, maxRetries: 3 },
+  });
+  const signed = results?.[0]?.signedTransaction;
+  if (!(signed instanceof Uint8Array)) throw new Error("The wallet did not return the signed transaction");
+  return base64FromBytes(signed);
+}
+
+async function launchPromotion(event, mode = "standard") {
+  event.preventDefault();
+  const showResult = mode === "ultra" ? showUltraResult : showPromotionResult;
+  const economy = promotionState.economy[mode];
+  if (!economy) {
+    showResult("warning", "Economic calculation required", "Wait for a fresh USD quote and review the economy terminal first.");
+    return;
+  }
+  if (mode === "standard" && economy.intentionalSubsidy) {
+    showResult("warning", "Standard promotion is below the safe floor", "Use Ultra Promotion if you intentionally want LuckyMe to subsidize this campaign.");
+    return;
+  }
+  if (!promotionState.config?.executionEnabled) {
+    showResult("warning", "Mainnet launch is locked", "Enable execution on the protected production service only when the final program upgrade and release are approved.");
+    return;
+  }
+  promotionState.busy = true;
+  renderPromotionTreasury();
+  try {
+    const form = new FormData(event.currentTarget);
+    const expiryMode = String(form.get("expiryMode"));
+    const request = {
+      title: String(form.get("title") || ""),
+      subtitle: String(form.get("subtitle") || ""),
+      description: String(form.get("description") || ""),
+      entryCostPoints: Number(form.get("entryCostPoints")),
+      capacity: Number(form.get("capacity")),
+      prizeAsset: String(form.get("prizeAsset")),
+      prizeAmount: String(form.get("prizeAmount") || "").replace(",", "."),
+      economyMode: mode,
+      minLevel: Number(form.get("minLevel") || 1),
+      maxLevel: Number(form.get("maxLevel") || 100),
+      useLiveAudience: Boolean(form.get("useLiveAudience")),
+      approveIntentionalSubsidy: mode === "ultra" && Boolean(form.get("approveIntentionalSubsidy")),
+      subsidyConfirmation: mode === "ultra" && Boolean(form.get("approveIntentionalSubsidy"))
+        ? "APPROVE INTENTIONAL HOUSE SUBSIDY"
+        : "",
+      expiryMode,
+      ...(expiryMode === "timed" ? { expiresInMinutes: Number(form.get("expiresInMinutes")) } : {}),
+    };
+    showResult("working", "Preparing exact Mainnet transaction", "No transaction has been broadcast.");
+    const prepared = await promotionApi("prepare", { method: "POST", body: JSON.stringify(request) });
+    const summary = prepared.summary;
+    const amount = baseUnits(summary.prizeAmountBaseUnits, summary.prizeDecimals);
+    const approved = window.confirm(
+      `FINAL MAINNET REVIEW\n\nPromotion: ${request.title}\nMode: ${mode.toUpperCase()}\nPrize: ${amount} ${summary.asset} · $${Number(summary.prizeUsd).toFixed(2)}\nParticipants: ${summary.capacity}\nValid draw: ${summary.capacity}/${summary.capacity}\nEntry: ${summary.entryCostPoints} Lucky Points\nLevels: ${request.minLevel}-${request.maxLevel}\nEconomy: ${String(summary.economyStatus).replaceAll("_", " ")}\nVault: ${summary.vault}\n\nApprove this exact transaction in your wallet?`,
+    );
+    if (!approved) {
+      showResult("warning", "Launch cancelled before wallet approval", "No transaction was signed or broadcast.");
+      return;
+    }
+    const signedTransactionBase64 = await signPromotionTransaction(prepared.transactionBase64);
+    showResult("working", "Wallet approved", "Simulating the exact signed transaction before Mainnet broadcast.");
+    const result = await promotionApi("submit", {
+      method: "POST",
+      body: JSON.stringify({
+        planId: prepared.planId,
+        confirmation: prepared.confirmation,
+        signedTransactionBase64,
+      }),
+    });
+    showResult("success", `${mode === "ultra" ? "Ultra Promotion" : "Promotion"} launched on Mainnet`, `Transaction ${result.signature}`);
+    await loadPromotionConfig();
+  } catch (error) {
+    showResult("error", "Promotion launch stopped", error.message);
+  } finally {
+    promotionState.busy = false;
+    renderPromotionTreasury();
+  }
+}
+
 function renderPromotions() {
-  const promotions = Array.isArray(referralSnapshot.promotions) ? referralSnapshot.promotions : [];
+  const promotions = Array.isArray(promotionState.config?.promotions)
+    ? promotionState.config.promotions
+    : [];
   $("promotion-list").innerHTML = promotions.length ? promotions.map((promotion) => {
-    const prizes = (promotion.prizes ?? []).map((prize) => `<div><span>#${safe(prize.rank)}</span><strong>${safe(Number(prize.prizeSol).toFixed(3))} SOL</strong></div>`).join("");
-    const winners = (promotion.winners ?? []).map((winner) => `<div class="history-winner"><span>#${safe(winner.rank)}</span><code class="wallet-address">${safe(winner.wallet)}</code><strong>${safe(Number(winner.prizeSol).toFixed(3))} SOL</strong></div>`).join("");
-    const drawEvidence = promotion.entryCommitment
-      ? `<div class="promotion-evidence"><div><span>Entry commitment</span><code>${safe(promotion.entryCommitment)}</code></div><div><span>Target / resolved slot</span><code>${safe(promotion.targetSlot)} / ${safe(promotion.resolvedSlot)}</code></div><div><span>Randomness hash</span><code>${safe(promotion.randomnessHash)}</code></div></div>`
-      : "";
+    const prize = `${baseUnits(promotion.prizeAmountBaseUnits, promotion.prizeDecimals)} ${promotion.prizeAsset}`;
     return `<article class="promotion-card">
-      <div class="referral-card-head"><div><span class="eyebrow">${safe(promotion.campaignId)}</span><h3>${safe(promotion.name)}</h3></div><span class="referral-status ${promotionStatusClass(promotion.status)}">${safe(promotion.status)}</span></div>
-      <div class="referral-summary promotion-summary"><article class="referral-stat"><span>Validated NFTs</span><strong>${safe(promotion.entryCount)} / ${safe(promotion.entryThreshold)}</strong></article><article class="referral-stat"><span>Winners</span><strong>${safe(promotion.winnerCount)}</strong></article><article class="referral-stat"><span>Total prizes</span><strong>${safe(Number(promotion.prizeSol).toFixed(2))} SOL</strong></article><article class="referral-stat"><span>Funding</span><strong>${promotion.funded ? "Funded" : "Not loaded"}</strong></article></div>
-      <div class="promotion-progress"><span style="width:${Math.max(0, Math.min(100, Number(promotion.progressPercent ?? 0)))}%"></span></div>
-      <p class="panel-copy">${safe(promotion.entriesRemaining)} verified entries remaining · payout ${promotion.payoutEnabled ? "enabled" : "locked"}</p>
-      <div class="promotion-prizes">${prizes}</div>
-      ${drawEvidence}
-      ${winners ? `<div class="history-winners promotion-winners"><span class="eyebrow">Draw winners</span>${winners}</div>` : ""}
+      <div class="referral-card-head"><div><span class="eyebrow">${safe(promotion.prizeAsset)} prize pool</span><h3>${safe(promotion.title)}</h3></div><span class="referral-status ${promotionStatusClass(promotion.status)}">${safe(promotion.status)}</span></div>
+      <p class="panel-copy">${safe(promotion.subtitle)}</p>
+      <div class="referral-summary promotion-summary"><article class="referral-stat"><span>Confirmed entries</span><strong>${safe(promotion.entryCount)} / ${safe(promotion.capacity)}</strong></article><article class="referral-stat"><span>Entry</span><strong>${safe(promotion.entryCostPoints)} LP</strong></article><article class="referral-stat"><span>Prize</span><strong>${safe(prize)}</strong></article><article class="referral-stat"><span>Duration</span><strong>${promotion.expiryMode === "capacity-only" ? "No limit" : "Timed"}</strong></article></div>
+      <div class="promotion-progress"><span style="width:${Math.max(0, Math.min(100, Number(promotion.entryCount) / Number(promotion.capacity) * 100))}%"></span></div>
+      <div class="promotion-evidence"><div><span>Prize vault</span><code>${safe(promotion.vaultAddress)}</code></div><div><span>Promotion account</span><code>${safe(promotion.promotionAddress)}</code></div><div><span>Rules hash</span><code>${safe(promotion.rulesHash)}</code></div></div>
     </article>`;
   }).join("") : `<p class="entry-empty history-empty">No promotions are registered.</p>`;
+}
+
+function showPlatformTaskResult(kind, title, detail = "") {
+  const result = $("platform-task-result");
+  result.hidden = false;
+  result.className = `nft-result ${kind}`;
+  result.innerHTML = `<strong>${safe(title)}</strong>${detail ? `<span>${safe(detail)}</span>` : ""}`;
+}
+
+function renderPlatformUsers() {
+  $("platform-user-count").textContent = `${platformState.users.length} users`;
+  $("platform-user-count").className = "status ok";
+  $("platform-user-list").innerHTML = platformState.users.length
+    ? platformState.users.map((user) => `<article class="platform-user-row">
+        <button type="button" data-platform-user="${safe(user.wallet)}">
+          <span><strong>@${safe(user.username)}</strong><code>${safe(user.wallet)}</code></span>
+          <span class="platform-user-metrics">
+            <b>${safe(user.luckyPoints)} LP · ${safe(user.xpTotal)} XP</b>
+            <small>Level ${safe(user.level)} · ${safe(user.rankTitle)}</small>
+            <small>${safe(user.completedTasks)} completed · ${safe(user.pendingTasks)} pending</small>
+          </span>
+          <span class="referral-status ${user.status === "active" ? "qualified" : "invalid"}">${safe(user.status)}</span>
+        </button>
+      </article>`).join("")
+    : `<p class="entry-empty history-empty">No LuckyMe user matches this search.</p>`;
+}
+
+function renderPlatformUserDetails(user) {
+  const detail = $("platform-user-detail");
+  if (!user) {
+    detail.hidden = true;
+    detail.innerHTML = "";
+    return;
+  }
+  detail.hidden = false;
+  const identities = (user.identities ?? []).map((identity) =>
+    `<span class="platform-identity">${safe(identity.platform)} · @${safe(identity.displayHandle)}</span>`).join("") ||
+    `<span class="platform-identity muted">No social account verified</span>`;
+  const ledger = (user.ledger ?? []).map((entry) => `<div class="platform-ledger-row">
+    <span>${safe(entry.reason)}</span>
+    <strong class="${Number(entry.delta) >= 0 ? "positive" : "negative"}">${Number(entry.delta) >= 0 ? "+" : ""}${safe(entry.delta)} LP</strong>
+    <small>${new Date(entry.createdAt).toLocaleString()} · balance ${safe(entry.balanceAfter)}</small>
+  </div>`).join("") || `<p class="entry-empty">No points events yet.</p>`;
+  const xpLedger = (user.xpLedger ?? []).map((entry) => `<div class="platform-ledger-row">
+    <span>${safe(entry.reason)}</span>
+    <strong class="positive">+${safe(entry.delta)} XP</strong>
+    <small>${new Date(entry.createdAt).toLocaleString()} · total ${safe(entry.xpAfter)} XP</small>
+  </div>`).join("") || `<p class="entry-empty">No XP events yet.</p>`;
+  const submissions = (user.submissions ?? []).map((entry) => `<div class="platform-ledger-row">
+    <span>${safe(entry.title)}</span><strong>${safe(entry.status)}</strong>
+    <small>${safe(entry.platform)} · ${safe(entry.reward_points)} LP</small>
+  </div>`).join("") || `<p class="entry-empty">No tasks submitted yet.</p>`;
+  const entries = (user.promotionEntries ?? []).map((entry) => `<div class="platform-ledger-row">
+    <span>${safe(entry.promotion_title)}</span><strong>${safe(entry.status)}</strong>
+    <small>${entry.entry_index == null ? "Reserved" : `Entry #${Number(entry.entry_index) + 1}`}</small>
+  </div>`).join("") || `<p class="entry-empty">No promotional pool entries yet.</p>`;
+  detail.innerHTML = `<div class="panel-title">
+      <div><span class="eyebrow">User details</span><h3>@${safe(user.username)}</h3></div>
+      <button class="nft-button secondary" type="button" id="platform-user-close">Close</button>
+    </div>
+    <div class="platform-user-summary">
+      <article><span>Wallet</span><code>${safe(user.wallet)}</code><button class="nft-button secondary" type="button" data-copy-wallet="${safe(user.wallet)}">Copy</button></article>
+      <article><span>Lucky Points</span><strong>${safe(user.luckyPoints)}</strong><small>${safe(user.reservedPoints)} reserved</small></article>
+      <article><span>Progress</span><strong>Level ${safe(user.xp?.level)} · ${safe(user.xp?.rankTitle)}</strong><small>${safe(user.xp?.total)} XP · ${safe(user.xp?.progressPercent)}% to next level</small></article>
+      <article><span>Avatar</span><strong>${safe(user.avatar?.name || "Not selected")}</strong><small>${safe(user.avatar?.assetKey || "Awaiting approved artwork")}</small></article>
+      <article><span>Username</span><strong>${safe(user.usernameState?.canCustomize ? "Temporary" : "Permanent")}</strong><small>${safe(user.usernameState?.finalizedAt || "Not finalized")}</small></article>
+      <article><span>Social identity</span><div>${identities}</div></article>
+    </div>
+    <div class="platform-detail-grid">
+      <section><h4>Task history</h4>${submissions}</section>
+      <section><h4>Lucky Points ledger</h4>${ledger}</section>
+      <section><h4>XP ledger</h4>${xpLedger}</section>
+      <section><h4>Promotion entries</h4>${entries}</section>
+    </div>`;
+}
+
+async function loadPlatformUsers() {
+  try {
+    const search = $("platform-user-search")?.value.trim() ?? "";
+    const payload = await promotionApi(`platform/users?limit=500&search=${encodeURIComponent(search)}`);
+    platformState.users = payload.users ?? [];
+    renderPlatformUsers();
+  } catch (error) {
+    $("platform-user-count").textContent = "Unavailable";
+    $("platform-user-count").className = "status bad";
+    $("platform-user-list").innerHTML = `<div class="alert"><strong>users_error</strong>${safe(error.message)}</div>`;
+  }
+}
+
+async function openPlatformUser(wallet) {
+  try {
+    const payload = await promotionApi(`platform/users/${encodeURIComponent(wallet)}`);
+    platformState.selectedUser = payload.user;
+    renderPlatformUserDetails(payload.user);
+  } catch (error) {
+    $("platform-user-detail").hidden = false;
+    $("platform-user-detail").innerHTML = `<div class="alert"><strong>user_error</strong>${safe(error.message)}</div>`;
+  }
+}
+
+function renderPlatformTasks() {
+  $("platform-task-status").textContent = `${platformState.tasks.length} tasks`;
+  $("platform-task-status").className = "status ok";
+  $("platform-task-list").innerHTML = platformState.tasks.length
+    ? platformState.tasks.map((task) => `<article class="platform-task-row">
+        <div><span class="eyebrow">${safe(task.gameplay ? "gameplay" : task.platform)} · ${safe(task.actionType || task.verificationType)}</span><h3>${safe(task.title)}</h3><p>${safe(task.description)}</p>${task.targetUrl ? `<a href="${safe(task.targetUrl)}" target="_blank" rel="noopener noreferrer">${safe(task.actionLabel)} ↗</a>` : ""}${task.gameplay ? `<small>${safe(task.gameplay.requiredCount)} valid ${safe(task.gameplay.poolType)} pool settlements after mission start</small>` : ""}</div>
+        <div class="platform-fixed-reward"><strong>${safe(task.rewardPoints)} LP</strong><strong>${safe(task.rewardXp)} XP</strong><small>${safe(task.rewardPresetKey)} · levels ${safe(task.minLevel)}-${safe(task.maxLevel)}${task.participantLimit ? ` · max ${safe(task.participantLimit)} users` : ""}</small></div>
+        <span class="referral-status ${task.status === "active" ? "qualified" : "pending"}">${safe(task.status)}</span>
+        <div class="platform-task-actions">
+          ${task.status === "archived"
+            ? `<button class="nft-button danger" type="button" data-platform-task-delete="${safe(task.id)}">Delete</button>`
+            : `<button class="nft-button ${task.status === "active" ? "danger" : ""}" type="button" data-platform-task-toggle="${safe(task.id)}" data-next-status="${task.status === "active" ? "paused" : "active"}">${task.status === "active" ? "Pause" : "Activate"}</button>
+               <button class="nft-button danger" type="button" data-platform-task-close="${safe(task.id)}">Close</button>`}
+        </div>
+      </article>`).join("")
+    : `<p class="entry-empty history-empty">No tasks created yet.</p>`;
+  $("platform-submission-list").innerHTML = platformState.submissions.length
+    ? platformState.submissions.map((submission) => `<article class="platform-submission-row">
+        <div><span class="eyebrow">${safe(submission.platform)} · ${safe(submission.rewardPoints)} LP · ${safe(submission.rewardXp)} XP</span><h3>${safe(submission.title)}</h3><p>@${safe(submission.username)} · ${safe(submission.wallet)}</p></div>
+        <div><strong>@${safe(submission.submittedValue)}</strong>${submission.proofUrl ? `<a href="${safe(submission.proofUrl)}" target="_blank" rel="noopener noreferrer">Open X proof ↗</a>` : ""}<small>Required: ${safe(submission.proofMessage)}</small></div>
+        <div class="platform-task-actions">
+          <button class="nft-button" type="button" data-platform-review="${safe(submission.id)}" data-decision="approve">Approve</button>
+          <button class="nft-button danger" type="button" data-platform-review="${safe(submission.id)}" data-decision="reject">Reject</button>
+        </div>
+      </article>`).join("")
+    : `<p class="entry-empty history-empty">No X submissions are waiting for review.</p>`;
+}
+
+async function loadPlatformTasks() {
+  try {
+    const payload = await promotionApi("platform/tasks?submissionStatus=pending_review");
+    platformState.tasks = payload.tasks ?? [];
+    platformState.submissions = payload.submissions ?? [];
+    renderPlatformTasks();
+  } catch (error) {
+    $("platform-task-status").textContent = "Unavailable";
+    $("platform-task-status").className = "status bad";
+    $("platform-task-list").innerHTML = `<div class="alert"><strong>tasks_error</strong>${safe(error.message)}</div>`;
+  }
+}
+
+async function createPlatformTask(event) {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
+  const selectedPlatform = String(form.get("platform") || "");
+  const gameplay = selectedPlatform === "gameplay";
+  try {
+    showPlatformTaskResult("working", "Creating task");
+    await promotionApi("platform/tasks", {
+      method: "POST",
+      body: JSON.stringify({
+        title: String(form.get("title") || ""),
+        platform: gameplay ? "community" : selectedPlatform,
+        description: String(form.get("description") || ""),
+        xAction: String(form.get("xAction") || ""),
+        targetUrl: String(form.get("targetUrl") || ""),
+        minLevel: Number(form.get("minLevel") || 1),
+        maxLevel: Number(form.get("maxLevel") || 100),
+        participantLimit: form.get("participantLimit") ? Number(form.get("participantLimit")) : null,
+        gameplayPoolType: gameplay ? String(form.get("gameplayPoolType") || "any") : null,
+        gameplayRequiredCount: gameplay ? Number(form.get("gameplayRequiredCount") || 1) : null,
+        status: String(form.get("status") || "active"),
+      }),
+    });
+    showPlatformTaskResult("success", "Task created", "It is now available in the APK when active.");
+    formElement.reset();
+    syncXTaskFields();
+    await syncTaskRewardPreview();
+    await loadPlatformTasks();
+  } catch (error) {
+    showPlatformTaskResult("error", "Task was not created", error.message);
+  }
+}
+
+async function updatePlatformTask(taskId, changes) {
+  await promotionApi(`platform/tasks/${encodeURIComponent(taskId)}/update`, {
+    method: "POST",
+    body: JSON.stringify(changes),
+  });
+  await loadPlatformTasks();
+}
+
+async function deletePlatformTask(taskId) {
+  if (!window.confirm("Delete this closed task from the registry? Its completed user history will be preserved.")) return;
+  await promotionApi(`platform/tasks/${encodeURIComponent(taskId)}/delete`, {
+    method: "POST",
+    body: "{}",
+  });
+  showPlatformTaskResult("success", "Task deleted", "It no longer appears in the registry or APK.");
+  await loadPlatformTasks();
+}
+
+function syncXTaskFields() {
+  const isX = $("platform-task-platform").value === "x";
+  const isGameplay = $("platform-task-platform").value === "gameplay";
+  $("platform-task-x-action-field").hidden = !isX;
+  $("platform-task-x-target-field").hidden = !isX;
+  $("platform-task-x-preview").hidden = !isX;
+  $("platform-task-x-target").required = isX;
+  $("platform-task-gameplay-pool-field").hidden = !isGameplay;
+  $("platform-task-gameplay-count-field").hidden = !isGameplay;
+  const labels = {
+    like: "Like this post",
+    follow: "Follow this account",
+    repost: "Repost this post",
+    comment: "Comment on this post",
+  };
+  const action = $("platform-task-x-action").value;
+  $("platform-task-x-requirement").textContent = labels[action] ?? "Complete this X action";
+  $("platform-task-x-target").placeholder = action === "follow"
+    ? "https://x.com/LuckyMe"
+    : "https://x.com/LuckyMe/status/...";
+  void syncTaskRewardPreview();
+}
+
+async function syncTaskRewardPreview() {
+  const selectedPlatform = $("platform-task-platform").value;
+  const gameplay = selectedPlatform === "gameplay";
+  try {
+    const payload = await promotionApi("platform/tasks/reward-preview", {
+      method: "POST",
+      body: JSON.stringify({
+        platform: gameplay ? "community" : selectedPlatform,
+        xAction: $("platform-task-x-action").value,
+        gameplayPoolType: gameplay ? $("platform-task-gameplay-pool").value : null,
+        gameplayRequiredCount: gameplay ? Number($("platform-task-gameplay-count").value) : null,
+      }),
+    });
+    $("platform-task-reward-lp").textContent = `${payload.reward.points} LP`;
+    $("platform-task-reward-xp").textContent = `${payload.reward.xp} XP`;
+  } catch (error) {
+    $("platform-task-reward-lp").textContent = "Unavailable";
+    $("platform-task-reward-xp").textContent = error.message;
+  }
+}
+
+async function reviewPlatformSubmission(submissionId, decision) {
+  const label = decision === "approve" ? "approve and award the configured Lucky Points" : "reject";
+  if (!window.confirm(`Confirm that you want to ${label} this submission?`)) return;
+  try {
+    await promotionApi(`platform/submissions/${encodeURIComponent(submissionId)}/review`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
+    });
+    showPlatformTaskResult("success", decision === "approve" ? "Submission approved" : "Submission rejected");
+    await Promise.all([loadPlatformTasks(), loadPlatformUsers()]);
+  } catch (error) {
+    showPlatformTaskResult("error", "Review failed", error.message);
+  }
 }
 
 function statusClass(status) {
@@ -863,9 +1423,71 @@ $("history-pool").addEventListener("change", renderWinnerHistory);
 $("history-round").addEventListener("input", renderWinnerHistory);
 $("referral-status").addEventListener("change", renderReferrals);
 $("referral-search").addEventListener("input", renderReferrals);
+$("promotion-expiry-mode").addEventListener("change", () => {
+  $("promotion-duration").disabled = $("promotion-expiry-mode").value !== "timed";
+});
+$("ultra-expiry-mode").addEventListener("change", () => {
+  $("ultra-duration").disabled = $("ultra-expiry-mode").value !== "timed";
+});
+$("promotion-connect-wallet").addEventListener("click", () => choosePromotionWallet("standard"));
+$("ultra-connect-wallet").addEventListener("click", () => choosePromotionWallet("ultra"));
+$("promotion-form").addEventListener("submit", (event) => launchPromotion(event, "standard"));
+$("ultra-promotion-form").addEventListener("submit", (event) => launchPromotion(event, "ultra"));
+$("ultra-subsidy-approval").addEventListener("change", renderPromotionTreasury);
+for (const mode of ["standard", "ultra"]) {
+  const fields = promotionEconomyFields(mode);
+  for (const field of [fields.asset, fields.prize, fields.minLevel, fields.maxLevel, fields.liveAudience]) {
+    field.addEventListener(field.type === "checkbox" || field.tagName === "SELECT" ? "change" : "input", () => {
+      schedulePromotionEconomy(mode, false);
+    });
+  }
+  for (const field of [fields.capacity, fields.entryCost]) {
+    field.addEventListener("input", () => schedulePromotionEconomy(mode, true));
+  }
+}
+$("platform-task-form").addEventListener("submit", createPlatformTask);
+$("platform-task-platform").addEventListener("change", syncXTaskFields);
+$("platform-task-x-action").addEventListener("change", syncXTaskFields);
+$("platform-task-gameplay-pool").addEventListener("change", syncTaskRewardPreview);
+$("platform-task-gameplay-count").addEventListener("input", syncTaskRewardPreview);
+syncXTaskFields();
+$("platform-user-search").addEventListener("input", () => {
+  clearTimeout(platformState.searchTimer);
+  platformState.searchTimer = setTimeout(loadPlatformUsers, 200);
+});
+$("platform-user-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-platform-user]");
+  if (button) openPlatformUser(button.dataset.platformUser);
+});
+$("platform-user-detail").addEventListener("click", (event) => {
+  if (event.target.closest("#platform-user-close")) renderPlatformUserDetails(null);
+  const copy = event.target.closest("[data-copy-wallet]");
+  if (copy) navigator.clipboard.writeText(copy.dataset.copyWallet).catch(() => undefined);
+});
+$("platform-task-list").addEventListener("click", (event) => {
+  const toggle = event.target.closest("[data-platform-task-toggle]");
+  if (toggle) {
+    updatePlatformTask(toggle.dataset.platformTaskToggle, { status: toggle.dataset.nextStatus })
+      .catch((error) => showPlatformTaskResult("error", "Task update failed", error.message));
+  }
+  const close = event.target.closest("[data-platform-task-close]");
+  if (close && window.confirm("Close this task? It will disappear from the APK and can then be deleted.")) {
+    updatePlatformTask(close.dataset.platformTaskClose, { status: "archived" })
+      .catch((error) => showPlatformTaskResult("error", "Task close failed", error.message));
+  }
+  const remove = event.target.closest("[data-platform-task-delete]");
+  if (remove) {
+    deletePlatformTask(remove.dataset.platformTaskDelete)
+      .catch((error) => showPlatformTaskResult("error", "Task deletion failed", error.message));
+  }
+});
+$("platform-submission-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-platform-review]");
+  if (button) reviewPlatformSubmission(button.dataset.platformReview, button.dataset.decision);
+});
 
 function selectTab(name) {
-  const selected = ["status", "treasury", "winners", "referrals", "downloads", "promotions", "skr-database", "nft-send"].includes(name) ? name : "status";
+  const selected = ["status", "treasury", "winners", "referrals", "downloads", "promotions", "ultra-promotion", "users", "tasks", "skr-database", "nft-send"].includes(name) ? name : "status";
   document.querySelectorAll("[data-admin-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.adminTab === selected);
   });
@@ -874,6 +1496,8 @@ function selectTab(name) {
   });
   history.replaceState(null, "", `#${selected}`);
   if (selected === "skr-database") loadSkrRegistry();
+  if (selected === "users") loadPlatformUsers();
+  if (selected === "tasks") loadPlatformTasks();
 }
 
 document.querySelectorAll("[data-admin-tab]").forEach((button) => {
@@ -924,6 +1548,9 @@ $("skr-registry-list").addEventListener("click", (event) => {
 });
 loadNftConfig();
 loadSkrRegistry();
+loadPromotionConfig();
+loadPlatformUsers();
+loadPlatformTasks();
 
 async function refresh() {
   try {

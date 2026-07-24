@@ -244,7 +244,7 @@ test("Seeker How To stays within the phone viewport", () => {
   assert.match(seekerScreens, /<div class="how-wiki-page">/);
   assert.match(seekerScreens, /class="how-wiki-tabs"/);
   assert.match(seekerScreens, /data-how-tab="pools"/);
-  assert.match(seekerScreens, /data-how-tab="referral"/);
+  assert.match(seekerScreens, /data-how-tab="missions"/);
   assert.match(seekerScreens, /data-how-tab="nft"/);
   assert.match(seekerScreens, /\.how-wiki-page \{[\s\S]*?overflow: hidden;/);
   assert.match(seekerScreens, /\.how-pool-grid \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);

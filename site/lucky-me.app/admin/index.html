@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <title>LuckyMe Admin</title>
-    <link rel="stylesheet" href="/admin/admin.css?v=20260719-skr-manual-remove1" />
+    <link rel="stylesheet" href="/admin/admin.css?v=20260723-economy1" />
   </head>
   <body>
     <main class="shell">
@@ -21,6 +21,9 @@
         <button class="admin-tab" data-admin-tab="referrals">Referrals</button>
         <button class="admin-tab" data-admin-tab="downloads">Downloads</button>
         <button class="admin-tab" data-admin-tab="promotions">Promotions</button>
+        <button class="admin-tab admin-tab-write" data-admin-tab="ultra-promotion">Ultra Promotion</button>
+        <button class="admin-tab" data-admin-tab="users">Users</button>
+        <button class="admin-tab admin-tab-write" data-admin-tab="tasks">Tasks</button>
         <button class="admin-tab" data-admin-tab="skr-database">SKR Database</button>
         <button class="admin-tab admin-tab-write" data-admin-tab="nft-send">Send NFT</button>
       </nav>
@@ -84,10 +87,146 @@
         </section>
       </div>
       <div class="admin-panel" data-admin-panel="promotions">
+        <section class="panel promotion-launcher">
+          <div class="panel-title">
+            <div><span class="eyebrow">Mainnet promotional pools</span><h2>Launch a promotion</h2></div>
+            <span class="status neutral" id="promotion-tool-status">Loading</span>
+          </div>
+          <p class="panel-copy">One reviewed wallet approval creates and funds an isolated prize vault. The draw starts automatically only when every place is filled.</p>
+          <div class="promotion-treasury" id="promotion-treasury"></div>
+          <form id="promotion-form" class="promotion-form">
+            <label>Promotion name<input id="promotion-title" name="title" required maxlength="100" placeholder="SKR Community Draw" /></label>
+            <label>Short subtitle<input id="promotion-subtitle" name="subtitle" required maxlength="140" value="Exclusive LuckyMe promotion" /></label>
+            <label class="promotion-field-wide">Description<textarea id="promotion-description" name="description" required maxlength="2000" rows="4" placeholder="Who can enter and what they can win."></textarea></label>
+            <label>Prize currency<select id="promotion-asset" name="prizeAsset"><option value="SKR">SKR</option><option value="SOL">SOL</option></select></label>
+            <label>Prize value<input id="promotion-prize" name="prizeAmount" required type="text" inputmode="decimal" placeholder="500" /></label>
+            <div class="promotion-live-value promotion-field-wide">
+              <div><span>Live prize value</span><strong id="promotion-prize-usd">Enter a prize value</strong></div>
+              <div><span>Market quote</span><strong id="promotion-price-status">Waiting for Jupiter</strong></div>
+            </div>
+            <label>Recommended participants<input id="promotion-capacity" name="capacity" required type="number" min="2" max="10000" step="1" value="20" /></label>
+            <label>Lucky Points per entry<input id="promotion-entry-cost" name="entryCostPoints" required type="number" min="1" max="1000000" step="1" value="25" /></label>
+            <label>Minimum level<input id="promotion-min-level" name="minLevel" type="number" min="1" max="100" step="1" value="1" /></label>
+            <label>Maximum level<input id="promotion-max-level" name="maxLevel" type="number" min="1" max="100" step="1" value="100" /></label>
+            <label class="promotion-toggle promotion-field-wide"><input id="promotion-live-audience" name="useLiveAudience" type="checkbox" /><span>Use live LuckyMe audience</span><small>OFF uses the Premium economic baseline. ON uses only eligible active users when the sample is reliable.</small></label>
+            <label>Promotion duration<select id="promotion-expiry-mode" name="expiryMode"><option value="capacity-only">No time limit — draw at capacity</option><option value="timed">Time limit — no partial draw</option></select></label>
+            <label>Duration in minutes<input id="promotion-duration" name="expiresInMinutes" type="number" min="5" max="43200" step="1" value="1440" disabled /></label>
+            <section class="economy-terminal promotion-field-wide" aria-live="polite">
+              <div class="economy-terminal-head"><span>Promotion economy terminal</span><strong id="promotion-economy-status">WAITING</strong></div>
+              <pre id="promotion-economy-terminal">Enter the prize currency and amount to calculate the live USD value, participants and LP cost.</pre>
+            </section>
+            <div class="promotion-wallet promotion-field-wide">
+              <div><span>Funding wallet</span><code id="promotion-sponsor">Not configured</code></div>
+              <div><span>Prize vault</span><code>Generated separately for this promotion at launch</code></div>
+            </div>
+            <div class="promotion-actions promotion-field-wide">
+              <button class="nft-button secondary" id="promotion-connect-wallet" type="button">Connect funding wallet</button>
+              <button class="nft-button" id="promotion-launch" type="submit" disabled>Launch Promotion on Mainnet</button>
+            </div>
+          </form>
+          <div class="nft-result" id="promotion-result" hidden aria-live="polite"></div>
+        </section>
         <section class="panel">
-          <div class="panel-title"><div><span class="eyebrow">Campaign registry</span><h2>Promotions</h2></div></div>
-          <p class="panel-copy">Every LuckyMe promotion appears here with its verified entries, prize schedule, funding gate, public commitment and draw result.</p>
+          <div class="panel-title"><div><span class="eyebrow">Pool registry</span><h2>Promotion status</h2></div></div>
+          <p class="panel-copy">Each promotion has its own vault, entry capacity and on-chain lifecycle.</p>
           <div class="promotion-list" id="promotion-list"></div>
+        </section>
+      </div>
+      <div class="admin-panel" data-admin-panel="ultra-promotion">
+        <section class="panel promotion-launcher ultra-launcher">
+          <div class="panel-title">
+            <div><span class="eyebrow">Intentional high-impact campaign</span><h2>Ultra Promotion</h2></div>
+            <span class="status neutral" id="ultra-tool-status">Calculator ready</span>
+          </div>
+          <p class="panel-copy">Uses the same live economy engine, but permits an explicit House subsidy after the exact loss is reviewed and accepted.</p>
+          <form id="ultra-promotion-form" class="promotion-form">
+            <label>Promotion name<input name="title" required maxlength="100" placeholder="LuckyMe Ultra Draw" /></label>
+            <label>Short subtitle<input name="subtitle" required maxlength="140" value="Ultra LuckyMe promotion" /></label>
+            <label class="promotion-field-wide">Description<textarea name="description" required maxlength="2000" rows="4" placeholder="Explain why this Ultra Promotion is exceptional."></textarea></label>
+            <label>Prize currency<select id="ultra-asset" name="prizeAsset"><option value="SKR">SKR</option><option value="SOL">SOL</option></select></label>
+            <label>Prize value<input id="ultra-prize" name="prizeAmount" required type="text" inputmode="decimal" placeholder="5000" /></label>
+            <div class="promotion-live-value promotion-field-wide">
+              <div><span>Live prize value</span><strong id="ultra-prize-usd">Enter a prize value</strong></div>
+              <div><span>Market quote</span><strong id="ultra-price-status">Waiting for Jupiter</strong></div>
+            </div>
+            <label>Participants<input id="ultra-capacity" name="capacity" required type="number" min="2" max="10000" step="1" value="100" /></label>
+            <label>Lucky Points per entry<input id="ultra-entry-cost" name="entryCostPoints" required type="number" min="1" max="1000000" step="1" value="100" /></label>
+            <label>Minimum level<input id="ultra-min-level" name="minLevel" type="number" min="1" max="100" step="1" value="1" /></label>
+            <label>Maximum level<input id="ultra-max-level" name="maxLevel" type="number" min="1" max="100" step="1" value="100" /></label>
+            <label class="promotion-toggle promotion-field-wide"><input id="ultra-live-audience" name="useLiveAudience" type="checkbox" /><span>Use live LuckyMe audience</span><small>Automatically ignored when fewer than 50 eligible active users are available.</small></label>
+            <label>Promotion duration<select id="ultra-expiry-mode" name="expiryMode"><option value="capacity-only">No time limit — draw at capacity</option><option value="timed">Time limit — no partial draw</option></select></label>
+            <label>Duration in minutes<input id="ultra-duration" name="expiresInMinutes" type="number" min="5" max="43200" step="1" value="1440" disabled /></label>
+            <section class="economy-terminal promotion-field-wide" aria-live="polite">
+              <div class="economy-terminal-head"><span>Ultra economy terminal</span><strong id="ultra-economy-status">WAITING</strong></div>
+              <pre id="ultra-economy-terminal">Enter the prize value to calculate the campaign.</pre>
+            </section>
+            <label class="promotion-toggle promotion-field-wide ultra-approval"><input id="ultra-subsidy-approval" name="approveIntentionalSubsidy" type="checkbox" /><span>I approve the intentional House subsidy shown above</span><small>This confirmation is required only when the selected capacity and LP cost are below the safe economic floor.</small></label>
+            <div class="promotion-wallet promotion-field-wide">
+              <div><span>Funding wallet</span><code id="ultra-sponsor">Not configured</code></div>
+              <div><span>Prize vault</span><code>Generated separately for this Ultra Promotion at launch</code></div>
+            </div>
+            <div class="promotion-actions promotion-field-wide">
+              <button class="nft-button secondary" id="ultra-connect-wallet" type="button">Connect funding wallet</button>
+              <button class="nft-button" id="ultra-launch" type="submit" disabled>Launch Ultra Promotion on Mainnet</button>
+            </div>
+          </form>
+          <div class="nft-result" id="ultra-result" hidden aria-live="polite"></div>
+        </section>
+      </div>
+      <div class="admin-panel" data-admin-panel="users">
+        <section class="panel platform-panel">
+          <div class="panel-title">
+            <div><span class="eyebrow">Wallet-based LuckyMe accounts</span><h2>Users</h2></div>
+            <span class="status neutral" id="platform-user-count">Loading</span>
+          </div>
+          <p class="panel-copy">Every SIWS-authenticated wallet has one profile, one permanent username and one Lucky Points ledger.</p>
+          <div class="history-filters">
+            <label>Username or wallet<input id="platform-user-search" type="search" placeholder="player_… or Solana address" /></label>
+          </div>
+          <div class="platform-user-list" id="platform-user-list"></div>
+          <div class="platform-user-detail" id="platform-user-detail" hidden></div>
+        </section>
+      </div>
+      <div class="admin-panel" data-admin-panel="tasks">
+        <section class="panel platform-panel">
+          <div class="panel-title">
+            <div><span class="eyebrow">Lucky Points missions</span><h2>Create a task</h2></div>
+            <span class="status neutral" id="platform-task-status">Loading</span>
+          </div>
+          <p class="panel-copy">Discord membership is verified automatically. X missions open the official Like, Follow, Repost or Comment dialog for the selected target.</p>
+          <form id="platform-task-form" class="promotion-form">
+            <label>Task title<input name="title" required maxlength="100" placeholder="Join LuckyMe Discord" /></label>
+            <label>Mission type<select id="platform-task-platform" name="platform"><option value="discord">Discord — automatic</option><option value="x">X</option><option value="gameplay">Pool participation — automatic</option><option value="community">Community — admin approval</option></select></label>
+            <label id="platform-task-x-action-field" hidden>X action<select id="platform-task-x-action" name="xAction"><option value="like">Like</option><option value="follow">Follow</option><option value="repost">Repost</option><option value="comment">Comment</option></select></label>
+            <label id="platform-task-x-target-field" hidden>X target link<input id="platform-task-x-target" name="targetUrl" type="url" maxlength="500" placeholder="https://x.com/LuckyMe/status/..." /></label>
+            <div class="promotion-wallet promotion-field-wide" id="platform-task-x-preview" hidden>
+              <div><span>User requirement</span><strong id="platform-task-x-requirement">Like this post</strong></div>
+              <div><span>X opens</span><strong>Official confirmation popup</strong></div>
+            </div>
+            <label id="platform-task-gameplay-pool-field" hidden>Pool type<select id="platform-task-gameplay-pool" name="gameplayPoolType"><option value="any">Any valid pool</option><option value="mini">Mini</option><option value="normal">Normal</option><option value="high">High</option><option value="premium">Premium</option></select></label>
+            <label id="platform-task-gameplay-count-field" hidden>Valid participations<input id="platform-task-gameplay-count" name="gameplayRequiredCount" type="number" min="1" max="100" step="1" value="1" /></label>
+            <label class="promotion-field-wide">Description<textarea name="description" required maxlength="1000" rows="3" placeholder="Explain exactly what the user must complete."></textarea></label>
+            <label>Minimum level<input name="minLevel" type="number" min="1" max="100" step="1" value="1" /></label>
+            <label>Maximum level<input name="maxLevel" type="number" min="1" max="100" step="1" value="100" /></label>
+            <label>Participant limit<input name="participantLimit" type="number" min="1" max="1000000" step="1" placeholder="No limit" /></label>
+            <label>Initial status<select name="status"><option value="active">Active</option><option value="draft">Draft</option><option value="paused">Paused</option></select></label>
+            <div class="promotion-live-value promotion-field-wide">
+              <div><span>Fixed Lucky Points reward</span><strong id="platform-task-reward-lp">— LP</strong></div>
+              <div><span>Fixed XP reward</span><strong id="platform-task-reward-xp">— XP</strong></div>
+            </div>
+            <div class="promotion-actions promotion-field-wide">
+              <button class="nft-button" type="submit">Create task</button>
+            </div>
+          </form>
+          <div class="nft-result" id="platform-task-result" hidden aria-live="polite"></div>
+        </section>
+        <section class="panel platform-panel">
+          <div class="panel-title"><div><span class="eyebrow">Published missions</span><h2>Task registry</h2></div></div>
+          <div class="platform-task-list" id="platform-task-list"></div>
+        </section>
+        <section class="panel platform-panel">
+          <div class="panel-title"><div><span class="eyebrow">Manual X verification</span><h2>Pending approvals</h2></div></div>
+          <div class="platform-submission-list" id="platform-submission-list"></div>
         </section>
       </div>
       <div class="admin-panel" data-admin-panel="skr-database">
@@ -176,6 +315,6 @@
       </div>
       <p class="readonly">Read-only panels remain reporting-only. “Send NFT” is a separate protected operation and always requires an external authority-wallet signature.</p>
     </main>
-    <script src="/admin/admin.js?v=20260719-skr-manual-remove1" type="module"></script>
+    <script src="/admin/admin.js?v=20260723-platform3" type="module"></script>
   </body>
 </html>

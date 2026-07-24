@@ -16,6 +16,7 @@ import {
   SEEKER_PASS_TREE,
   SEEKER_PASS_VERIFIED_CREATOR,
   SEEKER_PASS_WINNER_COUNT,
+  createMainnetLuckyMeNftVerifier,
   createMainnetSeekerPassVerifier,
   createSeekerReferralService,
   selectSeekerPassWinnerIndexes,
@@ -88,6 +89,101 @@ test("Seeker Pass nonce binds the exact statement", async (t) => {
   );
 });
 
+test("LuckyMe NFT profile verification is read-only and returns every verified asset", async (t) => {
+  const keypair = Keypair.generate();
+  const assets = [
+    {
+      assetId: Keypair.generate().publicKey.toBase58(),
+      name: "LuckyMe Seeker Pass #1",
+      image: "https://lucky-me.app/cnft/luckyme-seeker-pass-v2.png",
+      collectionId: "seeker-pass",
+      collectionName: "LuckyMe Seeker Pass",
+      collectionAddress: SEEKER_PASS_COLLECTION,
+      compressed: true,
+      tree: SEEKER_PASS_TREE,
+      leafId: 1,
+    },
+    {
+      assetId: Keypair.generate().publicKey.toBase58(),
+      name: "LuckyMe Seeker Pass #2",
+      image: null,
+      collectionId: "seeker-pass",
+      collectionName: "LuckyMe Seeker Pass",
+      collectionAddress: SEEKER_PASS_COLLECTION,
+      compressed: true,
+      tree: SEEKER_PASS_TREE,
+      leafId: 2,
+    },
+  ];
+  const service = createSeekerReferralService({
+    sgtVerifier: async () => null,
+    seekerPassVerifier: async () => null,
+    luckyMeNftVerifier: async (wallet) => ({
+      wallet,
+      collections: [{ id: "seeker-pass", name: "LuckyMe Seeker Pass", address: SEEKER_PASS_COLLECTION }],
+      assets,
+    }),
+    logger: () => undefined,
+  });
+  t.after(() => service.close());
+
+  const { payload } = service.issueLuckyMeNftNonce({ ip: "nft-profile" });
+  assert.match(payload.statement, /display its LuckyMe NFT collection/);
+  assert.doesNotMatch(payload.statement, /promotion|transfer authorization/i);
+  const result = await service.verifyLuckyMeNftSiws({
+    payload,
+    output: signedOutput(keypair, payload),
+    ip: "nft-profile",
+  });
+  assert.equal(result.wallet, keypair.publicKey.toBase58());
+  assert.deepEqual(result.assets, assets);
+  assert.equal(service.db.prepare("SELECT COUNT(*) AS count FROM promotion_entries").get().count, 0);
+});
+
+test("LuckyMe NFT DAS verifier lists valid collection assets and excludes burned assets", async (t) => {
+  const owner = Keypair.generate().publicKey.toBase58();
+  const firstAsset = Keypair.generate().publicKey.toBase58();
+  const burnedAsset = Keypair.generate().publicKey.toBase58();
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({
+    jsonrpc: "2.0",
+    result: {
+      items: [
+        {
+          id: firstAsset,
+          burnt: false,
+          compression: { compressed: true, tree: SEEKER_PASS_TREE, leaf_id: 4 },
+          ownership: { owner, ownership_model: "single" },
+          grouping: [{ group_key: "collection", group_value: SEEKER_PASS_COLLECTION }],
+          creators: [{ address: SEEKER_PASS_VERIFIED_CREATOR, verified: true }],
+          content: {
+            metadata: { name: "LuckyMe Seeker Pass" },
+            links: { image: "https://lucky-me.app/cnft/luckyme-seeker-pass-v2.png" },
+          },
+        },
+        {
+          id: burnedAsset,
+          burnt: true,
+          compression: { compressed: true, tree: SEEKER_PASS_TREE, leaf_id: 5 },
+          ownership: { owner, ownership_model: "single" },
+          grouping: [{ group_key: "collection", group_value: SEEKER_PASS_COLLECTION }],
+          creators: [{ address: SEEKER_PASS_VERIFIED_CREATOR, verified: true }],
+        },
+      ],
+    },
+  });
+  t.after(() => { globalThis.fetch = priorFetch; });
+
+  const verify = createMainnetLuckyMeNftVerifier({
+    rpcUrl: "https://mainnet.helius-rpc.com/?api-key=test",
+  });
+  const result = await verify(owner);
+  assert.equal(result.assets.length, 1);
+  assert.equal(result.assets[0].assetId, firstAsset);
+  assert.equal(result.assets[0].collectionName, "LuckyMe Seeker Pass");
+  assert.equal(result.assets[0].leafId, 4);
+});
+
 test("DAS verifier filters by collection and validates owner, tree and creator", async (t) => {
   const owner = Keypair.generate().publicKey.toBase58();
   const assetId = Keypair.generate().publicKey.toBase58();
@@ -118,7 +214,94 @@ test("DAS verifier filters by collection and validates owner, tree and creator",
   assert.equal(result.assetId, assetId);
   assert.deepEqual(requestBody.params.grouping, ["collection", SEEKER_PASS_COLLECTION]);
   assert.equal(requestBody.params.ownerAddress, owner);
-  assert.equal(requestBody.params.tokenType, "compressedNft");
+  assert.equal(requestBody.params.tokenType, undefined);
+});
+
+test("DAS verifier rejects a standard RPC provider without DAS support", () => {
+  assert.throws(
+    () => createMainnetSeekerPassVerifier({
+      rpcUrl: "https://solana-mainnet.g.alchemy.com/v2/test",
+    }),
+    (error) => error?.code === "missing_rpc_configuration",
+  );
+});
+
+test("DAS verifier supports QuickNode compressed NFT filtering", async (t) => {
+  const owner = Keypair.generate().publicKey.toBase58();
+  const priorFetch = globalThis.fetch;
+  let requestBody;
+  globalThis.fetch = async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return Response.json({ jsonrpc: "2.0", result: { items: [] } });
+  };
+  t.after(() => { globalThis.fetch = priorFetch; });
+
+  const verify = createMainnetSeekerPassVerifier({
+    rpcUrl: "https://example.solana-mainnet.quiknode.pro/test/",
+  });
+  assert.equal(await verify(owner), null);
+  assert.equal(requestBody.params.tokenType, undefined);
+});
+
+test("DAS verifier accepts an eligible asset when the first provider is unavailable", async (t) => {
+  const owner = Keypair.generate().publicKey.toBase58();
+  const assetId = Keypair.generate().publicKey.toBase58();
+  const priorFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    if (url.includes("helius")) return new Response("quota exhausted", { status: 429 });
+    return Response.json({
+      jsonrpc: "2.0",
+      result: {
+        items: [{
+          id: assetId,
+          burnt: false,
+          compression: { compressed: true, tree: SEEKER_PASS_TREE, leaf_id: 9 },
+          ownership: { owner, ownership_model: "single" },
+          grouping: [{ group_key: "collection", group_value: SEEKER_PASS_COLLECTION }],
+          creators: [{ address: SEEKER_PASS_VERIFIED_CREATOR, verified: true, share: 100 }],
+        }],
+      },
+    });
+  };
+  t.after(() => { globalThis.fetch = priorFetch; });
+
+  const verify = createMainnetSeekerPassVerifier({
+    env: {
+      SEEKER_PASS_DAS_RPC_URL: "https://mainnet.helius-rpc.com/?api-key=test",
+      LUCKYME_RPC_QUICKNODE_DAS_URL: "https://example.solana-mainnet.quiknode.pro/test/",
+    },
+  });
+  const result = await verify(owner);
+  assert.equal(result.assetId, assetId);
+  assert.equal(result.leafId, 9);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.some((url) => url.includes("helius")));
+  assert.ok(calls.some((url) => url.includes("quiknode")));
+});
+
+test("DAS verifier accepts multiple configured provider URLs and removes duplicates", async (t) => {
+  const owner = Keypair.generate().publicKey.toBase58();
+  const priorFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    return Response.json({ jsonrpc: "2.0", result: { items: [] } });
+  };
+  t.after(() => { globalThis.fetch = priorFetch; });
+
+  const helius = "https://mainnet.helius-rpc.com/?api-key=test";
+  const quicknode = "https://example.solana-mainnet.quiknode.pro/test/";
+  const verify = createMainnetSeekerPassVerifier({
+    env: {
+      SEEKER_PASS_DAS_RPC_URL: helius,
+      SEEKER_PASS_DAS_RPC_URLS: `${helius},\n${quicknode}`,
+      LUCKYME_RPC_ALCHEMY_URL: "https://solana-mainnet.g.alchemy.com/v2/ignored",
+    },
+  });
+  assert.equal(await verify(owner), null);
+  assert.deepEqual(calls.sort(), [helius, quicknode].sort());
 });
 
 test("Seeker Pass promotion registers one free entry per wallet and cNFT", async (t) => {

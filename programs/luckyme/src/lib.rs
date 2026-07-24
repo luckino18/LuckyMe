@@ -2,6 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use solana_sha256_hasher::hashv;
 
+mod promotion_compact;
+
 declare_id!("4bndxrGfuUcSLJnbCu8vs9WZ4qHdKGwcoeCybNThkrA3");
 
 const BPS_DENOMINATOR: u64 = 10_000;
@@ -1104,6 +1106,27 @@ pub mod luckyme {
         });
         Ok(())
     }
+
+    pub fn promotion_dispatch<'info>(
+        ctx: Context<'info, PromotionDispatch<'info>>,
+        operation: u8,
+        data: Vec<u8>,
+    ) -> Result<()> {
+        promotion_compact::dispatch(ctx, operation, data)
+    }
+
+    pub fn request_promotion_randomness<'info>(
+        ctx: Context<'info, RequestPromotionRandomness<'info>>,
+    ) -> Result<()> {
+        promotion_compact::request_randomness(ctx)
+    }
+
+    pub fn promotion_randomness_callback(
+        ctx: Context<PromotionRandomnessCallback>,
+        randomness: [u8; 32],
+    ) -> Result<()> {
+        promotion_compact::consume_randomness(ctx, randomness)
+    }
 }
 
 #[event]
@@ -1748,6 +1771,51 @@ pub struct SetPaused<'info> {
     pub config: Account<'info, Config>,
 }
 
+#[derive(Accounts)]
+pub struct PromotionDispatch<'info> {
+    #[account(mut)]
+    pub actor: Signer<'info>,
+    pub authorizer: Signer<'info>,
+    pub config: Account<'info, Config>,
+    /// CHECK: Canonical Promotion PDA, validated and decoded manually.
+    #[account(mut)]
+    pub target: UncheckedAccount<'info>,
+    /// CHECK: Canonical vault or Entry PDA, selected by the operation.
+    #[account(mut)]
+    pub auxiliary: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RequestPromotionRandomness<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub authorizer: Signer<'info>,
+    pub config: Account<'info, Config>,
+    /// CHECK: Canonical Promotion PDA, validated and decoded manually.
+    #[account(mut)]
+    pub promotion: UncheckedAccount<'info>,
+    /// CHECK: LuckyMe identity PDA used to sign the VRF CPI.
+    pub program_identity: UncheckedAccount<'info>,
+    /// CHECK: MagicBlock base-layer queue, constrained in the handler.
+    #[account(mut)]
+    pub oracle_queue: UncheckedAccount<'info>,
+    /// CHECK: MagicBlock VRF program, constrained in the handler.
+    pub vrf_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+    /// CHECK: Slot hashes sysvar, constrained in the handler.
+    pub slot_hashes: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct PromotionRandomnessCallback<'info> {
+    /// The scoped MagicBlock identity is a signer only during a valid callback.
+    pub vrf_program_identity: Signer<'info>,
+    /// CHECK: Promotion ownership, layout and state are validated manually.
+    #[account(mut)]
+    pub promotion: UncheckedAccount<'info>,
+}
+
 #[account]
 pub struct Config {
     pub authority: Pubkey,
@@ -2379,6 +2447,20 @@ pub enum LuckyMeError {
     RefundsPending,
     #[msg("Round ticket state changed after review; refresh and review again")]
     ReviewedRoundChanged,
+    #[msg("Promotion instruction is invalid")]
+    InvalidPromotionInstruction,
+    #[msg("Promotion account is invalid")]
+    InvalidPromotionAccount,
+    #[msg("Promotion authority is invalid")]
+    InvalidPromotionAuthority,
+    #[msg("Promotion state is invalid")]
+    InvalidPromotionState,
+    #[msg("Promotion randomness provider account is invalid")]
+    InvalidPromotionRandomnessAccount,
+    #[msg("Promotion winner entry is invalid")]
+    InvalidPromotionWinnerEntry,
+    #[msg("Promotion prize asset is invalid")]
+    InvalidPromotionPrizeAsset,
 }
 
 #[cfg(test)]

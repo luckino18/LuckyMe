@@ -13,6 +13,7 @@ import {
   verifySignIn,
 } from "@solana/wallet-standard-util";
 import { readSettlementArchive } from "../../scripts/settlement-archive.mjs";
+import { createRpcFailoverFetch } from "../../scripts/rpc-failover.mjs";
 import { referralQualificationProgress } from "./referral-eligibility.mjs";
 
 export const SGT_MINT_AUTHORITY = "GT2zuHVaZQYZSyQMgJPLzvkmyztfyXg2NJunqFp4p3A4";
@@ -25,6 +26,15 @@ export const MONTHLY_REFERRAL_PRIZE_SKr = 10_000;
 export const SEEKER_PASS_COLLECTION = "HqbzvQGhssViGrwaPkJWPPRTSnGbi4z2DsPeDYyJqo9J";
 export const SEEKER_PASS_TREE = "6MaEv559doM7sUkL1tFWRQST9JKRskSd64DzdkL3B22k";
 export const SEEKER_PASS_VERIFIED_CREATOR = "6p8dv8FaqjdoJ2MQHwrYADdP65FKcyyGX3a7kqKtf24H";
+export const LUCKYME_NFT_COLLECTIONS = Object.freeze([
+  Object.freeze({
+    id: "seeker-pass",
+    name: "LuckyMe Seeker Pass",
+    collection: SEEKER_PASS_COLLECTION,
+    tree: SEEKER_PASS_TREE,
+    verifiedCreator: SEEKER_PASS_VERIFIED_CREATOR,
+  }),
+]);
 export const SEEKER_PASS_CAMPAIGN_ID = "luckyme-seeker-pass-3-sol-1000-2026";
 export const SEEKER_PASS_CAMPAIGN_NAME = "LuckyMe Seeker Pass — 3 SOL Draw";
 export const SEEKER_PASS_ENTRY_THRESHOLD = 1_000;
@@ -253,7 +263,10 @@ export function createMainnetSgtVerifier({ rpcUrl, timeoutMs = RPC_TIMEOUT_MS } 
   const endpoint = rpcUrl ?? process.env.SEEKER_SGT_RPC_URL ?? process.env.ANCHOR_PROVIDER_URL;
   if (!endpoint) fail(500, "missing_rpc_configuration", "SEEKER_SGT_RPC_URL is required");
   assertMainnetRpcUrl(endpoint);
-  const connection = new Connection(endpoint, "confirmed");
+  const connection = new Connection(endpoint, {
+    commitment: "confirmed",
+    fetch: createRpcFailoverFetch({ primaryUrl: endpoint }),
+  });
   const endpointUrl = new URL(endpoint);
   const useHeliusV2 = endpointUrl.hostname.endsWith("helius-rpc.com");
 
@@ -371,49 +384,29 @@ function isEligibleSeekerPassAsset(asset, walletAddress) {
   }
 }
 
-export function createMainnetSeekerPassVerifier({ rpcUrl, timeoutMs = RPC_TIMEOUT_MS } = {}) {
-  const endpoint = rpcUrl ?? process.env.SEEKER_PASS_DAS_RPC_URL ??
-    process.env.SEEKER_SGT_RPC_URL ?? process.env.ANCHOR_PROVIDER_URL;
-  if (!endpoint) fail(500, "missing_rpc_configuration", "SEEKER_PASS_DAS_RPC_URL is required");
-  assertMainnetRpcUrl(endpoint);
-  const endpointUrl = new URL(endpoint);
-  if (!endpointUrl.hostname.endsWith("helius-rpc.com")) {
-    fail(500, "invalid_das_configuration", "Seeker Pass verification requires a Helius DAS endpoint");
+export function createMainnetSeekerPassVerifier({
+  rpcUrl,
+  timeoutMs = RPC_TIMEOUT_MS,
+  env = process.env,
+} = {}) {
+  const endpoints = seekerPassDasEndpoints(rpcUrl, env);
+  if (endpoints.length === 0) {
+    fail(500, "missing_rpc_configuration", "A supported Seeker Pass DAS RPC URL is required");
   }
   return async function verifySeekerPassOwnership(walletAddress) {
     const owner = new PublicKey(walletAddress).toBase58();
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let response;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: `seeker-pass-${randomBytes(6).toString("hex")}`,
-          method: "searchAssets",
-          params: {
-            ownerAddress: owner,
-            tokenType: "compressedNft",
-            grouping: ["collection", SEEKER_PASS_COLLECTION],
-            page: 1,
-            limit: 10,
-          },
-        }),
-      });
-    } catch {
+    const results = await Promise.allSettled(
+      endpoints.map((endpoint) => fetchSeekerPassAssets(endpoint, owner, timeoutMs)),
+    );
+    const validResults = results
+      .filter((result) => result.status === "fulfilled")
+      .map((result) => result.value);
+    if (validResults.length === 0) {
       fail(503, "seeker_pass_rpc_unavailable", "Seeker Pass verification is temporarily unavailable");
-    } finally {
-      clearTimeout(timer);
     }
-    if (!response?.ok) fail(503, "seeker_pass_rpc_unavailable", "Seeker Pass verification request failed");
-    const data = await response.json().catch(() => null);
-    if (data?.error || !Array.isArray(data?.result?.items)) {
-      fail(503, "seeker_pass_rpc_invalid", "Seeker Pass verification response was invalid");
-    }
-    const asset = data.result.items.find((item) => isEligibleSeekerPassAsset(item, owner));
+    const asset = validResults
+      .flat()
+      .find((item) => isEligibleSeekerPassAsset(item, owner));
     if (!asset) return null;
     return {
       assetId: new PublicKey(asset.id).toBase58(),
@@ -421,6 +414,147 @@ export function createMainnetSeekerPassVerifier({ rpcUrl, timeoutMs = RPC_TIMEOU
       leafId: Number.isSafeInteger(Number(asset.compression?.leaf_id)) ? Number(asset.compression.leaf_id) : null,
     };
   };
+}
+
+function luckyMeNftImage(asset) {
+  const direct = asset?.content?.links?.image;
+  if (typeof direct === "string" && /^https:\/\//i.test(direct)) return direct;
+  const file = asset?.content?.files?.find((item) =>
+    typeof item?.uri === "string" && /^https:\/\//i.test(item.uri) &&
+    (!item?.mime || String(item.mime).startsWith("image/")));
+  return file?.uri ?? null;
+}
+
+function isEligibleLuckyMeNftAsset(asset, walletAddress, collection) {
+  if (!asset || typeof asset !== "object" || asset.burnt === true) return false;
+  if (asset.ownership?.owner !== walletAddress || asset.ownership?.ownership_model !== "single") return false;
+  if (collection.tree && asset.compression?.tree !== collection.tree) return false;
+  const grouped = Array.isArray(asset.grouping) && asset.grouping.some((group) =>
+    group?.group_key === "collection" && group?.group_value === collection.collection);
+  const creator = Array.isArray(asset.creators) && asset.creators.some((item) =>
+    item?.address === collection.verifiedCreator && item?.verified === true);
+  if (!grouped || !creator) return false;
+  try {
+    new PublicKey(asset.id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function createMainnetLuckyMeNftVerifier({
+  rpcUrl,
+  timeoutMs = RPC_TIMEOUT_MS,
+  env = process.env,
+  collections = LUCKYME_NFT_COLLECTIONS,
+} = {}) {
+  const endpoints = seekerPassDasEndpoints(rpcUrl, env);
+  if (endpoints.length === 0) {
+    fail(500, "missing_rpc_configuration", "A supported LuckyMe NFT DAS RPC URL is required");
+  }
+  return async function listLuckyMeNfts(walletAddress) {
+    const owner = new PublicKey(walletAddress).toBase58();
+    const requests = collections.flatMap((collection) =>
+      endpoints.map(async (endpoint) => ({
+        collection,
+        assets: await fetchSeekerPassAssets(endpoint, owner, timeoutMs, collection.collection),
+      })));
+    const results = await Promise.allSettled(requests);
+    const fulfilled = results
+      .filter((result) => result.status === "fulfilled")
+      .map((result) => result.value);
+    if (fulfilled.length === 0) {
+      fail(503, "luckyme_nft_rpc_unavailable", "LuckyMe NFT verification is temporarily unavailable");
+    }
+    const seen = new Set();
+    const assets = [];
+    for (const { collection, assets: candidates } of fulfilled) {
+      for (const asset of candidates) {
+        if (!isEligibleLuckyMeNftAsset(asset, owner, collection) || seen.has(asset.id)) continue;
+        seen.add(asset.id);
+        assets.push({
+          assetId: new PublicKey(asset.id).toBase58(),
+          name: String(asset?.content?.metadata?.name ?? collection.name).slice(0, 120),
+          image: luckyMeNftImage(asset),
+          collectionId: collection.id,
+          collectionName: collection.name,
+          collectionAddress: collection.collection,
+          compressed: asset.compression?.compressed === true,
+          tree: typeof asset.compression?.tree === "string" ? asset.compression.tree : null,
+          leafId: Number.isSafeInteger(Number(asset.compression?.leaf_id))
+            ? Number(asset.compression.leaf_id)
+            : null,
+        });
+      }
+    }
+    return {
+      wallet: owner,
+      collections: collections.map(({ id, name, collection }) => ({
+        id,
+        name,
+        address: collection,
+      })),
+      assets,
+    };
+  };
+}
+
+function seekerPassDasEndpoints(explicitRpcUrl, env) {
+  const configured = [
+    explicitRpcUrl,
+    env.SEEKER_PASS_DAS_RPC_URL,
+    ...String(env.SEEKER_PASS_DAS_RPC_URLS ?? "").split(/[\n,]/),
+    env.LUCKYME_RPC_QUICKNODE_DAS_URL,
+    env.LUCKYME_RPC_SHYFT_URL,
+  ];
+  const seen = new Set();
+  return configured.flatMap((rawUrl) => {
+    const endpoint = String(rawUrl ?? "").trim();
+    if (!endpoint || seen.has(endpoint)) return [];
+    assertMainnetRpcUrl(endpoint);
+    const hostname = new URL(endpoint).hostname.toLowerCase();
+    const supported = ["helius-rpc.com", "quiknode.pro", "shyft.to"]
+      .some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`));
+    if (!supported) return [];
+    seen.add(endpoint);
+    return [endpoint];
+  });
+}
+
+async function fetchSeekerPassAssets(
+  endpoint,
+  owner,
+  timeoutMs,
+  collectionAddress = SEEKER_PASS_COLLECTION,
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `seeker-pass-${randomBytes(6).toString("hex")}`,
+        method: "searchAssets",
+        params: {
+          ownerAddress: owner,
+          grouping: ["collection", collectionAddress],
+          page: 1,
+          limit: 10,
+        },
+      }),
+    });
+    if (!response.ok) throw new Error("DAS HTTP request failed");
+    const data = await response.json().catch(() => null);
+    if (data?.error || !Array.isArray(data?.result?.items)) {
+      throw new Error("DAS response was invalid");
+    }
+    return data.result.items;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function promotionRpc(endpoint, method, params, timeoutMs) {
@@ -548,6 +682,7 @@ export function createSeekerReferralService({
   appAnalyticsEnabled = process.env.APP_ANALYTICS_ENABLED === "true",
   appAnalyticsHashKey = process.env.APP_ANALYTICS_HASH_KEY ?? "",
   seekerPassVerifier,
+  luckyMeNftVerifier,
   seekerPassPromotionEnabled = process.env.SEEKER_PASS_PROMOTION_ENABLED === "true",
   promotionRandomnessProvider,
 } = {}) {
@@ -607,6 +742,7 @@ export function createSeekerReferralService({
 
   const verifySgt = sgtVerifier ?? createMainnetSgtVerifier({});
   let verifySeekerPass = seekerPassVerifier;
+  let listVerifiedLuckyMeNfts = luckyMeNftVerifier;
   let promotionRandomness = promotionRandomnessProvider;
   let promotionAdvancePromise = null;
   const rateBuckets = new Map();
@@ -963,6 +1099,39 @@ export function createSeekerReferralService({
     };
   }
 
+  function issueLuckyMeNftNonce({ ip = "unknown" } = {}) {
+    rateLimit("luckyme-nft-nonce-ip", ip, 20, 10 * 60_000);
+    const nonce = randomBytes(16).toString("hex");
+    const issuedAt = nowIso(clock);
+    const expirationTime = new Date(clock() + nonceTtlMs).toISOString();
+    const requestId = randomBytes(12).toString("hex");
+    const statement = "Verify this wallet to display its LuckyMe NFT collection. This is not a transaction and does not authorize any transfer.";
+    db.prepare(`
+      INSERT INTO seeker_pass_nonces
+        (nonce_hash, domain, uri, statement, issued_at, expires_at, request_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(sha256(nonce), domain, uri, statement, issuedAt, expirationTime, requestId, issuedAt);
+    return {
+      payload: {
+        domain,
+        statement,
+        uri,
+        version: "1",
+        chainId: "mainnet",
+        nonce,
+        issuedAt,
+        expirationTime,
+        requestId,
+      },
+      expiresAt: expirationTime,
+      collections: LUCKYME_NFT_COLLECTIONS.map(({ id, name, collection }) => ({
+        id,
+        name,
+        address: collection,
+      })),
+    };
+  }
+
   function consumeSeekerPassNonce(payload, wallet) {
     return inTransaction(db, () => {
       const row = db.prepare("SELECT * FROM seeker_pass_nonces WHERE nonce_hash = ?").get(sha256(payload.nonce));
@@ -1054,6 +1223,51 @@ export function createSeekerReferralService({
           ? "LuckyMe Seeker Pass ownership verified. Registration is not enabled in this build."
         : "No eligible LuckyMe Seeker Pass was found in this wallet.",
     };
+  }
+
+  async function verifyLuckyMeNftSiws({ payload, output, ip = "unknown" } = {}) {
+    rateLimit("luckyme-nft-verify-ip", ip, 30, 10 * 60_000);
+    const input = validateSiwsPayload(payload);
+    if (!output || typeof output !== "object" || Array.isArray(output)) {
+      fail(400, "invalid_siws", "SIWS output is invalid");
+    }
+    const publicKey = decodeBase64(output.publicKey, "publicKey", 32);
+    const signature = decodeBase64(output.signature, "signature", 64);
+    const signedMessage = decodeBase64(output.signedMessage, "signedMessage");
+    if (signedMessage.length < 80 || signedMessage.length > 8_192) {
+      fail(400, "invalid_siws", "Signed SIWS message has an invalid length");
+    }
+    const parsed = parseSignInMessage(signedMessage);
+    let wallet;
+    try {
+      wallet = new PublicKey(parsed?.address);
+    } catch {
+      fail(401, "invalid_siws", "Wallet ownership verification failed");
+    }
+    if (!wallet.toBytes().every((byte, index) => byte === publicKey[index])) {
+      fail(401, "invalid_siws", "Wallet ownership verification failed");
+    }
+    const walletAddress = wallet.toBase58();
+    rateLimit("luckyme-nft-wallet", walletAddress, 10, 10 * 60_000);
+    const verified = verifySignIn({ ...input, address: walletAddress }, {
+      account: { publicKey },
+      signature,
+      signedMessage,
+    });
+    if (!verified) fail(401, "invalid_siws", "Wallet ownership verification failed");
+    consumeSeekerPassNonce(input, walletAddress);
+    listVerifiedLuckyMeNfts ??= createMainnetLuckyMeNftVerifier({});
+    const result = await withTimeout(
+      Promise.resolve(listVerifiedLuckyMeNfts(walletAddress)),
+      RPC_TIMEOUT_MS,
+      "luckyme_nft_rpc_timeout",
+    );
+    logger("luckyme_nft_wallet_checked", {
+      wallet: mask(walletAddress),
+      assetCount: result.assets.length,
+      collectionCount: result.collections.length,
+    });
+    return result;
   }
 
   function recordAppActivation({ installId, channel, platform, appVersion, versionCode } = {}, { ip = "unknown" } = {}) {
@@ -1183,6 +1397,14 @@ export function createSeekerReferralService({
     return row;
   }
 
+  function authenticate(token) {
+    const auth = session(token);
+    return {
+      wallet: auth.wallet,
+      sgtMint: auth.sgt_mint,
+    };
+  }
+
   function profileForSgt(sgtMint) {
     refreshReferralQualifications();
     const row = db.prepare(`
@@ -1201,6 +1423,30 @@ export function createSeekerReferralService({
         SUM(CASE WHEN status = 'invalidated' THEN 1 ELSE 0 END) AS invalidated
       FROM referral_bindings WHERE referrer_sgt_mint = ?
     `).get(sgtMint);
+    const hasLuckyMeUsers = Boolean(db.prepare(`
+      SELECT 1 FROM sqlite_master
+      WHERE type = 'table' AND name = 'luckyme_users'
+    `).get());
+    const invitedRows = hasLuckyMeUsers
+      ? db.prepare(`
+          SELECT b.status, b.bound_at, b.qualified_at,
+                 i.current_wallet, i.skr_domain,
+                 u.username, u.display_name
+          FROM referral_bindings b
+          JOIN seeker_identities i ON i.sgt_mint = b.referred_sgt_mint
+          LEFT JOIN luckyme_users u ON u.wallet = i.current_wallet
+          WHERE b.referrer_sgt_mint = ?
+          ORDER BY b.bound_at DESC
+        `).all(sgtMint)
+      : db.prepare(`
+          SELECT b.status, b.bound_at, b.qualified_at,
+                 i.current_wallet, i.skr_domain,
+                 NULL username, NULL display_name
+          FROM referral_bindings b
+          JOIN seeker_identities i ON i.sgt_mint = b.referred_sgt_mint
+          WHERE b.referrer_sgt_mint = ?
+          ORDER BY b.bound_at DESC
+        `).all(sgtMint);
     const qualification = qualificationFor(row);
     return {
       state: "VERIFIED",
@@ -1222,6 +1468,16 @@ export function createSeekerReferralService({
         invalidatedReferrals: Number(counts.invalidated ?? 0),
         totalPoints: Number(row.points),
       },
+      invitedUsers: invitedRows.map((invited) => ({
+        username: invited.username ?? null,
+        displayName: invited.display_name ?? null,
+        walletMasked: mask(invited.current_wallet),
+        skrDomain: invited.skr_domain ?? null,
+        status: invited.status,
+        accepted: invited.status === "qualified" || invited.status === "qualified_test",
+        boundAt: invited.bound_at,
+        qualifiedAt: invited.qualified_at ?? null,
+      })),
       qualification,
       prizePreview: testMode ? "Fictitious test preview only" : "Up to 10,000 SKR distributed monthly",
       disclaimer: testMode
@@ -1581,8 +1837,10 @@ export function createSeekerReferralService({
     activateProfile,
     bindReferral,
     close,
+    authenticate,
     db,
     getProfile,
+    issueLuckyMeNftNonce,
     issueSeekerPassNonce,
     issueNonce,
     leaderboard,
@@ -1596,6 +1854,7 @@ export function createSeekerReferralService({
     seekerPassPromotionEnabled,
     seekerPassPromotionStatus,
     testMode,
+    verifyLuckyMeNftSiws,
     verifySeekerPassSiws,
     verifySiws,
   };

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import anchor from "@coral-xyz/anchor";
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import { createRpcFailoverFetch } from "./rpc-failover.mjs";
 
 const { AnchorProvider, BN, Program, Wallet } = anchor;
 
@@ -96,7 +97,18 @@ class ReadonlyWallet {
 
 export function createClient({ requireSigner = true, url: overrideUrl } = {}) {
   const url = overrideUrl ?? process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
-  const connection = new Connection(url, "confirmed");
+  const rpcFetch = createRpcFailoverFetch({
+    primaryUrl: url,
+    onEvent: ({ type, provider, reason }) => {
+      if (type === "failover") {
+        console.warn(`[solana-rpc] ${provider} unavailable (${reason}); trying next provider`);
+      }
+    },
+  });
+  const connection = new Connection(url, {
+    commitment: "confirmed",
+    fetch: rpcFetch,
+  });
   const payer = requireSigner ? readKeypair() : null;
   const wallet = payer ? new Wallet(payer) : new ReadonlyWallet();
   const provider = new AnchorProvider(connection, wallet, {
@@ -105,7 +117,7 @@ export function createClient({ requireSigner = true, url: overrideUrl } = {}) {
   });
   const idl = JSON.parse(fs.readFileSync(new URL("../idl/luckyme.json", import.meta.url), "utf8"));
   const program = new Program(idl, provider);
-  return { connection, payer, program, provider, url };
+  return { connection, payer, program, provider, url, rpcStatus: rpcFetch.status };
 }
 
 export function readKeypair() {

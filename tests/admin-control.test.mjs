@@ -111,7 +111,15 @@ test("protected Admin separates operations, downloads, and promotions", () => {
   assert.match(adminJs, /renderReferrals/);
   assert.match(adminJs, /renderPromotions/);
   assert.match(adminHtml, /unique LuckyMe app activations/i);
-  assert.match(adminHtml, /Every LuckyMe promotion appears here/);
+  assert.match(adminHtml, /Launch a promotion/);
+  assert.match(adminHtml, /id="promotion-entry-cost"/);
+  assert.match(adminHtml, /id="promotion-capacity"/);
+  assert.match(adminHtml, /value="SKR"/);
+  assert.match(adminHtml, /No time limit — draw at capacity/);
+  assert.match(adminJs, /\/admin\/api\/promotions\//);
+  assert.match(adminJs, /FINAL MAINNET REVIEW/);
+  assert.match(adminJs, /signedTransactionBase64/);
+  assert.match(nginx, /proxy_pass http:\/\/127\.0\.0\.1:8793\//);
   assert.match(adminJs, /Completed rounds/);
   assert.match(referralSnapshot, /referrer_wallet/);
   assert.match(referralSnapshot, /referred_wallet/);
@@ -119,4 +127,20 @@ test("protected Admin separates operations, downloads, and promotions", () => {
   assert.match(referralSnapshot, /readPromotions/);
   assert.match(referralSnapshot, /promotion_winners/);
   assert.doesNotMatch(referralSnapshot, /sendTransaction|signTransaction/);
+});
+
+test("mission creation keeps the form reference across the async request", () => {
+  assert.match(adminJs, /const formElement = event\.currentTarget;/);
+  assert.match(adminJs, /formElement\.reset\(\);/);
+  assert.doesNotMatch(adminJs, /event\.currentTarget\.reset\(\);/);
+});
+
+test("mission Admin exposes X action intents and closed-task deletion", () => {
+  for (const action of ["like", "follow", "repost", "comment"]) {
+    assert.match(adminHtml, new RegExp(`<option value="${action}">`, "i"));
+  }
+  assert.match(adminHtml, /name="targetUrl"/);
+  assert.match(adminJs, /data-platform-task-close/);
+  assert.match(adminJs, /data-platform-task-delete/);
+  assert.match(adminJs, /platform\/tasks\/\$\{encodeURIComponent\(taskId\)\}\/delete/);
 });

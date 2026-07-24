@@ -32,7 +32,7 @@ export type StitchRenderOptions = {
   /** Native transaction progress/error shown in the WebView. */
   transaction?: TransactionStatus;
   /** Optional image candidates used by the Home redesign preview. */
-  homeIcons?: Partial<Record<"pools" | "referral" | "nft" | "winners", string>>;
+  homeIcons?: Partial<Record<"pools" | "referral" | "nft" | "winners" | "luckyRewards" | "missions" | "profile" | "jackpot", string>>;
   /** Optional artwork used by the themed Home bottom navigation. */
   navigationIcons?: Partial<Record<"home" | "pools" | "activity" | "howTo" | "social", string>>;
   /** Optional artwork used by the Social hub cards. */
@@ -53,6 +53,23 @@ export type StitchRenderOptions = {
     funded?: boolean;
     payoutEnabled?: boolean;
   };
+  /** Authenticated mission results shown inside Activity. */
+  missionHistory?: MissionHistoryItem[];
+};
+
+export type MissionHistoryItem = {
+  id: string;
+  taskId: string;
+  title: string;
+  platform: string;
+  actionType?: string | null;
+  status: "approved" | "rejected";
+  rewardPoints: number;
+  rewardXp: number;
+  awardedPoints: number;
+  awardedXp: number;
+  submittedAt?: string | null;
+  completedAt?: string | null;
 };
 
 export type WinnerShareData = {
@@ -130,6 +147,10 @@ export type LivePool = {
   recentRounds?: LiveRound[];
   mainPrizeBps?: string | number;
   prizeSplitBps?: Array<string | number>;
+  jackpotLamports?: string | number;
+  jackpotSol?: string | number;
+  jackpotBps?: string | number;
+  jackpotMessage?: string;
   onchain?: {
     available?: boolean;
   };
@@ -939,7 +960,7 @@ function page(
       border-radius: 21px;
       background:
         radial-gradient(circle at 50% 45%, var(--accent-soft), transparent 72%),
-        linear-gradient(160deg, rgba(24,91,41,.26), rgba(2,34,24,.52));
+        linear-gradient(160deg, rgba(20,82,38,.44), rgba(1,28,20,.76));
       color: #fff;
       text-align: left;
       box-shadow: inset 0 0 0 3px rgba(216,255,93,.08), 0 0 17px var(--accent-glow), 0 10px 24px rgba(0,0,0,.25);
@@ -954,7 +975,7 @@ function page(
       width: 188px;
       height: 188px;
       object-fit: contain;
-      opacity: .76;
+      opacity: .52;
       filter: saturate(1.12) contrast(1.06);
       transform: translate(-50%, -50%);
       pointer-events: none;
@@ -965,20 +986,39 @@ function page(
     .pool-selector-head { position: relative; z-index: 1; display: flex; align-items: start; justify-content: space-between; gap: 7px; }
     .pool-selector-name { display: grid; gap: 2px; }
     .pool-selector-name strong { color: rgba(255,255,255,.90); font-size: 21px; line-height: 1; text-shadow: 0 2px 7px rgba(0,0,0,.86); }
-    .pool-selector-name small { color: rgba(255,255,255,.52); font-size: 8px; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-name small { color: rgba(255,255,255,.68); font-size: 8px; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
     .pool-selector-status { max-width: 70px; padding: 4px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 82%, transparent); color: rgba(7,24,15,.86); font-size: 7.5px; font-weight: 900; letter-spacing: .04em; line-height: 1.12; text-align: center; text-transform: uppercase; }
     .pool-selector-price { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 4px; }
     .pool-selector-price strong { color: color-mix(in srgb, var(--accent) 88%, white); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 25px; line-height: 1; letter-spacing: -.035em; text-shadow: 0 2px 8px rgba(0,0,0,.92), 0 0 12px var(--accent-glow); }
-    .pool-selector-price span { color: rgba(255,255,255,.58); font-size: 8.5px; font-weight: 850; letter-spacing: .05em; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-price span { color: rgba(255,255,255,.78); font-size: 8.5px; font-weight: 850; letter-spacing: .05em; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-jackpot {
+      position: relative;
+      z-index: 1;
+      width: fit-content;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border: 1px solid rgba(255,220,91,.62);
+      border-radius: 999px;
+      background: linear-gradient(105deg, rgba(93,66,4,.82), rgba(27,92,41,.76));
+      box-shadow: 0 0 16px rgba(255,204,56,.16);
+      color: #ffe36f;
+      font-size: 7.5px;
+      font-weight: 950;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .pool-selector-jackpot strong { color: #fff8c8; font-size: 10px; letter-spacing: 0; text-shadow: 0 0 10px rgba(255,224,92,.42); }
     .pool-selector-progress { position: relative; z-index: 1; display: grid; gap: 6px; }
     .pool-selector-progress-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-    .pool-selector-progress-head span { color: rgba(255,255,255,.54); font-size: 8.5px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+    .pool-selector-progress-head span { color: rgba(255,255,255,.74); font-size: 8.5px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
     .pool-selector-progress-head strong { color: rgba(255,255,255,.88); font-size: 12px; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
     .pool-selector-card .progress-track { height: 7px; background: rgba(1,20,14,.70); border: 1px solid rgba(255,255,255,.10); }
     .pool-selector-card .progress-fill { background: linear-gradient(90deg, var(--accent), #caff8d); }
     .pool-selector-metrics { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, .65fr); gap: 7px; margin-top: auto; }
-    .pool-selector-metric { min-width: 0; min-height: 50px; display: grid; align-content: center; gap: 4px; padding: 7px; border: 1px solid rgba(196,255,158,.12); border-radius: 10px; background: rgba(1,24,17,.54); backdrop-filter: blur(2px); }
-    .pool-selector-metric span { color: rgba(255,255,255,.48); font-size: 7.5px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+    .pool-selector-metric { min-width: 0; min-height: 50px; display: grid; align-content: center; gap: 4px; padding: 7px; border: 1px solid rgba(196,255,158,.16); border-radius: 10px; background: rgba(1,24,17,.68); backdrop-filter: blur(2px); }
+    .pool-selector-metric span { color: rgba(255,255,255,.68); font-size: 7.5px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
     .pool-selector-metric strong { color: rgba(255,255,255,.86); font-size: 10px; line-height: 1.15; overflow-wrap: anywhere; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
     .pool-selector-enter { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; color: color-mix(in srgb, var(--accent) 82%, white); font-size: 9px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
     .pool-selector-enter svg { width: 14px; height: 14px; }
@@ -1012,7 +1052,7 @@ function page(
     .activity-wallet-state strong { color: #d9ffd2; font-size: 9px; }
     .activity-summary {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 7px;
       padding: 8px;
       border: 1px solid rgba(163,255,111,.30);
@@ -1108,7 +1148,7 @@ function page(
     .activity-page-v2 .activity-summary { padding: 7px; }
     .activity-switcher {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 5px;
       padding: 5px;
       border: 1px solid rgba(163,255,111,.28);
@@ -1122,7 +1162,7 @@ function page(
       border-radius: 10px;
       background: transparent;
       color: rgba(255,255,255,.58);
-      font-size: 9.5px;
+      font-size: 8.2px;
       font-weight: 900;
       letter-spacing: .04em;
     }
@@ -1206,17 +1246,19 @@ function page(
     .how-wiki-hero p { color: rgba(255,255,255,.70); font-size: 11px; }
     .how-wiki-tabs {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 7px;
     }
     .how-wiki-tab {
+      grid-column: span 2;
       min-width: 0;
-      min-height: 92px;
+      min-height: 86px;
       display: grid;
+      grid-template-rows: 58px 12px;
       justify-items: center;
       align-content: center;
-      gap: 3px;
-      padding: 5px;
+      gap: 2px;
+      padding: 6px 4px 5px;
       border: 1px solid rgba(163,255,111,.28);
       border-radius: 15px;
       background: linear-gradient(160deg, rgba(22,91,42,.30), rgba(2,34,24,.60));
@@ -1229,8 +1271,22 @@ function page(
       box-shadow: inset 0 0 0 2px rgba(216,255,93,.10), 0 0 17px rgba(105,255,72,.21);
       background: linear-gradient(150deg, rgba(76,173,54,.42), rgba(6,60,41,.66));
     }
-    .how-wiki-tab img { width: 58px; height: 58px; object-fit: contain; filter: drop-shadow(0 3px 7px rgba(0,0,0,.42)); }
-    .how-wiki-tab strong { font-size: 10px; line-height: 1; }
+    .how-wiki-tab:nth-child(4) { grid-column: 2 / span 2; }
+    .how-wiki-tab:nth-child(5) { grid-column: 4 / span 2; }
+    .how-wiki-tab img,
+    .how-wiki-tab > svg {
+      width: 58px;
+      height: 58px;
+      align-self: center;
+      object-fit: contain;
+      filter: drop-shadow(0 3px 7px rgba(0,0,0,.42));
+    }
+    .how-wiki-tab strong {
+      align-self: center;
+      font-size: 10px;
+      line-height: 12px;
+      white-space: nowrap;
+    }
     .how-wiki-content {
       min-height: 447px;
       display: grid;
@@ -1317,10 +1373,10 @@ function page(
     .social-card::after { content: ""; position: absolute; inset: auto -20px -34px auto; width: 96px; height: 96px; border-radius: 50%; background: var(--social-glow, rgba(129,255,103,.10)); filter: blur(12px); }
     .social-card-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; opacity: .76; transform: scale(1.33); filter: saturate(1.08) contrast(1.04); }
     .social-card-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,19,15,.02) 5%, rgba(0,22,17,.22) 44%, rgba(0,18,14,.94) 78%, rgba(0,17,13,.98) 100%); }
-    .social-card-icon { width: 47px; height: 47px; display: grid; place-items: center; border: 1px solid var(--social-line, rgba(163,255,111,.32)); border-radius: 14px; background: rgba(1,25,20,.55); color: var(--social-accent, #caff7d); box-shadow: 0 0 18px var(--social-glow, rgba(129,255,103,.12)); }
+    .social-card-icon { width: 58px; height: 58px; display: grid; place-items: center; color: var(--social-accent, #caff7d); filter: drop-shadow(0 5px 8px rgba(0,0,0,.34)); }
     .social-card-icon svg { width: 27px; height: 27px; }
-    .social-icon-card .social-card-icon { padding: 2px; overflow: hidden; }
-    .social-icon-card .social-card-icon img { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; transform: scale(1.42); }
+    .social-icon-card .social-card-icon { overflow: visible; }
+    .social-icon-card .social-card-icon img { width: 100%; height: 100%; object-fit: contain; }
     .social-card.has-art .social-card-icon { visibility: hidden; }
     .social-card-copy { align-self: end; display: grid; gap: 3px; position: relative; z-index: 1; }
     .social-card-copy strong { font-size: 18px; line-height: 1; }
@@ -2132,7 +2188,7 @@ function page(
       height: 72px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 4px;
       padding: 7px;
       border-radius: 18px;
@@ -2428,7 +2484,6 @@ function bottomNav(
   };
   const items: Array<[StitchScreenId, string, string]> = [
     ["home", navArt("home", ICONS.home), "Home"],
-    ["pools", navArt("pools", ICONS.pools), "Pools"],
     ["activity", navArt("activity", ICONS.activity), "Activity"],
     ["how-to-play", navArt("howTo", ICONS.help), "How To"],
     ["social", navArt("social", ICONS.x), "Social"],
@@ -2582,6 +2637,9 @@ function poolSelectorCard(pool: PoolSpec, options: StitchRenderOptions = {}) {
     : 0;
   const disabledAttr = poolReady ? "" : " disabled";
   const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
+  const jackpotValue = poolReady && facts.live?.jackpotSol !== undefined
+    ? `${escapeHtml(String(facts.live.jackpotSol))} SOL`
+    : "Pending";
   return String.raw`<button type="button" class="pool-selector-card tone-${pool.tone}" data-route="review" data-pool="${pool.id}"${disabledAttr}>
     ${poolIcon ? `<img class="pool-selector-watermark" src="${escapeHtml(poolIcon)}" alt="" />` : ""}
     <span class="pool-selector-head">
@@ -2589,6 +2647,7 @@ function poolSelectorCard(pool: PoolSpec, options: StitchRenderOptions = {}) {
       <span class="pool-selector-status">${escapeHtml(facts.status)}</span>
     </span>
     <span class="pool-selector-price"><strong>${priceSol(pool, facts.live)}</strong><span>SOL / TICKET</span></span>
+    <span class="pool-selector-jackpot"><span>✦ Live jackpot</span><strong>${jackpotValue}</strong></span>
     <span class="pool-selector-progress">
       <span class="pool-selector-progress-head"><span>Tickets sold</span><strong class="mono">${poolReady ? sold : "—"} / ${minimum}</strong></span>
       <span class="progress-track" role="progressbar" aria-label="${pool.name} tickets sold" aria-valuemin="0" aria-valuemax="${minimum}" aria-valuenow="${poolReady ? Math.min(sold, minimum) : 0}"><span class="progress-fill" style="width: ${percentage.toFixed(2)}%"></span></span>
@@ -2606,7 +2665,7 @@ function poolSelectorCard(pool: PoolSpec, options: StitchRenderOptions = {}) {
 /* ------------------------------------------------------------------ */
 
 function homeBody(options: StitchRenderOptions = {}) {
-  const homeIcon = (key: "pools" | "referral" | "nft" | "winners", fallback: string) => {
+  const homeIcon = (key: "pools" | "referral" | "nft" | "winners" | "luckyRewards" | "missions" | "profile", fallback: string) => {
     const src = options.homeIcons?.[key];
     return src
       ? `<span class="feature-icon has-image icon-${key}"><img src="${escapeHtml(src)}" alt="" /></span>`
@@ -2623,17 +2682,17 @@ function homeBody(options: StitchRenderOptions = {}) {
       ${homeIcon("pools", ICONS.homePools)}
       <span class="home-action-copy"><h2>Pools</h2></span>
     </button>
-    <button class="home-action feature-referral" data-route="referral">
-      ${homeIcon("referral", ICONS.homeReferral)}
-      <span class="home-action-copy"><h2>Referral League</h2></span>
+    <button class="home-action feature-referral" data-route="seeker-pass">
+      ${homeIcon("luckyRewards", ICONS.homeNft)}
+      <span class="home-action-copy"><h2>Promotions</h2></span>
     </button>
-    <button class="home-action feature-nft" data-route="seeker-pass">
-      ${homeIcon("nft", ICONS.homeNft)}
-      <span class="home-action-copy"><h2>NFT Holders</h2></span>
+    <button class="home-action feature-nft" data-route="missions">
+      ${homeIcon("missions", ICONS.activity)}
+      <span class="home-action-copy"><h2>Missions</h2></span>
     </button>
-    <button class="home-action feature-winners" data-route="latest-winners">
-      ${homeIcon("winners", ICONS.homeWinners)}
-      <span class="home-action-copy"><h2>Latest Winners</h2></span>
+    <button class="home-action feature-winners" data-route="profile">
+      ${homeIcon("profile", ICONS.wallet)}
+      <span class="home-action-copy"><h2>Profile</h2></span>
     </button>
   </section>
 </main>`;
@@ -2816,6 +2875,7 @@ function poolsBody(options: StitchRenderOptions = {}) {
 
 function activityBody(options: StitchRenderOptions = {}) {
   const activityIcon = options.navigationIcons?.activity;
+  const missionIcon = options.homeIcons?.missions;
   const entryAmountSol = (pool: PoolSpec, live: LivePool | undefined, entry: LiveUserEntry | null | undefined) => {
     const lamports = numberValue(entry?.lamports, Number.NaN);
     if (Number.isFinite(lamports)) {
@@ -2880,6 +2940,7 @@ function activityBody(options: StitchRenderOptions = {}) {
     const bTime = b.round.archivedAt ? new Date(b.round.archivedAt).getTime() : numberValue(b.round.endTs) * 1_000;
     return bTime - aTime || numberValue(b.round.roundId ?? b.round.id) - numberValue(a.round.roundId ?? a.round.id);
   });
+  const missionEntries = options.missionHistory ?? [];
   const walletLabel = options.walletAddress ? shortAddress(options.walletAddress) : "Wallet not connected";
   const activeRows = activeEntries.slice(0, 4).map(({ pool, live, round, tickets }) => {
     const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
@@ -2930,25 +2991,43 @@ function activityBody(options: StitchRenderOptions = {}) {
       <span class="activity-compact-state"><strong>${state}</strong><span class="${solscanUrl ? "activity-public-proof" : ""}">${solscanUrl ? `${ICONS.external} Solscan` : "On-chain"}</span></span>
     </${tag}>`;
   }).join("\n      ");
-  const emptyState = (title: string, copy: string) => String.raw`<div class="activity-empty">
+  const missionRows = missionEntries.map((mission) => {
+    const date = mission.completedAt ? new Date(mission.completedAt) : null;
+    const dateLabel = date && !Number.isNaN(date.getTime())
+      ? date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+      : "Completed mission";
+    const approved = mission.status === "approved";
+    return String.raw`<article class="activity-compact-row activity-history-row tone-purple">
+      ${missionIcon ? `<img class="activity-compact-icon" src="${escapeHtml(missionIcon)}" alt="" />` : `<span>${ICONS.activity}</span>`}
+      <span class="activity-compact-copy">
+        <span class="activity-compact-title"><strong>${escapeHtml(mission.title)}</strong><small>${escapeHtml(mission.platform)}</small></span>
+        <span class="activity-compact-meta">${approved ? `+${escapeHtml(mission.awardedPoints)} LP · +${escapeHtml(mission.awardedXp)} XP` : "No reward issued"}</span>
+        <span class="activity-compact-sub">${escapeHtml(dateLabel)} · ${approved ? "verified reward" : "mission closed"}</span>
+      </span>
+      <span class="activity-compact-state"><strong class="${approved ? "activity-result-won" : ""}">${approved ? "Completed" : "Rejected"}</strong><span>${approved ? "Credited" : "Closed"}</span></span>
+    </article>`;
+  }).join("\n      ");
+  const emptyState = (title: string, copy: string, route = "pools", label = "Explore Pools") => String.raw`<div class="activity-empty">
     ${activityIcon ? `<img src="${escapeHtml(activityIcon)}" alt="" />` : ICONS.activity}
     <h2>${escapeHtml(title)}</h2><p>${escapeHtml(copy)}</p>
-    <button type="button" data-route="pools">Explore Pools</button>
+    <button type="button" data-route="${escapeHtml(route)}">${escapeHtml(label)}</button>
   </div>`;
 
   return String.raw`<main class="activity-page activity-page-v2">
   <section class="activity-hero">
-    <span class="activity-hero-copy"><span class="eyebrow">Live and transparent</span><h1>Activity</h1><p>Your entries plus public round history.</p></span>
+    <span class="activity-hero-copy"><span class="eyebrow">Live and transparent</span><h1>Activity</h1><p>Your entries, mission rewards and public round history.</p></span>
     <span class="activity-wallet-state"><span>Wallet</span><strong class="mono">${escapeHtml(walletLabel)}</strong></span>
   </section>
   <section class="activity-summary" aria-label="Activity summary">
     <span class="activity-summary-item"><span>My active</span><strong>${activeEntries.length}</strong></span>
     <span class="activity-summary-item"><span>My results</span><strong>${historyEntries.length}</strong></span>
+    <span class="activity-summary-item"><span>Missions</span><strong>${missionEntries.length}</strong></span>
     <span class="activity-summary-item"><span>All rounds</span><strong>${publicRounds.length}</strong></span>
   </section>
   <section class="activity-switcher" aria-label="Activity view">
     <button type="button" class="activity-switch" data-activity-tab="active" aria-selected="true">Active</button>
     <button type="button" class="activity-switch" data-activity-tab="history" aria-selected="false">My History</button>
+    <button type="button" class="activity-switch" data-activity-tab="missions" aria-selected="false">Missions</button>
     <button type="button" class="activity-switch" data-activity-tab="all-rounds" aria-selected="false">All Rounds</button>
   </section>
   <section class="activity-view" data-activity-view="active">
@@ -2957,10 +3036,12 @@ function activityBody(options: StitchRenderOptions = {}) {
   <section class="activity-view" data-activity-view="history" hidden>
     ${historyRows || emptyState("No history yet", options.walletAddress ? "Completed rounds and automatic refunds will appear here." : "Connect your wallet to load its verified results.")}
   </section>
+  <section class="activity-view" data-activity-view="missions" hidden>
+    ${missionRows || emptyState("No completed missions", "Verified mission rewards will appear here with their LP and XP values.", "missions", "Open Missions")}
+  </section>
   <section class="activity-view activity-public-view" data-activity-view="all-rounds" hidden>
     ${publicRoundRows || emptyState("No public rounds yet", "Completed rounds from all four pools will appear here for everyone.")}
   </section>
-  <section class="activity-safety-note">${ICONS.shield}<span>Refunds are automatic when a round expires below target. Network fees are not refundable.</span></section>
 </main>`;
 }
 
@@ -3174,8 +3255,8 @@ function walletBody(options: StitchRenderOptions = {}) {
   </section>
   <button class="primary-button" data-action="${connected ? "disconnect-wallet" : "connect-wallet"}">${connected ? "Disconnect wallet" : "Connect wallet"}</button>
   <section class="wallet-quick-grid">
-    <button class="wallet-quick" data-route="referral"><strong>Referral League</strong><span>Verify official SGT identity</span></button>
-    <button class="wallet-quick" data-route="seeker-pass"><strong>NFT Holders</strong><span>Verify Pass and enter free</span></button>
+    <button class="wallet-quick" data-route="missions"><strong>Missions</strong><span>Complete tasks and earn Lucky Points</span></button>
+    <button class="wallet-quick" data-route="profile"><strong>Profile</strong><span>Username, wallet and points balance</span></button>
   </section>
   <div class="feature-note">${ICONS.shield}<span>All approvals open in your external Seed Vault wallet. LuckyMe cannot sign for you.</span></div>
 </main>`;
@@ -3272,8 +3353,10 @@ function howToPlayBody(options: StitchRenderOptions = {}) {
     ? `<img src="${escapeHtml(src)}" alt="" />`
     : fallback;
   const poolsIcon = options.homeIcons?.pools ?? options.navigationIcons?.pools;
-  const referralIcon = options.homeIcons?.referral;
+  const missionsIcon = options.homeIcons?.missions;
+  const referralIcon = options.homeIcons?.profile ?? options.homeIcons?.referral;
   const nftIcon = options.homeIcons?.nft;
+  const jackpotIcon = options.homeIcons?.jackpot;
   const poolCards = POOLS.map((pool) => {
     const poolIcon = options.poolIcons?.[pool.id as "mini" | "normal" | "high" | "premium"];
     const targetCopy = pool.id === "premium"
@@ -3292,8 +3375,26 @@ function howToPlayBody(options: StitchRenderOptions = {}) {
   <section class="how-wiki-hero"><span class="eyebrow">LuckyMe Guide</span><h1>How To</h1><p>Choose a topic. The guide opens here without leaving the page.</p></section>
   <section class="how-wiki-tabs" aria-label="How To topics">
     <button type="button" class="how-wiki-tab" data-how-tab="pools" aria-selected="true">${wikiIcon(poolsIcon, ICONS.pools)}<strong>Pools</strong></button>
-    <button type="button" class="how-wiki-tab" data-how-tab="referral" aria-selected="false">${wikiIcon(referralIcon, ICONS.referral)}<strong>Referral</strong></button>
+    <button type="button" class="how-wiki-tab" data-how-tab="missions" aria-selected="false">${wikiIcon(missionsIcon, ICONS.activity)}<strong>Missions</strong></button>
+    <button type="button" class="how-wiki-tab" data-how-tab="referral" aria-selected="false">${wikiIcon(referralIcon, ICONS.wallet)}<strong>Referral</strong></button>
     <button type="button" class="how-wiki-tab" data-how-tab="nft" aria-selected="false">${wikiIcon(nftIcon, ICONS.homeNft)}<strong>NFT Pass</strong></button>
+    <button type="button" class="how-wiki-tab" data-how-tab="jackpot" aria-selected="false">${wikiIcon(jackpotIcon, ICONS.diamond)}<strong>Jackpot</strong></button>
+  </section>
+
+  <section class="how-wiki-content" data-how-view="jackpot" hidden>
+    <div class="how-wiki-title"><span class="how-wiki-title-copy"><h2>LuckyMe Jackpot</h2><p>Each pool grows its own transparent on-chain reserve.</p></span><span class="how-wiki-badge">On-chain</span></div>
+    <div class="how-wiki-facts">
+      <span class="how-wiki-fact"><strong>3%</strong><span>To jackpot</span></span>
+      <span class="how-wiki-fact"><strong>2%</strong><span>House fee</span></span>
+      <span class="how-wiki-fact"><strong>Live</strong><span>Pool balance</span></span>
+    </div>
+    <div class="how-wiki-steps">
+      ${step(1, "A valid round settles", "The selected pool must reach its ticket target and complete a real winner draw.")}
+      ${step(2, "Three percent accumulates", "Three percent of every valid round is added to that pool's on-chain jackpot reserve.")}
+      ${step(3, "The balance stays visible", "Mini, Normal, High and Premium each display their own live jackpot amount.")}
+      ${step(4, "A completed draw can trigger it", "The jackpot is never awarded from an invalid or refunded round. Its payout follows the on-chain LuckyMe rules.")}
+    </div>
+    <div class="how-wiki-note">${ICONS.shield}<span>Rounds below their target are refunded automatically and do not create a winner. Jackpot funds remain separated by pool and visible on-chain.</span></div>
   </section>
 
   <section class="how-wiki-content" data-how-view="pools">
@@ -3305,23 +3406,40 @@ function howToPlayBody(options: StitchRenderOptions = {}) {
       ${step(3, "Target reached", "After the timer, a valid round uses verifiable Solana randomness to select the winner or winners.")}
       ${step(4, "Target missed", "No winner is drawn. Ticket principal and entry rent return automatically; network fees do not.")}
     </div>
+    <div class="how-wiki-note">${ICONS.shield}<span>Every valid round routes 3% into that pool's on-chain reserve jackpot and 2% to the House. The live jackpot balance is shown on each pool card and can trigger only during a completed valid draw.</span></div>
     <span class="sr-only">Mini needs 25 tickets sold in total, not 25 different players. Each wallet pays one small refundable rent deposit for its entry in a round, regardless of how many tickets it buys at once. If the target is reached and another player wins, only your rent deposit returns.</span>
   </section>
 
-  <section class="how-wiki-content" data-how-view="referral" hidden>
-    <div class="how-wiki-title"><span class="how-wiki-title-copy"><h2>Referral League</h2><p>Seeker APK and official SGT identity only.</p></span><span class="how-wiki-badge">APK only</span></div>
+  <section class="how-wiki-content" data-how-view="missions" hidden>
+    <div class="how-wiki-title"><span class="how-wiki-title-copy"><h2>Community Missions</h2><p>Verified tasks that award Lucky Points.</p></span><span class="how-wiki-badge">APK only</span></div>
     <div class="how-wiki-facts">
-      <span class="how-wiki-fact"><strong>3</strong><span>Winning rounds</span></span>
-      <span class="how-wiki-fact"><strong>3</strong><span>Different days</span></span>
-      <span class="how-wiki-fact"><strong>7</strong><span>Active days</span></span>
+      <span class="how-wiki-fact"><strong>LP</strong><span>Lucky Points</span></span>
+      <span class="how-wiki-fact"><strong>X</strong><span>Manual review</span></span>
+      <span class="how-wiki-fact"><strong>✓</strong><span>Discord OAuth</span></span>
     </div>
     <div class="how-wiki-steps">
-      ${step(1, "Activate your SGT", "Claim or activate the official Seeker Genesis Token before joining the league.")}
-      ${step(2, "Verify the holder wallet", "Sign the authentication request. LuckyMe verifies the wallet and official SGT on mainnet.")}
-      ${step(3, "Share your invite", "Your referral link opens the LuckyMe Solana dApp Store listing and carries your invite code.")}
-      ${step(4, "Qualify automatically", "Complete winner-producing rounds on 3 different days and use the app on 7 distinct days.")}
+      ${step(1, "Open Missions", "Sign in with the wallet that owns your LuckyMe profile.")}
+      ${step(2, "Complete a task", "Follow the exact Discord or X verification instructions shown in the APK.")}
+      ${step(3, "Wait for verification", "Discord verifies automatically. X proof is reviewed manually.")}
+      ${step(4, "Use your points", "Approved rewards appear in Profile and can be spent to enter promotional pools.")}
     </div>
-    <div class="how-wiki-note">${ICONS.shield}<span>Cancelled or refunded rounds never count. Web play remains available but does not grant Referral League eligibility.</span></div>
+    <div class="how-wiki-note">${ICONS.shield}<span>Each verified social identity can reward only one LuckyMe wallet, and each mission reward is issued once.</span></div>
+  </section>
+
+  <section class="how-wiki-content" data-how-view="referral" hidden>
+    <div class="how-wiki-title"><span class="how-wiki-title-copy"><h2>Referral League</h2><p>Your invite code and invited Seekers live inside Profile.</p></span><span class="how-wiki-badge">Profile</span></div>
+    <div class="how-wiki-facts">
+      <span class="how-wiki-fact"><strong>1</strong><span>Permanent code</span></span>
+      <span class="how-wiki-fact"><strong>SGT</strong><span>Verified Seeker</span></span>
+      <span class="how-wiki-fact"><strong>Live</strong><span>Invite status</span></span>
+    </div>
+    <div class="how-wiki-steps">
+      ${step(1, "Open Profile", "Connect the wallet verified for your LuckyMe and Seeker identity.")}
+      ${step(2, "Copy or share", "Use the permanent Referral League code displayed in your Profile.")}
+      ${step(3, "Friend accepts", "The invited Seeker enters the code before completing their own verification.")}
+      ${step(4, "Track qualification", "Profile shows every invited user as pending, qualified or invalidated.")}
+    </div>
+    <div class="how-wiki-note">${ICONS.shield}<span>Referral bindings are permanent and qualification is verified from LuckyMe activity. Never share a seed phrase or private key.</span></div>
   </section>
 
   <section class="how-wiki-content" data-how-view="nft" hidden>
@@ -3449,7 +3567,7 @@ function reviewBody(options: StitchRenderOptions = {}) {
       <div class="pool-entry-summary-item"><span>After purchase</span><strong class="mono" ${isPremium ? "" : "data-ticket-after"}>${hasRound ? afterPurchaseCopy : "Unavailable"}</strong></div>
       <div class="pool-entry-summary-item"><span>Still needed</span><strong class="mono" ${isPremium ? "" : "data-ticket-remaining"}>${hasRound ? remainingAfterCopy : "Unavailable"}</strong></div>
     </div>
-    <div class="pool-entry-wallet"><span>Wallet · Mainnet · external signer</span><strong class="mono">${escapeHtml(wallet)}</strong></div>
+    <div class="pool-entry-wallet"><span>Wallet</span><strong class="mono">${escapeHtml(wallet)}</strong></div>
     ${alreadyEntered ? `<div class="pool-entry-wallet"><span>My confirmed tickets</span><strong class="mono success">${escapeHtml(facts.myTickets)}</strong></div>` : ""}
   </section>
   <div class="pool-entry-refund">${ICONS.shield}<span>If the round ends below ${refundThresholdCopy}, principal and refundable Entry rent return automatically. Network fees are not refundable.</span></div>

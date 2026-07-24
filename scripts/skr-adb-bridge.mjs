@@ -191,6 +191,10 @@ server.listen(PORT, HOST, () => {
   console.log(`LuckyMe SKR Tool ready: ${LOCAL_ORIGIN}/`);
   console.log("Keep this window open while the local tool is scanning the Seeker screen.");
   if (process.env.LUCKYME_SKR_OPEN_BROWSER === "true") {
-    execFile("/usr/bin/open", [`${LOCAL_ORIGIN}/`], () => {});
+    const browserApp = String(process.env.LUCKYME_SKR_BROWSER_APP ?? "").trim();
+    const openArgs = browserApp
+      ? ["-a", browserApp, `${LOCAL_ORIGIN}/`]
+      : [`${LOCAL_ORIGIN}/`];
+    execFile("/usr/bin/open", openArgs, () => {});
   }
 });

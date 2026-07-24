@@ -313,6 +313,35 @@ test("backend exposes safe public config", async () => {
   }
 });
 
+test("production config never exposes a path-based private RPC credential", async () => {
+  const port = await getFreePort();
+  const child = startServer({
+    PORT: String(port),
+    NODE_ENV: "production",
+    ANCHOR_PROVIDER_URL: "https://solana-mainnet.core.chainstack.com/private-path-token",
+    LUCKYME_PUBLIC_WALLET_RPC_URL: "https://api.mainnet-beta.solana.com",
+    LUCKYME_RELEASE_MODE: "MAINNET_RELEASE",
+    LUCKYME_RANDOMNESS_MODE: "orao_vrf",
+    LUCKYME_PRODUCTION_RANDOMNESS: "true",
+    LUCKYME_SOLANA_CLUSTER: "mainnet-beta",
+    CORS_ORIGIN: "https://lucky-me.app",
+  });
+
+  try {
+    await waitForOutput(child, /LuckyMe API listening/);
+    const response = await fetch(`http://127.0.0.1:${port}/config`);
+    const body = await response.text();
+    const payload = JSON.parse(body);
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.clusterUrl, "https://api.mainnet-beta.solana.com/");
+    assert.equal(body.includes("private-path-token"), false);
+  } finally {
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  }
+});
+
 async function runServerExpectingExit(env) {
   const child = startServer(env);
   const [code] = await once(child, "exit");

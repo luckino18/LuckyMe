@@ -560,7 +560,7 @@ test("LuckyMe Seeker referral security and idempotency suite", async (t) => {
     }
   });
 
-  await t.test("23. referral build reliably selects integrated UI and preserves notifications", () => {
+  await t.test("23. legacy referral test config stays isolated from the official Missions UI", () => {
     const names = [
       "LUCKYME_REFERRAL_TEST_BUILD",
       "EXPO_PUBLIC_LUCKYME_REFERRAL_TEST_MODE",
@@ -595,12 +595,13 @@ test("LuckyMe Seeker referral security and idempotency suite", async (t) => {
       assert.match(appSource, /Constants\.expoConfig\?\.extra/);
       assert.doesNotMatch(appSource, /process\?\.env\?\.EXPO_PUBLIC_LUCKYME_REFERRAL_BUILD/);
       assert.match(wrapperSource, /<LuckyMeScreen/);
-      assert.match(wrapperSource, /onOpenReferral=/);
-      assert.match(wrapperSource, /<SeekerReferralScreen/);
+      assert.match(wrapperSource, /onOpenCommunity=/);
+      assert.match(wrapperSource, /<CommunityScreen/);
+      assert.match(wrapperSource, /<PromotionsScreen/);
+      assert.doesNotMatch(wrapperSource, /onOpenReferral=|<SeekerReferralScreen/);
       assert.doesNotMatch(wrapperSource, /referralBar|SEEKER REFERRAL TEST/);
-      assert.match(luckyMeSource, /SEEKER EXCLUSIVE/);
-      assert.match(luckyMeSource, /Seeker Referral/);
-      assert.match(luckyMeSource, /onOpenReferral/);
+      assert.match(luckyMeSource, /message\?\.type === "community"/);
+      assert.doesNotMatch(luckyMeSource, /message\?\.type === "referral"|onOpenReferral/);
       assert.match(luckyMeSource, /solanadappstore:\/\/details\?id=com\.luckyme\.seeker/);
       assert.match(luckyMeSource, /history\.rounds\.length >= 2/);
       assert.match(luckyMeSource, /Review LuckyMe/);

@@ -142,7 +142,7 @@ async function request(path: string, options: RequestInit = {}, token?: string) 
     if (!response.ok) {
       const responseCode = typeof payload.error === "string" ? payload.error : "request_failed";
       if (response.status === 404 && responseCode.replace(/[_ -]/g, "").toLowerCase() === "notfound") {
-        throw new ApiError(404, "backend_unavailable", "The Seeker referral service is not available on the server");
+        throw new ApiError(404, "backend_unavailable", "The referral service is temporarily unavailable");
       }
       throw new ApiError(response.status, responseCode, payload.message ?? "Request failed");
     }
@@ -527,7 +527,7 @@ export function SeekerReferralScreen({
       INVALID_SIWS: "Wallet ownership verification failed.",
       SGT_ALREADY_BOUND: "This Seeker Genesis Token is already registered.",
       NETWORK_ERROR: "Network error. Retry is safe and will not duplicate profiles or events.",
-      BACKEND_UNAVAILABLE: "Verification backend unavailable. Eligibility is never granted offline.",
+      BACKEND_UNAVAILABLE: "Verification is temporarily unavailable. Please try again later.",
     };
     const message = messages[state];
     if (!message) return null;
